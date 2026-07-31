@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>蝦皮智取店科目回報系統v2.6.2</title>
+<style>
+  /* ==========================================================================
+     【全域基礎樣式與版面配置】
+     ========================================================================== */
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f5f7; margin: 0; padding: 15px; color: #333; }
+  h2 { color: #ee4d2d; font-size: 20px; text-align: center; margin-bottom: 15px; }
+
+  /* ==========================================================================
+     【卡片區塊 (Card) 樣式與狀態】
+     ========================================================================== */
+  .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: opacity 0.3s; }
+  .card.disabled-card { opacity: 0.5; background: #eee; } /* 非權責班別鎖定時半透明 */
+  .card h3 { margin-top: 0; color: #ff5722; border-bottom: 2px solid #ffe0b2; padding-bottom: 5px; font-size: 15px; }
+  
+  /* 表單輸入元件 */
+  label { display: block; font-size: 13px; font-weight: bold; margin-top: 10px; color: #555; }
+  input, select { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+  input:disabled, select:disabled { background-color: #e0e0e0; cursor: not-allowed; }
+  
+  /* 多欄位並排容器 */
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  
+  /* ==========================================================================
+     【按鈕風格元件】
+     ========================================================================== */
+  /* 科目一鍵複製按鈕 */
+  button.copy-btn { width: 100%; background: #ee4d2d; color: white; border: none; padding: 12px; border-radius: 8px; font-size: 15px; font-weight: bold; margin-top: 12px; cursor: pointer; }
+  button.copy-btn:disabled { background: #b0bec5; cursor: not-allowed; }
+  button.copy-btn:active:not(:disabled) { background: #d73211; }
+  
+  /* 暫存與快照控制按鈕列 (四按鈕併排/自動適應) */
+  .storage-btn-group { display: flex; gap: 6px; margin-bottom: 15px; flex-wrap: wrap; }
+  .storage-btn-group button { flex: 1; min-width: 110px; padding: 10px 4px; border-radius: 8px; font-size: 12px; font-weight: bold; border: none; cursor: pointer; color: white; }
+  .btn-save { background: #4caf50; }
+  .btn-load { background: #2196f3; }
+  .btn-clear-form { background: #ff9800; }
+  .btn-clear-data { background: #757575; }
+
+  /* ==========================================================================
+     【標籤與徽章 (Tags & Badges)】
+     ========================================================================== */
+  /* 頂部巡店狀態小標籤 */
+  .draft-badge { display: inline-block; background: #bbdefb; color: #0d47a1; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+  .draft-badge.active { background: #1976d2; color: #ffffff; }
+
+  /* 門市特徵與任務標籤 */
+  .tag { display: inline-block; background: #ffe0b2; color: #e65100; font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 4px; }
+  .tag-key { background: #ffcdd2; color: #b71c1c; } /* 重點店標籤 */
+  
+  /* 班別分類標籤 */
+  .shift-tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: normal; margin-left: 6px; }
+  .tag-morning { background: #e3f2fd; color: #1565c0; } /* 早班標籤 */
+  .tag-night { background: #f3e5f5; color: #6a1b9a; }   /* 晚班標籤 */
+  .tag-both { background: #e8f5e9; color: #2e7d32; }    /* 早晚通用標籤 */
+
+  /* ==========================================================================
+     【科目5 分次驗收多批次表格】
+     ========================================================================== */
+  .batch-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .batch-table th { font-size: 11px; color: #666; background: #fafafa; padding: 4px; border: 1px solid #eee; text-align: center; }
+  .batch-table td { padding: 3px; border: 1px solid #eee; }
+  .batch-table input { padding: 5px; font-size: 12px; margin-top: 0; }
+
+  /* ==========================================================================
+     【Toast 非阻斷式訊息提示框】
+     ========================================================================== */
+  #toast-container {
+    position: fixed;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    pointer-events: none;
+  }
+
+  .toast {
+    background: rgba(33, 33, 33, 0.9);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    margin-top: 8px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s ease;
+    text-align: center;
+    white-space: pre-line;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<!-- 浮動提示訊息容器 -->
+<div id="toast-container"></div>
+
+<h2>📦 蝦皮智取店科目回報自動產生器v2.6.2</h2>
+
+<!-- 📍 頂部巡店門市紀錄切換與即時狀態總覽卡片 -->
+<div class="card" style="background: #e3f2fd; border: 1px solid #90caf9;">
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+      <span style="font-weight: bold; color: #1565c0; font-size: 14px;">🏪 巡店門市紀錄切換：</span>
+      <select id="draft_selector" onchange="switchDraft(this.value)" style="width: auto; margin: 0; padding: 4px 8px; font-weight: bold;">
+        <option value="draft_1">店 1: (空)</option>
+        <option value="draft_2">店 2: (空)</option>
+        <option value="draft_3">店 3: (空)</option>
+        <option value="draft_4">店 4: (空)</option>
+        <option value="draft_5">店 5: (空)</option>
+      </select>
+    </div>
+    
+    <!-- 已存門市即時清空/總覽看板 -->
+    <div id="draft_status_bar" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; background: rgba(255,255,255,0.6); padding: 6px 8px; border-radius: 6px;">
+      <!-- JS 動態渲染已存店家徽章 -->
+    </div>
+  </div>
+</div>
+
+<!-- 📍 全域巡店紀錄控制列 -->
+<div class="storage-btn-group">
+  <button class="btn-save" onclick="saveData(true)">💾 寫入巡店紀錄</button>
+  <button class="btn-load" onclick="loadData(true)">📂 重新載入紀錄</button>
+  <button class="btn-clear-form" onclick="clearFormOnly()">🧹 清空目前畫面</button>
+  <button class="btn-clear-data" onclick="clearData()">🗑️ 刪除此店紀錄</button>
+</div>
+
+<!-- 📍 基本資訊與門市自動連動區 -->
+<div class="card" style="background: #fff8f6; border: 1px solid #ffccbc;">
+  <h3 style="color: #e65100; border-bottom-color: #ffab91;">基本資訊</h3>
+  <div class="row">
+    <div>
+      <label>月/日 (自動帶入當天)</label>
+      <input type="text" id="date" placeholder="例: 3/30" oninput="autoSave()">
+    </div>
+    <div>
+      <label>門市 (可選/可輸入)</label>
+      <input type="text" id="shopName" list="shopList" placeholder="選擇或輸入店名" oninput="updateStoreInfo(); autoSave(); updateDraftLabels();">
+      <datalist id="shopList"></datalist>
+    </div>
+    <div>
+      <label>班別</label>
+      <select id="shift" onchange="applyShiftLock(); autoSave();">
+        <option value="早">早班</option>
+        <option value="晚">晚班</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- 功能：跨班別臨時解鎖開關 -->
+  <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #ffe0b2;">
+    <input type="checkbox" id="unlockOverride" onchange="applyShiftLock(); autoSave();" style="width: auto; margin: 0;">
+    <label for="unlockOverride" style="margin: 0; color: #d84315; cursor: pointer; font-size: 13px;">🔓 解鎖所有欄位 (允許跨班別臨時修改)</label>
+  </div>
+
+  <!-- 功能：選取門市後自動帶入之地址、任務 Tags 與注意事項 -->
+  <div id="storeDetailCard" style="margin-top: 12px; padding: 10px; background: #ffffff; border-radius: 8px; border: 1px dashed #ffab91; display: none;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+      <span style="font-size: 13px; font-weight: bold; color: #d84315;">📍 門市地址</span>
+      <button onclick="copyAddress()" style="background: #e65100; color: white; border: none; border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer; font-weight: bold;">📋 複製地址</button>
+    </div>
+    <div id="storeAddressText" style="font-size: 13px; color: #444; margin-bottom: 8px; font-weight: 500;"></div>
+    
+    <div style="font-size: 12px; font-weight: bold; color: #d84315; margin-bottom: 4px;">🏷️ 本店任務標籤</div>
+    <div id="storeTagList" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;"></div>
+    
+    <div id="storeNotesBox" style="display: none; background: #fff3e0; padding: 6px 8px; border-radius: 6px; font-size: 12px; color: #bf360c; font-weight: bold;"></div>
+  </div>
+</div>
+
+<!-- ==========================================================================
+     【各科目回報卡片區】
+     ========================================================================== -->
+
+<!-- 科目3 -->
+<div class="card" id="card_c3" data-shift="早">
+  <h3>科目3 逾期包裹 <span class="shift-tag tag-morning">早班專屬</span></h3>
+  <label>逾期</label>
+  <input type="text" id="c3_overdue" value="0" oninput="autoSave()">
+  <div class="row">
+    <div>
+      <label>SCS</label>
+      <input type="text" id="c3_scs" value="0" oninput="autoSave()">
+    </div>
+    <div>
+      <label>FBS</label>
+      <input type="text" id="c3_fbs" value="0" oninput="autoSave()">
+    </div>
+  </div>
+  <button class="copy-btn" id="btn_c3" onclick="copyC3()">📋 複製【科目3】</button>
+</div>
+
+<!-- 科目4 -->
+<div class="card" id="card_c4" data-shift="雙">
+  <h3>科目4 配送數據 <span class="shift-tag tag-both">早晚通用</span></h3>
+  <div class="row">
+    <div>
+      <label>物流是否配送</label>
+      <select id="c4_delivery" onchange="autoSave()"><option>是</option><option>否</option></select>
+    </div>
+    <div>
+      <label>配送箱數</label>
+      <input type="text" id="c4_boxes" value="0" oninput="autoSave()">
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label>前日滯留箱數</label>
+      <input type="text" id="c4_stay" value="0" oninput="autoSave()">
+    </div>
+    <div>
+      <label>NDD配送箱數</label>
+      <input type="text" id="c4_ndd" value="0" oninput="autoSave()">
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label>WHNDD</label>
+      <input type="text" id="c4_whndd" value="0" oninput="autoSave()">
+    </div>
+    <div>
+      <label>管制品(回報AS)</label>
+      <input type="text" id="c4_as" value="0" oninput="autoSave()">
+    </div>
+  </div>
+  <label>前日未離店箱數</label>
+  <input type="text" id="c4_not_left" value="0" oninput="autoSave()">
+  <button class="copy-btn" id="btn_c4" onclick="copyC4()">📋 複製【科目4】</button>
+</div>
+
+<!-- 科目5 -->
+<div class="card" id="card_c5" data-shift="雙">
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <h3>科目5 上架秒數+滯留箱數 <span class="shift-tag tag-both">早晚通用</span></h3>
+    <div style="font-size: 12px; color: #2196f3; display: flex; align-items: center; gap: 4px;">
+      <input type="checkbox" id="c5_multi_mode" onchange="toggleBatchMode(); autoSave();" style="width:auto; margin:0;">
+      <label for="c5_multi_mode" style="margin:0; cursor:pointer; color:#1976d2;">🚚 啟用分次驗收</label>
+    </div>
+  </div>
+
+  <div id="c5_single_box">
+    <label>驗收包裹數量</label>
+    <input type="text" id="c5_count" placeholder="例: 183" oninput="calcAvgTime(); autoSave();">
+    
+    <div class="row">
+      <div>
+        <label>第一顆上架時間</label>
+        <input type="text" id="c5_startTime" placeholder="例: 20:19" oninput="calcAvgTime(); autoSave();">
+      </div>
+      <div>
+        <label>完成驗收時間</label>
+        <input type="text" id="c5_endTime" placeholder="例: 21:09" oninput="calcAvgTime(); autoSave();">
+      </div>
+    </div>
+  </div>
+
+  <div id="c5_multi_box" style="display: none; background: #e3f2fd; padding: 10px; border-radius: 8px; margin-top: 8px;">
+    <span style="font-size: 12px; font-weight: bold; color: #1565c0;">🚚 分次明細 (系統自動加總與用 / 隔開)</span>
+    <table class="batch-table">
+      <thead>
+        <tr>
+          <th>車次</th>
+          <th>數量</th>
+          <th>第一顆時間</th>
+          <th>完成時間</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td align="center"><b>#1</b></td>
+          <td><input type="text" id="c5_b1_count" placeholder="81" oninput="calcAvgTime(); autoSave();"></td>
+          <td><input type="text" id="c5_b1_start" placeholder="19:08:44" oninput="calcAvgTime(); autoSave();"></td>
+          <td><input type="text" id="c5_b1_end" placeholder="19:25:41" oninput="calcAvgTime(); autoSave();"></td>
+        </tr>
+        <tr>
+          <td align="center"><b>#2</b></td>
+          <td><input type="text" id="c5_b2_count" placeholder="63" oninput="calcAvgTime(); autoSave();"></td>
+          <td><input type="text" id="c5_b2_start" placeholder="20:23:51" oninput="calcAvgTime(); autoSave();"></td>
+          <td><input type="text" id="c5_b2_end" placeholder="20:36:47" oninput="calcAvgTime(); autoSave();"></td>
+        </tr>
+        <tr>
+          <td align="center"><b>#3</b></td>
+          <td><input type="text" id="c5_b3_count" placeholder="135" oninput="calcAvgTime(); autoSave();"></td>
+          <td><input type="text" id="c5_b3_start" placeholder="21:01:49" oninput="calcAvgTime(); autoSave();"></td>
+          <td><input type="text" id="c5_b3_end" placeholder="21:32:55" oninput="calcAvgTime(); autoSave();"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <label>平均驗收時間 (自動計算)</label>
+  <input type="text" id="c5_avg" placeholder="自動計算秒數" readonly style="background:#eee;">
+
+  <div class="row">
+    <div>
+      <label>NDD完成驗收時間</label>
+      <input type="text" id="c5_ndd_time" placeholder="例: 20:36 或 留空" oninput="autoSave()">
+    </div>
+    <div>
+      <label>WH NDD完成時間</label>
+      <input type="text" id="c5_whndd_time" placeholder="例: 19:25 或 留空" oninput="autoSave()">
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>滯留箱數</label>
+      <input type="text" id="c5_stay_box" placeholder="例: 0" oninput="autoSave()">
+    </div>
+    <div>
+      <label>剩餘櫃位</label>
+      <input type="text" id="c5_seats" placeholder="例: 15" oninput="autoSave()">
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>到店 TO 單</label>
+      <input type="text" id="c5_to_in" placeholder="例: 18:26/20:16" oninput="autoSave()">
+    </div>
+    <div>
+      <label>離店 TO 單</label>
+      <input type="text" id="c5_to_out" placeholder="例: 19:27/" oninput="autoSave()">
+    </div>
+  </div>
+  <button class="copy-btn" id="btn_c5" onclick="copyC5()">📋 複製【科目5】</button>
+</div>
+
+<!-- 科目6 -->
+<div class="card" id="card_c6" data-shift="雙">
+  <h3>科目6 異常包裹 <span class="shift-tag tag-both">早晚通用</span></h3>
+  <div class="row">
+    <div>
+      <label>單顆錯店</label>
+      <input type="text" id="c6_wrong" value="0" oninput="autoSave()">
+    </div>
+    <div>
+      <label>破損</label>
+      <input type="text" id="c6_damaged" value="0" oninput="autoSave()">
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label>濕損</label>
+      <input type="text" id="c6_wet" value="0" oninput="autoSave()">
+    </div>
+    <div>
+      <label>打X往SOC</label>
+      <input type="text" id="c6_soc" value="0" oninput="autoSave()">
+    </div>
+  </div>
+  <button class="copy-btn" id="btn_c6" onclick="copyC6()">📋 複製【科目6】</button>
+</div>
+
+<!-- 科目8 -->
+<div class="card" id="card_c8" data-shift="雙">
+  <h3>科目8 寄件/離店包裹+空箱盤點 <span class="shift-tag tag-both">早晚通用</span></h3>
+  <div class="row">
+    <div>
+      <label>NDD警示條消除</label>
+      <select id="c8_ndd_alert" onchange="autoSave()"><option>✅</option><option>❌</option></select>
+    </div>
+    <div>
+      <label>FBS警示條消除</label>
+      <select id="c8_fbs_alert" onchange="autoSave()"><option>✅</option><option>❌</option></select>
+    </div>
+  </div>
+
+  <label>正物流寄件離店</label>
+  <div class="row">
+    <div>
+      <input type="text" id="c8_normal_north" placeholder="北 (例: 5+2)" oninput="autoSave()">
+    </div>
+    <div>
+      <input type="text" id="c8_normal_south" placeholder="南 (例: 3)" oninput="autoSave()">
+    </div>
+  </div>
+
+  <label>NDD寄件離店</label>
+  <div class="row">
+    <div>
+      <input type="text" id="c8_ndd_north" placeholder="北 (例: 1)" oninput="autoSave()">
+    </div>
+    <div>
+      <input type="text" id="c8_ndd_south" placeholder="南 (例: 0)" oninput="autoSave()">
+    </div>
+  </div>
+
+  <label>FBS寄件離店</label>
+  <div class="row">
+    <div>
+      <input type="text" id="c8_fbs_north" placeholder="北 (例: 0)" oninput="autoSave()">
+    </div>
+    <div>
+      <input type="text" id="c8_fbs_south" placeholder="南 (例: 1+1)" oninput="autoSave()">
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>逆物流離店</label>
+      <input type="text" id="c8_reverse" value="0" oninput="autoSave()">
+    </div>
+    <div>
+      <label>單顆錯店</label>
+      <input type="text" id="c8_wrong" value="0" oninput="autoSave()">
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>異常包裹</label>
+      <input type="text" id="c8_abnormal" value="0" oninput="autoSave()">
+    </div>
+    <div>
+      <label>寄件櫃狀態</label>
+      <select id="c8_lock_type" onchange="toggleLockInput(); autoSave();">
+        <option value="has">有寄件櫃</option>
+        <option value="none">無寄件櫃 (純取店)</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="lock_count_box">
+    <label>鑰匙孔數量</label>
+    <input type="number" id="c8_lock_count" value="4" placeholder="填寫孔數" oninput="autoSave()">
+  </div>
+
+  <div class="row">
+    <div>
+      <label>WH空箱在店數</label>
+      <input type="text" id="c8_wh_empty" value="0" oninput="autoSave()">
+    </div>
+    <div>
+      <label>橘箱空箱在店數</label>
+      <input type="text" id="c8_orange_empty" value="0" oninput="autoSave()">
+    </div>
+  </div>
+
+  <label>空箱收/補數量</label>
+  <input type="text" id="c8_empty_as" value="0" placeholder="只需填數字或收補文字" oninput="autoSave()">
+
+  <button class="copy-btn" id="btn_c8" onclick="copyC8()">📋 複製【科目8】</button>
+</div>
+
+<!-- 科目9 -->
+<div class="card" id="card_c9" data-shift="早">
+  <h3>科目9 10:00「前」打包SCS HD <span class="shift-tag tag-morning">早班專屬</span></h3>
+  <label>SCS HD打包</label>
+  <input type="text" id="c9_pack" value="0" oninput="calcC9Total(); autoSave();">
+  <div class="row">
+    <div>
+      <label>昨晚打包</label>
+      <input type="text" id="c9_last_night" value="0" oninput="calcC9Total(); autoSave();">
+    </div>
+    <div>
+      <label>合計 (自動計算)</label>
+      <input type="text" id="c9_total" value="0" readonly style="background:#eee;">
+    </div>
+  </div>
+  <button class="copy-btn" id="btn_c9" onclick="copyC9()">📋 複製【科目9】</button>
+</div>
+
+<!-- 科目10 -->
+<div class="card" id="card_c10" data-shift="早">
+  <h3>科目10 11:00「後」上架SCS HD <span class="shift-tag tag-morning">早班專屬</span></h3>
+  <div class="row">
+    <div>
+      <label>SCS HD成功上架</label>
+      <input type="text" id="c10_success" value="0" oninput="autoSave()">
+    </div>
+    <div>
+      <label>SCS HD滯留</label>
+      <input type="text" id="c10_stay" value="0" oninput="autoSave()">
+    </div>
+  </div>
+  <button class="copy-btn" id="btn_c10" onclick="copyC10()">📋 複製【科目10】</button>
+</div>
+
+<!-- 科目11 -->
+<div class="card" id="card_c11" data-shift="晚">
+  <h3>科目11 21:00「前」打包SCS HD <span class="shift-tag tag-night">晚班專屬</span></h3>
+  <label>SCS HD 打包數量</label>
+  <input type="text" id="c11_pack" value="0" oninput="autoSave()">
+  <button class="copy-btn" id="btn_c11" onclick="copyC11()">📋 複製【科目11】</button>
+</div>
+
+<!-- 科目12 -->
+<div class="card" id="card_c12" data-shift="雙">
+  <h3>科目12 中正速配倉 <span class="shift-tag tag-both">早晚通用</span></h3>
+  <label>進貨袋數</label>
+  <input type="text" id="c12_bags" value="0" oninput="autoSave()">
+  <button class="copy-btn" id="btn_c12" onclick="copyC12()">📋 複製【科目12】</button>
+</div>
+
+<!-- 科目14 -->
+<div class="card" id="card_c14" data-shift="晚">
+  <h3>科目14 21:00「後」HD上架 <span class="shift-tag tag-night">晚班專屬</span></h3>
+  <label>系統需上架數</label>
+  <input type="text" id="c14_sys" value="0" oninput="autoSave()">
+  <label>實際上架包裹數</label>
+  <input type="text" id="c14_real" value="0" oninput="autoSave()">
+  <label>不需上架包裹數</label>
+  <input type="text" id="c14_no_need" placeholder="例: 0 箱 0 裸 或 無" oninput="autoSave()">
+  <button class="copy-btn" id="btn_c14" onclick="copyC14()">📋 複製【科目14】</button>
+</div>
+
+<!-- 科目15 -->
+<div class="card" id="card_c15" data-shift="雙">
+  <h3>科目15 AMS入庫/維修 <span class="shift-tag tag-both">早晚通用</span></h3>
+  <label>入庫狀況</label>
+  <input type="text" id="c15_in" placeholder="例: 1未收到 / 1待開始 / 無" oninput="autoSave()">
+  
+  <label>維修狀況</label>
+  <input type="text" id="c15_repair" placeholder="例: 1維修中 / 1審核 / 無" oninput="autoSave()">
+  
+  <button class="copy-btn" id="btn_c15" onclick="copyC15()">📋 複製【科目15】</button>
+</div>
+
+<!-- 📍 支援群簡報複製按鈕 -->
+<div class="card" style="background: #fff;">
+  <button class="copy-btn" style="background: #2196f3; margin-top: 0;" onclick="copySupportReport()">
+    ⚡ 複製【支援群簡報】(跨區簡明格式)
+  </button>
+</div>
+
+<!-- ==========================================================================
+     【JavaScript 腳本邏輯區】
+     ========================================================================== -->
+<script>
+
+// 全域當前草稿 Key
+let currentDraftKey = 'shopee_report_draft_1';
+
+// 門市資料庫
+const storesData = [
+  {"name": "中正台大店", "address": "台北市中正區羅斯福路三段304號", "tags": ["👤有人店", "NDD打包", "FBS打包"], "notes": "中正速配倉"},
+  {"name": "大安溫州店", "address": "台北市大安區溫州街8號1樓", "tags": ["👤有人店", "NDD打包", "FBS打包"], "notes": ""},
+  {"name": "文山興隆-智取店", "address": "台北市文山區興隆路一段86號", "tags": ["⭐重點店", "SCS HD打包", "HD上架"], "notes": "HD滯留放 隔壁小房間"},
+  {"name": "文山景興-智取店", "address": "台北市文山區景興路87號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包", "包裹重新分配", "夜間上架"], "notes": "特選離店放後場"},
+  {"name": "文山仙岩-智取店", "address": "台北市文山區仙岩路28號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包"], "notes": ""},
+  {"name": "文山萬隆-智取店", "address": "台北市文山區羅斯福路五段218巷7號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包", "包裹重新分配", "夜間上架"], "notes": ""},
+  {"name": "文山興業-智取店", "address": "台北市文山區興隆路二段220巷3號1樓", "tags": ["⭐重點店", "SCS HD打包", "HD上架", "包裹重新分配"], "notes": "HD滯留放後場"},
+  {"name": "文山興豐-智取店", "address": "台北市文山區興隆路一段157號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包"], "notes": ""},
+  {"name": "文山福興-智取店", "address": "台北市文山區福興路32號1樓", "tags": [], "notes": ""},
+  {"name": "文山隆德-智取店", "address": "台北市文山區汀州路四段265號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包"], "notes": ""},
+  {"name": "文山興泰-智取店", "address": "台北市文山區辛亥路四段234號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包"], "notes": ""},
+  {"name": "文山景仁-智取店", "address": "台北市文山區羅斯福路六段44號1樓", "tags": [], "notes": ""},
+  {"name": "文山羅斯-智取店", "address": "台北市文山區羅斯福路五段241號", "tags": ["純取店"], "notes": ""},
+  {"name": "文山隆市-智取店", "address": "台北市文山區興隆路二段81號1樓", "tags": ["純取店"], "notes": "特選離店放後場"},
+  {"name": "文山興隆二-智取店", "address": "台北市文山區興隆路二段195號1樓", "tags": ["⭐重點店", "純取店"], "notes": ""},
+  {"name": "文山萬福-智取店", "address": "台北市文山區羅斯福路五段170巷2號1樓", "tags": ["SCS HD打包", "HD上架", "包裹重新分配", "夜間上架"], "notes": ""},
+  {"name": "大安台大-智取店", "address": "台北市大安區復興南路二段360號1樓", "tags": ["⭐重點店", "SCS HD打包", "HD上架", "包裹重新分配"], "notes": "HD滯留放後場"},
+  {"name": "大安市圖-智取店", "address": "台北市大安區建國南路二段151巷22號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包", "包裹重新分配", "夜間上架"], "notes": ""},
+  {"name": "大安瑞安-智取店", "address": "台北市大安區瑞安街146號", "tags": ["⭐重點店", "SCS HD打包", "HD上架"], "notes": "HD滯留放後場"},
+  {"name": "大安附中-智取店", "address": "台北市大安區復興南路一段342之2號1樓", "tags": ["純取店"], "notes": ""},
+  {"name": "大安高工-智取店", "address": "台北市大安區復興南路二段47號1樓", "tags": ["⭐重點店", "SCS HD打包", "HD上架"], "notes": "HD滯留放後場、 特選離店放後場"},
+  {"name": "大安龍門-智取店", "address": "台北市大安區和平東路二段30號1樓", "tags": ["純取店"], "notes": ""},
+  {"name": "大安龍陣-智取店", "address": "台北市大安區和平東路二段107巷25號1樓", "tags": ["純取店"], "notes": ""},
+  {"name": "大安德安-智取店", "address": "台北市大安區敦化南路一段320號1樓", "tags": ["純取店"], "notes": ""},
+  {"name": "大安中山醫-智取店", "address": "台北市大安區仁愛路四段112巷9弄3號1樓", "tags": [], "notes": ""},
+  {"name": "大安國中-智取店", "address": "台北市大安區大安路二段51號1樓", "tags": [], "notes": ""},
+  {"name": "大安群賢-智取店", "address": "台北市大安區和平東路二段265巷60號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包"], "notes": ""},
+  {"name": "大安科技-智取店", "address": "台北市大安區和平東路二段157之1號1樓", "tags": ["包裹重新分配", "夜間上架"], "notes": "特選離店放後場"},
+  {"name": "大安成功-智取店", "address": "台北市大安區四維路192巷10號1樓", "tags": [], "notes": ""},
+  {"name": "大安建安-智取店", "address": "台北市大安區大安路二段170號1樓", "tags": ["純取店"], "notes": ""},
+  {"name": "大安福華-智取店", "address": "台北市大安區復興南路一段251號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包", "包裹重新分配"], "notes": ""},
+  {"name": "大安潮州-智取店", "address": "台北市大安區潮州街90號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包"], "notes": "特選離店放後場"},
+  {"name": "大安新生南-智取店", "address": "台北市大安區新生南路三段60巷2之1號1樓", "tags": ["⭐重點店", "SCS HD打包", "HD上架"], "notes": "HD滯留放後場"},
+  {"name": "大安永康-智取店", "address": "台北市大安區永康街41巷23號1樓", "tags": [], "notes": ""},
+  {"name": "大安泰順-智取店", "address": "台北市大安區泰順街42之1號1樓", "tags": ["⭐重點店", "SCS HD打包", "HD上架", "包裹重新分配"], "notes": "HD滯留放後場"},
+  {"name": "大安麗水-智取店", "address": "台北市大安區永康街10巷7號1樓", "tags": [], "notes": ""},
+  {"name": "大安師大-智取店", "address": "台北市大安區羅斯福路三段135號1樓", "tags": ["包裹重新分配", "夜間上架"], "notes": ""},
+  {"name": "大安錦安-智取店", "address": "台北市大安區潮州街114號1樓", "tags": [], "notes": "中正速配倉"},
+  {"name": "中正公館-智取店", "address": "台北市中正區汀州路三段122號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包", "HD上架", "包裹重新分配"], "notes": "HD滯留放後場、 中正速配倉"},
+  {"name": "中正軍總-智取店", "address": "台北市中正區汀州路三段52號1樓", "tags": [], "notes": "中正速配倉、 掃騎樓"},
+  {"name": "中正東門-智取店", "address": "台北市中正區臨沂街56之1號1樓", "tags": [], "notes": "中正速配倉"},
+  {"name": "信義景聯-智取店", "address": "台北市信義區吳興街50巷17號1樓", "tags": ["⭐重點店", "SCS HD打包", "HD上架"], "notes": "HD滯留放後場"},
+  {"name": "信義三興-智取店", "address": "台北市信義區吳興街156巷24號1樓", "tags": ["純取店"], "notes": ""},
+  {"name": "松菸旗艦店", "address": "台北市信義區忠孝東路四段553巷24號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包", "HD上架"], "notes": "0930開門&拍貼機 2130關門&拍貼機"},
+  {"name": "信義逸仙-智取店", "address": "台北市信義區逸仙路42巷12之1號1樓", "tags": ["純取店"], "notes": ""},
+  {"name": "信義松信-智取店", "address": "台北市信義區松信路101號1樓", "tags": ["⭐重點店", "SCS HD打包", "HD上架"], "notes": ""}
+];
+
+/* ==========================================================================
+   【初始化與巡店紀錄槽核心】
+   ========================================================================== */
+
+function getDraftName(key) {
+  const map = { 'draft_1': '店 1', 'draft_2': '店 2', 'draft_3': '店 3', 'draft_4': '店 4', 'draft_5': '店 5' };
+  return map[key] || key;
+}
+
+// 切換草稿
+function switchDraft(newKey) {
+  saveData(false); // 切換前儲存當前草稿
+  currentDraftKey = 'shopee_report_' + newKey;
+  loadData(false); // 讀取新草稿
+  updateDraftLabels();
+  showToast(`📂 已切換至【${getDraftName(newKey)}】`);
+}
+
+// 動態更新下拉選單標籤 & 頂部即時狀態看板 (已修正對齊邏輯)
+function updateDraftLabels() {
+  const selector = document.getElementById('draft_selector');
+  const statusBar = document.getElementById('draft_status_bar');
+  if (!selector) return;
+
+  // 確保下拉選單的值與 currentDraftKey 一致
+  const currentKeyShort = currentDraftKey.replace('shopee_report_', '');
+  if (selector.value !== currentKeyShort) {
+    selector.value = currentKeyShort;
+  }
+
+  let badgeHTML = '<span style="font-size:11px; font-weight:bold; color:#1565c0; margin-right:4px;">今日巡店進度:</span>';
+
+  ['draft_1', 'draft_2', 'draft_3', 'draft_4', 'draft_5'].forEach((key, index) => {
+    const rawData = localStorage.getItem('shopee_report_' + key);
+    let storeName = '(空)';
+    let isSaved = false;
+
+    if (rawData) {
+      try {
+        const parsed = JSON.parse(rawData);
+        if (parsed.shopName && parsed.shopName.trim() !== '') {
+          storeName = parsed.shopName;
+          isSaved = true;
+        }
+      } catch (e) {}
+    }
+
+    // 更新下拉選單 Option 顯示文字
+    selector.options[index].text = `店 ${index + 1}: ${storeName}`;
+
+    // 精準比對目前選取的卡片 (修正點：直接比對 key)
+    const isCurrent = key === currentKeyShort;
+    const activeClass = isCurrent ? 'draft-badge active' : 'draft-badge';
+    const statusText = isSaved ? `${index + 1}.${storeName}` : `${index + 1}.未填`;
+    
+    badgeHTML += `<span class="${activeClass}" style="transition: all 0.2s ease;">${statusText}</span>`;
+  });
+
+  if (statusBar) statusBar.innerHTML = badgeHTML;
+}
+// 取得今天 MM/DD 字串
+function getTodayString() {
+  const today = new Date();
+  return (today.getMonth() + 1) + '/' + today.getDate();
+}
+
+// 頁面載入完成統一初始化
+window.onload = function() {
+  populateShopOptions();
+  loadData(false);
+  updateDraftLabels();
+  
+  const dateInput = document.getElementById('date');
+  if (!dateInput.value || dateInput.value.trim() === '') {
+    dateInput.value = getTodayString();
+  }
+  
+  updateStoreInfo();
+  applyShiftLock();
+};
+
+/* ==========================================================================
+   【資料暫存、載入與清空邏輯】
+   ========================================================================== */
+
+function getAllData() {
+  const elements = document.querySelectorAll('input, select');
+  const data = {};
+  elements.forEach(el => {
+    if (el.id) {
+      if (el.type === 'checkbox') data[el.id] = el.checked;
+      else data[el.id] = el.value;
+    }
+  });
+  return JSON.stringify(data);
+}
+
+function autoSave() {
+  localStorage.setItem(currentDraftKey, getAllData());
+}
+
+function saveData(showAlert) {
+  localStorage.setItem(currentDraftKey, getAllData());
+  updateDraftLabels();
+  if (showAlert) {
+    const keyShort = currentDraftKey.replace('shopee_report_', '');
+    showToast(`💾 已成功寫入【${getDraftName(keyShort)}】巡店紀錄`);
+  }
+}
+
+// 表單純欄位清空重置
+function resetFormFields() {
+  const elements = document.querySelectorAll('input, select');
+  elements.forEach(el => {
+    if (el.id && el.id !== 'draft_selector') {
+      if (el.type === 'checkbox') el.checked = false;
+      else if (el.tagName === 'SELECT') el.selectedIndex = 0;
+      else if (el.id === 'c3_overdue' || el.id === 'c3_scs' || el.id === 'c3_fbs' || 
+               el.id === 'c4_boxes' || el.id === 'c4_stay' || el.id === 'c4_ndd' || el.id === 'c4_whndd' || el.id === 'c4_as' || el.id === 'c4_not_left' ||
+               el.id === 'c6_wrong' || el.id === 'c6_damaged' || el.id === 'c6_wet' || el.id === 'c6_soc' ||
+               el.id === 'c8_reverse' || el.id === 'c8_wrong' || el.id === 'c8_abnormal' || el.id === 'c8_wh_empty' || el.id === 'c8_orange_empty' || el.id === 'c8_empty_as' ||
+               el.id === 'c9_pack' || el.id === 'c9_last_night' || el.id === 'c9_total' ||
+               el.id === 'c10_success' || el.id === 'c10_stay' || el.id === 'c11_pack' || el.id === 'c12_bags' || el.id === 'c14_sys' || el.id === 'c14_real') {
+        el.value = '0';
+      } else {
+        el.value = '';
+      }
+    }
+  });
+  
+  const dateEl = document.getElementById('date');
+  if (dateEl) dateEl.value = getTodayString();
+  
+  toggleBatchMode();
+  calcAvgTime();
+  calcC9Total();
+  toggleLockInput();
+  updateStoreInfo();
+  applyShiftLock();
+}
+
+function loadData(showAlert) {
+  const saved = localStorage.getItem(currentDraftKey); 
+  resetFormFields();
+
+  if (saved) {
+    try {
+      const data = JSON.parse(saved);
+      for (let id in data) {
+        const el = document.getElementById(id);
+        if (el) {
+          if (el.type === 'checkbox') el.checked = data[id];
+          else el.value = data[id];
+        }
+      }
+    } catch (e) {}
+
+    toggleBatchMode();
+    calcAvgTime();
+    calcC9Total();
+    toggleLockInput();
+    updateStoreInfo();
+    applyShiftLock();
+    if (showAlert) showToast(`📂 已載入【${getDraftName(currentDraftKey.replace('shopee_report_', ''))}】巡店紀錄`);
+  } else {
+    if (showAlert) showToast('此巡店位置尚無儲存紀錄！');
+  }
+}
+
+// 僅清空畫面，不刪除已存紀錄
+function clearFormOnly() {
+  resetFormFields();
+  showToast('🧹 已清空目前畫面輸入欄位（已存巡店紀錄不受影響）');
+}
+
+// 刪除此店紀錄 (雙擊機制)
+let clearConfirmTimer = null;
+
+function clearData() {
+  if (clearConfirmTimer) {
+    clearTimeout(clearConfirmTimer);
+    clearConfirmTimer = null;
+    
+    // 清除當前槽位的 localStorage 資料
+    localStorage.removeItem(currentDraftKey);
+    
+    showToast('🗑️ 已徹底刪除此店巡店紀錄！');
+    
+    setTimeout(() => {
+      resetFormFields();
+      updateDraftLabels();
+    }, 400);
+    return;
+  }
+
+  showToast('⚠️ 請在 3 秒內【再按一次】刪除此店紀錄以確認刪除！', 3000);
+
+  clearConfirmTimer = setTimeout(() => {
+    clearConfirmTimer = null;
+  }, 3000);
+}
+
+/* ==========================================================================
+   【介面連動與計算邏輯】
+   ========================================================================== */
+
+function toggleBatchMode() {
+  const isMulti = document.getElementById('c5_multi_mode').checked;
+  document.getElementById('c5_single_box').style.display = isMulti ? 'none' : 'block';
+  document.getElementById('c5_multi_box').style.display = isMulti ? 'block' : 'none';
+  calcAvgTime();
+}
+
+function applyShiftLock() {
+  const currentShift = document.getElementById('shift').value;
+  const override = document.getElementById('unlockOverride').checked;
+  
+  const cards = document.querySelectorAll('.card[data-shift]');
+  cards.forEach(card => {
+    const cardShift = card.getAttribute('data-shift');
+    const isMatched = (cardShift === '雙' || cardShift === currentShift || override);
+    
+    if (isMatched) card.classList.remove('disabled-card');
+    else card.classList.add('disabled-card');
+    
+    const inputs = card.querySelectorAll('input, select');
+    inputs.forEach(input => {
+      if (input.id !== 'c5_avg' && input.id !== 'c9_total') {
+        input.disabled = !isMatched;
+      }
+    });
+
+    const btn = card.querySelector('.copy-btn');
+    if (btn) btn.disabled = !isMatched;
+  });
+}
+
+function populateShopOptions() {
+  const datalist = document.getElementById('shopList');
+  datalist.innerHTML = '';
+  storesData.forEach(store => {
+    const opt = document.createElement('option');
+    opt.value = store.name;
+    datalist.appendChild(opt);
+  });
+}
+
+function getCleanShopName() {
+  const rawName = document.getElementById('shopName').value.trim();
+  return rawName.replace(/-智取店$/, '').replace(/智取店$/, '');
+}
+
+function updateStoreInfo() {
+  const selectedName = document.getElementById('shopName').value.trim();
+  const store = storesData.find(s => s.name === selectedName || s.name.replace(/-智取店$/, '') === selectedName);
+  const detailCard = document.getElementById('storeDetailCard');
+  
+  if (store) {
+    document.getElementById('storeAddressText').innerText = store.address;
+    const tagListDiv = document.getElementById('storeTagList');
+    tagListDiv.innerHTML = '';
+    if (store.tags.length > 0) {
+      store.tags.forEach(t => {
+        const span = document.createElement('span');
+        span.className = (t.includes('重點店') || t.includes('有人店')) ? 'tag tag-key' : 'tag';
+        span.innerText = t;
+        tagListDiv.appendChild(span);
+      });
+    } else {
+      tagListDiv.innerHTML = '<span style="font-size:12px; color:#888;">無特殊打包標籤</span>';
+    }
+
+    const notesBox = document.getElementById('storeNotesBox');
+    if (store.notes && store.notes.trim() !== '') {
+      notesBox.style.display = 'block';
+      notesBox.innerText = '💡 注意事項：' + store.notes;
+    } else {
+      notesBox.style.display = 'none';
+    }
+    detailCard.style.display = 'block';
+  } else {
+    detailCard.style.display = 'none';
+  }
+}
+
+function copyAddress() {
+  const addr = document.getElementById('storeAddressText').innerText;
+  if (addr) {
+    navigator.clipboard.writeText(addr).then(() => {
+      showToast('📍 已複製門市地址！');
+    });
+  }
+}
+
+function toggleLockInput() {
+  const type = document.getElementById('c8_lock_type').value;
+  document.getElementById('lock_count_box').style.display = (type === 'has') ? 'block' : 'none';
+}
+
+function calcC9Total() {
+  const p = parseFloat(document.getElementById('c9_pack').value) || 0;
+  const l = parseFloat(document.getElementById('c9_last_night').value) || 0;
+  document.getElementById('c9_total').value = p + l;
+}
+
+function calcAvgTime() {
+  const isMulti = document.getElementById('c5_multi_mode').checked;
+  let totalCount = 0;
+  let totalDiffSec = 0;
+
+  if (!isMulti) {
+    const count = parseFloat(document.getElementById('c5_count').value) || 0;
+    const start = document.getElementById('c5_startTime').value.trim();
+    const end = document.getElementById('c5_endTime').value.trim();
+    
+    if (count > 0 && start && end) {
+      const diff = getTimeDiff(start, end);
+      if (diff > 0) {
+        totalCount = count;
+        totalDiffSec = diff;
+      }
+    }
+  } else {
+    for (let i = 1; i <= 3; i++) {
+      const c = parseFloat(document.getElementById(`c5_b${i}_count`).value) || 0;
+      const s = document.getElementById(`c5_b${i}_start`).value.trim();
+      const e = document.getElementById(`c5_b${i}_end`).value.trim();
+      if (c > 0 && s && e) {
+        const diff = getTimeDiff(s, e);
+        if (diff > 0) {
+          totalCount += c;
+          totalDiffSec += diff;
+        }
+      }
+    }
+  }
+
+  if (totalCount > 0 && totalDiffSec > 0) {
+    const avg = (totalDiffSec / totalCount).toFixed(1);
+    document.getElementById('c5_avg').value = avg;
+  } else {
+    document.getElementById('c5_avg').value = "";
+  }
+}
+
+function getTimeDiff(startStr, endStr) {
+  const sSec = parseStrToSeconds(startStr);
+  const eSec = parseStrToSeconds(endStr);
+  if (sSec === null || eSec === null) return 0;
+  let diff = eSec - sSec;
+  if (diff < 0) diff += 86400;
+  return diff;
+}
+
+function parseStrToSeconds(tStr) {
+  if (!tStr) return null;
+  const p = tStr.split(':');
+  if (p.length === 3) return (+p[0])*3600 + (+p[1])*60 + (+p[2]);
+  if (p.length === 2) return (+p[0])*3600 + (+p[1])*60;
+  return null;
+}
+
+function getHeader() {
+  const d = document.getElementById('date').value;
+  const s = getCleanShopName() || "未填門市";
+  const sh = document.getElementById('shift').value;
+  return `${d} ${s}${sh}班`;
+}
+
+/* ==========================================================================
+   【通用複製功能 - 修正 Android/手機剪貼簿權限問題】
+   ========================================================================= */
+function copyText(text, label = '') {
+  if (!text || text.trim() === '' || text.includes('undefined')) {
+    showToast('⚠️ 複製失敗：欄位資料異常或為空！');
+    return;
+  }
+
+  const displayTag = label ? label : '已複製內容';
+
+  // 優先使用現代化 Clipboard API
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast(`📋 已複製【${displayTag}】`);
+    }).catch(err => {
+      // 如果現代 API 失敗（例如被權限擋住），嘗試使用舊版 fallback 方法
+      console.warn('Modern Clipboard API failed, trying fallback:', err);
+      fallbackCopyText(text, displayTag);
+    });
+  } else {
+    // 如果瀏覽器不支援 navigator.clipboard，直接使用舊版 fallback
+    fallbackCopyText(text, displayTag);
+  }
+}
+
+/**
+ * 舊版相容複製方法 (Fallback)
+ * 透過建立隱藏 textarea 並執行 document.execCommand('copy')
+ */
+function fallbackCopyText(text, displayTag) {
+  // 建立一個隱藏的 textarea 元素
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  
+  // 防止在移動端觸發頁面滾動或放大
+  textarea.style.top = '0';
+  textarea.style.left = '0';
+  textarea.style.position = 'fixed';
+  textarea.style.visibility = 'hidden';
+  textarea.style.padding = '0';
+  textarea.style.border = 'none';
+  textarea.style.outline = 'none';
+  textarea.style.boxShadow = 'none';
+  textarea.style.background = 'transparent';
+  
+  document.body.appendChild(textarea);
+  
+  // 選取文字
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, 99999); // 針對 iOS 的相容性
+
+  try {
+    // 執行複製指令
+    const successful = document.execCommand('copy');
+    if (successful) {
+      showToast(`📋 已複製【${displayTag}】(相容模式)`);
+    } else {
+      showToast('❌ 複製失敗，請手動複製！');
+    }
+  } catch (err) {
+    console.error('Fallback copy failed:', err);
+    showToast('❌ 複製失敗，瀏覽器不支援！');
+  }
+
+  // 移除元件
+  document.body.removeChild(textarea);
+}
+
+/* ==========================================================================
+   【各科目複製功能】
+   ========================================================================== */
+
+function copyC3() {
+  const txt = `⬆️${getHeader()}\n逾期:${document.getElementById('c3_overdue').value}\nSCS:${document.getElementById('c3_scs').value}\nFBS:${document.getElementById('c3_fbs').value}`;
+  copyText(txt, '科目3 逾期包裹');
+}
+
+function copyC4() {
+  const txt = `${getHeader()}\n⭕️物流是否配送：${document.getElementById('c4_delivery').value}\n⭕️配送箱數：${document.getElementById('c4_boxes').value}\n⭕️前日滯留箱數：${document.getElementById('c4_stay').value}\n⭕️NDD配送箱數：${document.getElementById('c4_ndd').value}\n⭕️WHNDD：${document.getElementById('c4_whndd').value}\n⭕️管制品（需回報AS）：${document.getElementById('c4_as').value}\n⭕️前日未離店箱數：${document.getElementById('c4_not_left').value}`;
+  copyText(txt, '科目4 配送數據');
+}
+
+function copyC5() {
+  const shopName = getCleanShopName() || "未填門市";
+  const shift = document.getElementById('shift').value;
+  const isMulti = document.getElementById('c5_multi_mode').checked;
+
+  let countStr = "";
+  let startStr = "";
+  let endStr = "";
+
+  if (!isMulti) {
+    countStr = document.getElementById('c5_count').value;
+    startStr = document.getElementById('c5_startTime').value;
+    endStr = document.getElementById('c5_endTime').value;
+  } else {
+    const counts = [], starts = [], ends = [];
+    for (let i = 1; i <= 3; i++) {
+      const c = document.getElementById(`c5_b${i}_count`).value.trim();
+      const s = document.getElementById(`c5_b${i}_start`).value.trim();
+      const e = document.getElementById(`c5_b${i}_end`).value.trim();
+      if (c || s || e) {
+        counts.push(c);
+        starts.push(s);
+        ends.push(e);
+      }
+    }
+    countStr = counts.join('/');
+    startStr = starts.join('/');
+    endStr = ends.join('/');
+  }
+
+  const avgVal = document.getElementById('c5_avg').value;
+  const nddVal = document.getElementById('c5_ndd_time').value;
+  const whnddVal = document.getElementById('c5_whndd_time').value;
+  const stayVal = document.getElementById('c5_stay_box').value;
+  const seatsVal = document.getElementById('c5_seats').value;
+  const toInVal = document.getElementById('c5_to_in').value;
+  const toOutVal = document.getElementById('c5_to_out').value;
+
+  const txt = `${shopName} ${shift}班\n驗收完畢回報\n\n驗收包裹數量：${countStr}\n第一顆上架時間：${startStr}\n完成驗收時間：${endStr}\n平均驗收時間：${avgVal}\nNDD完成驗收時間：${nddVal}\nWH NDD完成驗收時間：${whnddVal}\n\n————————————-\n⭕️滯留：${stayVal}\n⭕️剩餘櫃位：${seatsVal}\n‼️產生滯留且有剩餘櫃位時，需通報值班幹部以利立刻進行人員調度\n————————————-\n到店TO單：${toInVal}\n離店TO單：${toOutOutStr(toOutVal)}`;
+
+  copyText(txt, '科目5 驗收回報');
+}
+
+function toOutOutStr(val) {
+  return val ? val : "";
+}
+
+function copyC6() {
+  const txt = `⬆️${getHeader()}\n單顆錯店：${document.getElementById('c6_wrong').value}\n破損：${document.getElementById('c6_damaged').value}\n濕損：${document.getElementById('c6_wet').value}\n打X往SOC：${document.getElementById('c6_soc').value}`;
+  copyText(txt, '科目6 異常包裹');
+}
+
+function formatShipText(northId, southId) {
+  const north = document.getElementById(northId).value.trim();
+  const south = document.getElementById(southId).value.trim();
+  
+  let result = "";
+  if (north && north !== "0" && north !== "無") {
+    result += `${north}北`;
+  }
+  if (south && south !== "0" && south !== "無") {
+    result += `${south}南`;
+  }
+  
+  return result || "無";
+}
+
+function copyC8() {
+  const lockType = document.getElementById('c8_lock_type').value;
+  const lockCount = document.getElementById('c8_lock_count').value;
+  const lockStr = (lockType === 'has') ? `‼️寄件櫃共${lockCount}個鑰匙孔已確認上鎖` : `‼️無寄件櫃`;
+
+  const normalShip = formatShipText('c8_normal_north', 'c8_normal_south');
+  const nddShip = formatShipText('c8_ndd_north', 'c8_ndd_south');
+  const fbsShip = formatShipText('c8_fbs_north', 'c8_fbs_south');
+
+  const txt = `⬆️${getHeader()}\n⭕️NDD警示條消除${document.getElementById('c8_ndd_alert').value}\n⭕️FBS警示條消除${document.getElementById('c8_fbs_alert').value}\n⭕️正物流寄件離店：${normalShip}\n⭕️NDD寄件離店：${nddShip}\n⭕️FBS寄件離店：${fbsShip}\n⭕️逆物流離店：${document.getElementById('c8_reverse').value}\n⭕️單顆錯店：${document.getElementById('c8_wrong').value}\n⭕️異常包裹：${document.getElementById('c8_abnormal').value}\n${lockStr}\n⭕️WH空箱在店數：${document.getElementById('c8_wh_empty').value}\n⭕️橘箱空箱在店數：${document.getElementById('c8_orange_empty').value}\n⭕️空箱收/補：${document.getElementById('c8_empty_as').value}（AS回報）`;
+
+  copyText(txt, '科目8 離店盤點');
+}
+
+function copyC9() {
+  const txt = `⬆️${getHeader()}\n⭕️SCS HD打包：${document.getElementById('c9_pack').value}\n⭕️昨晚打包：${document.getElementById('c9_last_night').value}\n⭕️合計：${document.getElementById('c9_total').value}`;
+  copyText(txt, '科目9 早班打包HD');
+}
+
+function copyC10() {
+  const txt = `⬆️${getHeader()}\n⭕️SCS HD成功上架：${document.getElementById('c10_success').value}\n⭕️SCS HD滯留：${document.getElementById('c10_stay').value}`;
+  copyText(txt, '科目10 早班上架HD');
+}
+
+function copyC11() {
+  const txt = `${getHeader()}\n⭕️SCS HD 打包：${document.getElementById('c11_pack').value}`;
+  copyText(txt, '科目11 晚班打包HD');
+}
+
+function copyC12() {
+  const txt = `⬆️${getHeader()}\n中正速配倉進貨${document.getElementById('c12_bags').value}袋已上架`;
+  copyText(txt, '科目12 速配倉進貨');
+}
+
+function copyC14() {
+  const txt = `⬆️${getHeader()}\n⭕️系統需上架數：${document.getElementById('c14_sys').value}\n⭕️實際上架包裹數 ：${document.getElementById('c14_real').value}\n⭕️不需上架包裹數：${document.getElementById('c14_no_need').value}`;
+  copyText(txt, '科目14 晚班HD上架');
+}
+
+function copyC15() {
+  const inVal = document.getElementById('c15_in').value;
+  const repairVal = document.getElementById('c15_repair').value;
+  const txt = `⬆️${getHeader()}\n⭕️入庫：${inVal}\n⭕️維修：${repairVal}`;
+  copyText(txt, '科目15 AMS維修');
+}
+
+/* ==========================================================================
+   【支援群簡報複製功能 - 全科目連動與班別自動過濾版】
+   ========================================================================== */
+
+function copySupportReport() {
+  const date = document.getElementById('date')?.value || getTodayString();
+  const shop = getCleanShopName() || "未填門市";
+  const shift = document.getElementById('shift')?.value || '早';
+
+  // 1. 標頭 (日期 店名 班別)
+  let reportLines = [`${date} ${shop} ${shift}班支援匯報\n`];
+
+  // 2. 依班別與科目順序組合內容
+  // -------------------------------------------------------------
+  // 科目3：早班專屬
+  if (shift === '早') {
+    const c3_overdue = document.getElementById('c3_overdue')?.value || '0';
+    const c3_scs = document.getElementById('c3_scs')?.value || '0';
+    const c3_fbs = document.getElementById('c3_fbs')?.value || '0';
+    reportLines.push(`【科目3 逾期包裹】\n逾期:${c3_overdue} | SCS:${c3_scs} | FBS:${c3_fbs}`);
+  }
+
+  // -------------------------------------------------------------
+  // 科目4：早晚通用
+  const c4_del = document.getElementById('c4_delivery')?.value || '是';
+  const c4_box = document.getElementById('c4_boxes')?.value || '0';
+  const c4_stay = document.getElementById('c4_stay')?.value || '0';
+  const c4_ndd = document.getElementById('c4_ndd')?.value || '0';
+  const c4_whndd = document.getElementById('c4_whndd')?.value || '0';
+  const c4_as = document.getElementById('c4_as')?.value || '0';
+  const c4_not_left = document.getElementById('c4_not_left')?.value || '0';
+  reportLines.push(`【科目4 配送數據】\n物流配送:${c4_del} | 配送箱數:${c4_box} | 滯留箱數:${c4_stay} | NDD:${c4_ndd} | WHNDD:${c4_whndd} | 管制品:${c4_as} | 未離店箱數:${c4_not_left}`);
+
+  // -------------------------------------------------------------
+  // 科目5：早晚通用
+  const isMulti = document.getElementById('c5_multi_mode')?.checked;
+  let countStr = "", startStr = "", endStr = "";
+
+  if (!isMulti) {
+    countStr = document.getElementById('c5_count')?.value || '';
+    startStr = document.getElementById('c5_startTime')?.value || '';
+    endStr = document.getElementById('c5_endTime')?.value || '';
+  } else {
+    const counts = [], starts = [], ends = [];
+    for (let i = 1; i <= 3; i++) {
+      const c = document.getElementById(`c5_b${i}_count`)?.value.trim();
+      const s = document.getElementById(`c5_b${i}_start`)?.value.trim();
+      const e = document.getElementById(`c5_b${i}_end`)?.value.trim();
+      if (c || s || e) { counts.push(c); starts.push(s); ends.push(e); }
+    }
+    countStr = counts.join('/');
+    startStr = starts.join('/');
+    endStr = ends.join('/');
+  }
+
+  const c5_avg = document.getElementById('c5_avg')?.value || '';
+  const c5_ndd = document.getElementById('c5_ndd_time')?.value || '';
+  const c5_whndd = document.getElementById('c5_whndd_time')?.value || '';
+  const c5_stay = document.getElementById('c5_stay_box')?.value || '0';
+  const c5_seats = document.getElementById('c5_seats')?.value || '';
+  const c5_to_in = document.getElementById('c5_to_in')?.value || '';
+  const c5_to_out = document.getElementById('c5_to_out')?.value || '';
+
+  reportLines.push(`【科目5 驗收回報】\n驗收包裹數量：${countStr}\n第一顆上架時間：${startStr}\n完成驗收時間：${endStr}\n平均驗收時間：${c5_avg}\nNDD完成驗收時間：${c5_ndd}\nWH NDD完成驗收時間：${c5_whndd}\n滯留：${c5_stay} | 剩餘櫃位：${c5_seats}\n到店TO單：${c5_to_in} | 離店TO單：${c5_to_out}`);
+
+  // -------------------------------------------------------------
+  // 科目6：早晚通用
+  const c6_wrong = document.getElementById('c6_wrong')?.value || '0';
+  const c6_damaged = document.getElementById('c6_damaged')?.value || '0';
+  const c6_wet = document.getElementById('c6_wet')?.value || '0';
+  const c6_soc = document.getElementById('c6_soc')?.value || '0';
+  reportLines.push(`【科目6 異常包裹】\n單顆錯店:${c6_wrong} | 破損:${c6_damaged} | 濕損:${c6_wet} | 打X往SOC:${c6_soc}`);
+
+  // -------------------------------------------------------------
+  // 科目8：早晚通用
+  const c8_ndd_alert = document.getElementById('c8_ndd_alert')?.value || '✅';
+  const c8_fbs_alert = document.getElementById('c8_fbs_alert')?.value || '✅';
+  const normalShip = formatShipText('c8_normal_north', 'c8_normal_south');
+  const nddShip = formatShipText('c8_ndd_north', 'c8_ndd_south');
+  const fbsShip = formatShipText('c8_fbs_north', 'c8_fbs_south');
+  const c8_reverse = document.getElementById('c8_reverse')?.value || '0';
+  const c8_wrong = document.getElementById('c8_wrong')?.value || '0';
+  const c8_abnormal = document.getElementById('c8_abnormal')?.value || '0';
+  const c8_wh_empty = document.getElementById('c8_wh_empty')?.value || '0';
+  const c8_orange_empty = document.getElementById('c8_orange_empty')?.value || '0';
+  const c8_empty_as = document.getElementById('c8_empty_as')?.value || '0';
+
+  reportLines.push(`【科目8 離店盤點】\nNDD警示條:${c8_ndd_alert} | FBS警示條:${c8_fbs_alert}\n正物流寄件離店：${normalShip}\nNDD寄件離店：${nddShip}\nFBS寄件離店：${fbsShip}\n逆物流離店：${c8_reverse} | 錯店：${c8_wrong} | 異常包裹：${c8_abnormal}\nWH空箱：${c8_wh_empty} | 橘箱空箱：${c8_orange_empty} | 空箱收補：${c8_empty_as}`);
+
+  // -------------------------------------------------------------
+  // 科目9 & 科目10：早班專屬
+  if (shift === '早') {
+    const c9_pack = document.getElementById('c9_pack')?.value || '0';
+    const c9_last = document.getElementById('c9_last_night')?.value || '0';
+    const c9_total = document.getElementById('c9_total')?.value || '0';
+    reportLines.push(`【科目9 SCS HD打包】\n打包:${c9_pack} | 昨晚打包:${c9_last} | 合計:${c9_total}`);
+
+    const c10_success = document.getElementById('c10_success')?.value || '0';
+    const c10_stay = document.getElementById('c10_stay')?.value || '0';
+    reportLines.push(`【科目10 SCS HD上架】\n成功上架:${c10_success} | 滯留:${c10_stay}`);
+  }
+
+  // -------------------------------------------------------------
+  // 科目11：晚班專屬
+  if (shift === '晚') {
+    const c11_pack = document.getElementById('c11_pack')?.value || '0';
+    reportLines.push(`【科目11 晚班打包HD】\n打包:${c11_pack}`);
+  }
+
+  // -------------------------------------------------------------
+  // 科目12：早晚通用
+  const c12_bags = document.getElementById('c12_bags')?.value || '0';
+  reportLines.push(`【科目12 速配倉進貨】\n進貨袋數:${c12_bags}`);
+
+  // -------------------------------------------------------------
+  // 科目14：晚班專屬
+  if (shift === '晚') {
+    const c14_sys = document.getElementById('c14_sys')?.value || '0';
+    const c14_real = document.getElementById('c14_real')?.value || '0';
+    const c14_no = document.getElementById('c14_no_need')?.value || '無';
+    reportLines.push(`【科目14 晚班HD上架】\n系統需上架:${c14_sys} | 實際上架:${c14_real} | 不需上架:${c14_no}`);
+  }
+
+  // -------------------------------------------------------------
+  // 科目15：早晚通用
+  const c15_in = document.getElementById('c15_in')?.value || '無';
+  const c15_repair = document.getElementById('c15_repair')?.value || '無';
+  reportLines.push(`【科目15 AMS維修】\n入庫:${c15_in} | 維修:${c15_repair}`);
+
+  // 3. 輸出完整文字
+  const fullText = reportLines.join('\n\n');
+  copyText(fullText, '支援群全科目匯報');
+}
+
+/* ==========================================================================
+   【Toast 通用彈窗】
+   ========================================================================== */
+
+function showToast(message, duration = 2000) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerText = message;
+  container.appendChild(toast);
+
+  setTimeout(() => toast.classList.add('show'), 10);
+
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+</script>
+</body>
+</html>
