@@ -3,24 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>蝦皮智取店科目回報與排班系統v3.2.6</title>
+<title>蝦皮智取店科目回報與排班系統v3.2.7</title>
 <style>
   /* ==========================================================================
      【全域基礎樣式與版面配置】
      ========================================================================== */
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f5f7; margin: 0; padding: 0; color: #333; }
-  h2 { color: #ee4d2d; font-size: 20px; text-align: center; margin: 15px 0; }
-
+  
   /* ==========================================================================
      【頂部主導覽頁籤 (Tab Nav)】
      ========================================================================== */
-  .main-nav {
-    display: flex;
+  .main-header {
     background-color: #2c3e50;
     position: sticky;
     top: 0;
     z-index: 1000;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  }
+  .main-nav {
+    display: flex;
+    background-color: #2c3e50;
   }
   .nav-btn {
     flex: 1;
@@ -168,18 +170,25 @@
 
 <div id="toast-container"></div>
 
-<!-- 📍 頂部主要導覽頁籤 -->
-<div class="main-nav">
-  <button class="nav-btn active" onclick="switchMainTab('report-tab', this)">📋 巡店回報</button>
-  <button class="nav-btn" onclick="switchMainTab('schedule-tab', this)">📅 班表管理</button>
+<!-- 📍 全域頂部標題與導覽列 -->
+<div class="main-header">
+  <div style="padding: 12px 0 6px 0; text-align: center;">
+    <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
+      📦 蝦皮智取店科目回報與排班系統 v3.2.7
+    </h1>
+  </div>
+  <div class="main-nav">
+    <button class="nav-btn active" onclick="switchMainTab('report-tab', this)">📋 巡店回報</button>
+    <button class="nav-btn" onclick="switchMainTab('schedule-tab', this)">📅 班表管理</button>
+  </div>
 </div>
 
 <!-- ==========================================================================
-     【頁籤一：巡店回報系統 (v3.2.6)】
+     【頁籤一：巡店回報系統 (v3.2.7)】
      ========================================================================== -->
 <div id="report-tab" class="tab-content active">
 
-  <h2>📦 蝦皮智取店科目回報自動產生器v3.2.6</h2>
+  <h2 style="color: #ee4d2d; font-size: 16px; text-align: center; margin: 5px 0 15px 0;">📋 巡店門市填表與回報區</h2>
 
   <div class="card" style="background: #e3f2fd; border: 1px solid #90caf9;">
     <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -602,7 +611,7 @@
      ========================================================================== -->
 <div id="schedule-tab" class="tab-content">
   
-  <h2>📅 個人班表查詢與管理</h2>
+  <h2 style="color: #ee4d2d; font-size: 16px; text-align: center; margin: 5px 0 15px 0;">📅 個人勤務班表管理</h2>
 
   <div class="card">
     <div class="sub-tab-group">
