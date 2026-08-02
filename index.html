@@ -14,10 +14,10 @@
 
 <!-- ☁️ Google Drive AppData 同步 SDK 初始化腳本 -->
 <script>
-  /* ==========================================================================
-     【Google Drive AppData 自動同步邏輯】
+/* ==========================================================================
+     【Google Drive AppData 自動同步與自動還原連線邏輯 - v4.1.3】
      ========================================================================== */
-  const CLIENT_ID = '879549181954-r1eai9agafnkp69o0cgbfcttegh39vju.apps.googleusercontent.com';
+     const CLIENT_ID = '879549181954-r1eai9agafnkp69o0cgbfcttegh39vju.apps.googleusercontent.com';
   const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
   const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
 
@@ -35,6 +35,15 @@
               discoveryDocs: [DISCOVERY_DOC],
           });
           gapiInited = true;
+          
+          // 📍 1. 檢查 sessionStorage 是否有剛存過的 Token，有就直接還原
+          const savedToken = sessionStorage.getItem('gdrive_access_token');
+          if (savedToken) {
+              gapi.client.setToken({ access_token: savedToken });
+              updateSyncUIConnected();
+              pullScheduleFromDrive(); // 自動拉取最新班表
+          }
+          
           maybeEnableSyncUI();
       } catch (err) {
           console.error("GAPI 初始化失敗:", err);
@@ -46,7 +55,20 @@
           tokenClient = google.accounts.oauth2.initTokenClient({
               client_id: CLIENT_ID,
               scope: SCOPES,
-              callback: '', // 授權完成後動態處理 Callback
+              callback: async (resp) => {
+                  if (resp.error !== undefined) {
+                      console.log("靜默授權未通過或已取消");
+                      return;
+                  }
+                  // 📍 2. 授權成功後，將 Token 存入 sessionStorage 供重整後還原
+                  if (resp.access_token) {
+                      sessionStorage.setItem('gdrive_access_token', resp.access_token);
+                  }
+                  
+                  updateSyncUIConnected();
+                  showToast("☁️ Google 雲端已自動連線！");
+                  pullScheduleFromDrive();
+              },
           });
           gsisInited = true;
           maybeEnableSyncUI();
@@ -55,43 +77,40 @@
       }
   }
 
+  function updateSyncUIConnected() {
+      const loginBtn = document.getElementById('gdrive-login-btn');
+      if (loginBtn) {
+          loginBtn.innerText = "✅ 雲端已連線";
+          loginBtn.style.background = "#2ea44f";
+          loginBtn.style.opacity = '1';
+      }
+  }
+
   function maybeEnableSyncUI() {
       if (gapiInited && gsisInited) {
-          console.log("[v4.1.2] Google Drive API SDK 初始化成功！");
+          console.log("[v4.1.3] Google Drive API SDK 初始化成功！");
           const loginBtn = document.getElementById('gdrive-login-btn');
-          if (loginBtn) {
-              loginBtn.style.opacity = '1';
+          if (loginBtn) loginBtn.style.opacity = '1';
+
+          // 📍 3. 如果本機沒有存 Token，嘗試進行背景靜默登入 (Silent Token Request)
+          if (!sessionStorage.getItem('gdrive_access_token')) {
+              tokenClient.requestAccessToken({ prompt: '' });
           }
       }
   }
 
-  // 觸發 Google 登入驗證與連線
+  // 觸發手動 Google 登入驗證
   function handleAuthClick() {
       if (!gsisInited || !tokenClient) {
           showToast("⏳ Google 服務加載中，請稍後再試...");
           return;
       }
-      
-      tokenClient.callback = async (resp) => {
-          if (resp.error !== undefined) {
-              showToast("❌ 登入授權失敗或已取消");
-              throw (resp);
-          }
-          showToast("☁️ Google 雲端授權成功！");
-          const loginBtn = document.getElementById('gdrive-login-btn');
-          if (loginBtn) {
-              loginBtn.innerText = "✅ 雲端已連線";
-              loginBtn.style.background = "#2ea44f";
-          }
-          
-          // 📍 v4.1.2 新增：登入成功後自動從雲端拉取最新班表
-          pullScheduleFromDrive();
-      };
 
-      if (gapi.client.getToken() === null) {
-          tokenClient.requestAccessToken({prompt: 'consent'});
+      // 手動點擊時，若無 Token 則顯示彈窗授權
+      if (!sessionStorage.getItem('gdrive_access_token')) {
+          tokenClient.requestAccessToken({ prompt: 'consent' });
       } else {
-          tokenClient.requestAccessToken({prompt: ''});
+          tokenClient.requestAccessToken({ prompt: '' });
       }
   }
 
