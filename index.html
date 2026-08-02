@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店科目回報與排班系統v4.1.0</title>
+<title>蝦皮智取店科目回報與排班系統v4.1.1</title>
 
 <!-- 引入 SheetJS 解析 Excel -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  
@@ -57,7 +57,7 @@
 
   function maybeEnableSyncUI() {
       if (gapiInited && gsisInited) {
-          console.log("[v4.1.0] Google Drive API SDK 初始化成功！");
+          console.log("[v4.1.1] Google Drive API SDK 初始化成功！");
           const loginBtn = document.getElementById('gdrive-login-btn');
           if (loginBtn) {
               loginBtn.style.opacity = '1';
@@ -284,7 +284,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: center;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店科目回報與排班系統 v4.1.0
+      📦 蝦皮智取店科目回報與排班系統 v4.1.1
     </h1>
   </div>
   <div class="main-nav">
@@ -771,8 +771,14 @@
     </div>
     <div id="week-cards-container" class="schedule-grid"></div>
 
-    <div style="display: flex; gap: 10px; margin-top: 15px;">
-      <button class="copy-btn" style="background: #757575; margin-top: 0;" onclick="clearAllScheduleData()">🗑️ 清空所有班表歷史</button>
+    <!-- 📍 雙重刪除按鈕控制區 -->
+    <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+      <button class="copy-btn" style="background: #e74c3c; flex: 1; margin-top: 0;" onclick="deleteCurrentWeekSchedule()">
+        🗑️ 刪除【當前選擇週次】班表
+      </button>
+      <button class="copy-btn" style="background: #757575; flex: 1; margin-top: 0;" onclick="clearAllScheduleData()">
+        ⚠️ 清空所有歷史班表
+      </button>
     </div>
   </div>
 
@@ -818,7 +824,7 @@
 <footer class="site-footer">
   <div class="brand-info">
     <span>📦 蝦皮智取店回報與排班系統</span>
-    <span>v4.1.0 (Cloud Sync)</span>
+    <span>v4.1.1 (Cloud Sync)</span>
   </div>
   <span class="divider">•</span>
   <span>© 2026 Developed by <b>willy huang (WSOFT)</b></span>
@@ -1047,6 +1053,54 @@ function loadWeekSchedule() {
   }
 }
 
+/* ==========================================================================
+   【班表刪除邏輯 - v4.1.1 支援單週刪除與全域清空】
+   ========================================================================== */
+
+let deleteWeekConfirmTimer = null;
+
+// 📍 1. 只刪除當前選取的週次 (7天)
+function deleteCurrentWeekSchedule() {
+  const mondayStr = document.getElementById('week-picker').value;
+  if (!mondayStr) {
+    showToast('⚠️ 請先選擇要刪除的週次！');
+    return;
+  }
+
+  if (deleteWeekConfirmTimer) {
+    clearTimeout(deleteWeekConfirmTimer);
+    deleteWeekConfirmTimer = null;
+
+    const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+    const parts = mondayStr.split('-').map(Number);
+    const monday = new Date(parts[0], parts[1] - 1, parts[2]);
+
+    let deletedCount = 0;
+    for (let i = 0; i < 7; i++) {
+      let curDate = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+      let dateKey = formatDateISO(curDate);
+      if (savedSchedule[dateKey]) {
+        delete savedSchedule[dateKey];
+        deletedCount++;
+      }
+    }
+
+    localStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
+    showToast(`🗑️ 已成功刪除 ${mondayStr} 週次 (${deletedCount} 天) 的班表！`);
+
+    // 重新整理 UI 與下拉選單
+    updateHistoryDropdown();
+    loadWeekSchedule();
+    renderMonthView();
+    renderDayView();
+    return;
+  }
+
+  showToast(`⚠️ 請在 3 秒內【再按一次】以確認刪除 ${mondayStr} 當週班表！`, 3000);
+  deleteWeekConfirmTimer = setTimeout(() => { deleteWeekConfirmTimer = null; }, 3000);
+}
+
+// 📍 2. 全域徹底清空 (保留防誤觸)
 let clearScheduleConfirmTimer = null;
 
 function clearAllScheduleData() {
@@ -2031,6 +2085,7 @@ function handleExcelImport(event) {
 
   reader.readAsArrayBuffer(file);
 }
+
 /**
  * 萬能 Excel 日期格式化工具 (支援 Date 物件、字串與 Excel 數字天數)
  */
