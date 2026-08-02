@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店科目回報與排班系統v4.0.2</title>
+<title>蝦皮智取店科目回報與排班系統v4.1.0</title>
 
 <!-- 引入 SheetJS 解析 Excel -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  
@@ -12,10 +12,10 @@
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 
-<!-- ☁️ Google Drive AppData 同步 SDK 初始化腳本 (v4.0.2) -->
+<!-- ☁️ Google Drive AppData 同步 SDK 初始化腳本 -->
 <script>
   /* ==========================================================================
-     【Google Drive AppData 自動同步邏輯 (v4.0.2)】
+     【Google Drive AppData 自動同步邏輯】
      ========================================================================== */
   const CLIENT_ID = '879549181954-r1eai9agafnkp69o0cgbfcttegh39vju.apps.googleusercontent.com';
   const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
@@ -57,7 +57,7 @@
 
   function maybeEnableSyncUI() {
       if (gapiInited && gsisInited) {
-          console.log("[v4.0.2] Google Drive API SDK 初始化成功！");
+          console.log("[v4.1.0] Google Drive API SDK 初始化成功！");
           const loginBtn = document.getElementById('gdrive-login-btn');
           if (loginBtn) {
               loginBtn.style.opacity = '1';
@@ -284,7 +284,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: center;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店科目回報與排班系統 v4.0.2
+      📦 蝦皮智取店科目回報與排班系統 v4.1.0
     </h1>
   </div>
   <div class="main-nav">
@@ -814,11 +814,11 @@
 
 </div>
 
-<!-- 📍 全域頁尾 Footer (Google 雲端同步 & Excel 匯入 v4.0.2) -->
+<!-- 📍 全域頁尾 Footer (Google 雲端同步 & Excel 匯入) -->
 <footer class="site-footer">
   <div class="brand-info">
     <span>📦 蝦皮智取店回報與排班系統</span>
-    <span>v4.0.2 (Cloud Sync)</span>
+    <span>v4.1.0 (Cloud Sync)</span>
   </div>
   <span class="divider">•</span>
   <span>© 2026 Developed by <b>willy huang (WSOFT)</b></span>
@@ -1932,9 +1932,9 @@ function showToast(message, duration = 2000) {
 }
 
 /* ==========================================================================
-   【處理 Excel 班表匯入】
+   【處理 Excel 班表匯入 - 高相容日期解析】
    ========================================================================== */  
-   function handleExcelImport(event) {
+function handleExcelImport(event) {
   const file = event.target.files[0];
   if (!file) return;
 
@@ -1942,36 +1942,36 @@ function showToast(message, duration = 2000) {
   reader.onload = function(e) {
     try {
       const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
+      // 關鍵點：開啟 cellDates: true 讓 SheetJS 直接回傳原生 Date 物件
+      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
       
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
       
-      // 轉為二維陣列
-      const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
+      const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
 
       if (!rawData || rawData.length < 3) {
         showToast('⚠️ Excel 格式不符或無資料！');
         return;
       }
 
-      // 📍 關鍵修正：
-      // row 0 (索引 0): 日期
-      // row 1 (索引 1): 星期 (忽略)
-      // row 2 (索引 2): 班表地點與時間內容
+      // row 0: 日期列
+      // row 2: 班表地點與時間內容列
       const dateRow = rawData[0];
-      const contentRow = rawData[2]; // 👈 修正為讀取第三列 (索引 2)
+      const contentRow = rawData[2];
 
       let scheduleData = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
       let importedCount = 0;
       let firstImportedMonday = null;
 
       for (let col = 0; col < dateRow.length; col++) {
-        let dateStr = dateRow[col];
+        let rawDateVal = dateRow[col];
         let content = contentRow[col] ? contentRow[col].toString().trim() : '';
 
-        if (!dateStr) continue;
-        dateStr = formatDateString(dateStr);
+        if (!rawDateVal) continue;
+        
+        // 使用強化版日期解析工具
+        let dateStr = parseExcelDateToISO(rawDateVal);
 
         if (dateStr && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
           if (!firstImportedMonday) {
@@ -2024,8 +2024,35 @@ function showToast(message, duration = 2000) {
   reader.readAsArrayBuffer(file);
 }
 
-function formatDateString(str) {
-  if (!str) return '';
+/**
+ * 萬能 Excel 日期格式化工具 (支援 Date 物件、字串與 Excel 數字天數)
+ */
+function parseExcelDateToISO(val) {
+  if (!val) return '';
+  
+  // 情況 1: 原生 JS Date 物件
+  if (val instanceof Date) {
+    if (!isNaN(val.getTime())) {
+      const year = val.getFullYear();
+      const month = String(val.getMonth() + 1).padStart(2, '0');
+      const day = String(val.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  }
+
+  // 情況 2: Excel 序號數值 (例如 46237)
+  if (typeof val === 'number') {
+    const d = XLSX.SSF.parse_date_code(val);
+    if (d) {
+      const year = d.y;
+      const month = String(d.m).padStart(2, '0');
+      const day = String(d.d).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  }
+
+  // 情況 3: 字串處理 (例如 "2026/8/3", "2026-08-03", "2026-08-03T00:00:00.000Z")
+  const str = String(val).trim();
   const d = new Date(str);
   if (!isNaN(d.getTime())) {
     const year = d.getFullYear();
@@ -2033,9 +2060,10 @@ function formatDateString(str) {
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   }
-  return str;
+
+  return '';
 }
-  
+
 /* ==========================================================================
    【系統狀態監測、容量管理與資料備份】
    ========================================================================== */
