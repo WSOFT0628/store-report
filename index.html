@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店科目回報與排班系統v4.1.3</title>
+<title>蝦皮智取店科目回報與排班系統v4.1.4</title>
 
 <!-- 引入 SheetJS 解析 Excel -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  
@@ -15,7 +15,7 @@
 <!-- ☁️ Google Drive AppData 自動同步與靜默認證腳本 -->
 <script>
   /* ==========================================================================
-     【Google Drive AppData 自動同步與自動還原連線邏輯 - v4.1.3】
+     【Google Drive AppData 自動同步與自動還原連線邏輯 - v4.1.4】
      ========================================================================== */
   const CLIENT_ID = '879549181954-r1eai9agafnkp69o0cgbfcttegh39vju.apps.googleusercontent.com';
   const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
@@ -31,9 +31,7 @@
 
   async function initializeGapiClient() {
       try {
-          await gapi.client.init({
-              discoveryDocs: [DISCOVERY_DOC],
-          });
+          await gapi.client.init({ discoveryDocs: [DISCOVERY_DOC] });
           gapiInited = true;
           
           const savedToken = sessionStorage.getItem('gdrive_access_token');
@@ -54,10 +52,7 @@
               client_id: CLIENT_ID,
               scope: SCOPES,
               callback: async (resp) => {
-                  if (resp.error !== undefined) {
-                      console.log("授權未通過或已取消");
-                      return;
-                  }
+                  if (resp.error !== undefined) return;
                   if (resp.access_token) {
                       sessionStorage.setItem('gdrive_access_token', resp.access_token);
                   }
@@ -84,7 +79,7 @@
 
   function maybeEnableSyncUI() {
       if (gapiInited && gsisInited) {
-          console.log("[v4.1.3] Google Drive API SDK 初始化成功！");
+          console.log("[v4.1.4] Google Drive API SDK 初始化成功！");
           const loginBtn = document.getElementById('gdrive-login-btn');
           if (loginBtn) loginBtn.style.opacity = '1';
 
@@ -108,19 +103,15 @@
   }
 
   /* ==========================================================================
-     【Google Drive 全系統資料備份上傳與下載 - v4.1.3】
+     【Google Drive 全系統資料備份上傳與下載】
      ========================================================================== */
 
   async function syncScheduleToDrive() {
-    if (!gapiInited || !gapi.client.getToken()) {
-      console.log("未連線至 Google 雲端，僅儲存於本機");
-      return;
-    }
+    if (!gapiInited || !gapi.client.getToken()) return;
 
     try {
       showToast("☁️ 正在同步資料至 Google 雲端...");
       
-      // 打包本機所有系統資料 (含排班與巡店紀錄)
       const allData = {};
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -180,7 +171,6 @@
       showToast("✅ 資料已成功同步至雲端！");
     } catch (err) {
       console.error("雲端同步失敗:", err);
-      showToast("❌ 雲端同步失敗，請確認網路或登入狀態");
     }
   }
 
@@ -218,7 +208,6 @@
             updateDraftLabels();
             showToast("☁️ 已自動從雲端拉取最新資料！");
           } catch(e) {
-            // 相容性處理：若遠端為舊版純班表 JSON
             localStorage.setItem('shopee_user_schedule', fileRes.body);
             loadWeekSchedule();
           }
@@ -241,7 +230,7 @@
   .tab-content { display: none; padding: 15px; }
   .tab-content.active { display: block; }
 
-  .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: opacity 0.3s; }
+  .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: opacity 0.3s; overflow: hidden; }
   .card.disabled-card { opacity: 0.5; background: #eee; }
   .card h3 { margin-top: 0; color: #ff5722; border-bottom: 2px solid #ffe0b2; padding-bottom: 5px; font-size: 15px; }
   
@@ -283,25 +272,26 @@
   .sub-tab-btn { flex: 1; padding: 8px; border: 1px solid #dcdfe6; background: #f8f9fa; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; text-align: center; }
   .sub-tab-btn.active { background: #ee4d2d; color: white; border-color: #ee4d2d; }
 
-  .schedule-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 10px; }
-  .schedule-grid-head { text-align: center; font-weight: bold; font-size: 12px; padding: 8px 0; background: #2c3e50; color: white; border-radius: 6px; }
+  /* 網格系統 - 預設 */
+  .schedule-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
+  .schedule-grid-head { text-align: center; font-weight: bold; font-size: 12px; padding: 6px 0; background: #2c3e50; color: white; border-radius: 4px; }
 
-  .week-card { min-height: 90px; border: 1px solid #e0e0e0; border-radius: 8px; padding: 8px; background: #fff; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; transition: all 0.15s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-  .week-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-  .week-card .date-lbl { font-size: 11px; color: #777; font-weight: bold; border-bottom: 1px dashed #eee; padding-bottom: 4px; margin-bottom: 4px; text-align: center; }
-  .week-card .loc-lbl { font-size: 13px; font-weight: bold; color: #e65100; text-align: center; margin-top: 4px; line-height: 1.2; word-break: break-all; }
-  .week-card .time-lbl { font-size: 11px; color: #555; text-align: center; margin-top: 4px; background: rgba(0,0,0,0.03); padding: 2px; border-radius: 4px; }
+  .week-card { min-height: 85px; border: 1px solid #e0e0e0; border-radius: 6px; padding: 6px 4px; background: #fff; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; transition: all 0.15s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .week-card .date-lbl { font-size: 11px; color: #777; font-weight: bold; border-bottom: 1px dashed #eee; padding-bottom: 2px; margin-bottom: 2px; text-align: center; }
+  .week-card .loc-lbl { font-size: 12px; font-weight: bold; color: #e65100; text-align: center; margin-top: 2px; line-height: 1.2; word-break: break-all; }
+  .week-card .time-lbl { font-size: 10px; color: #555; text-align: center; margin-top: 2px; background: rgba(0,0,0,0.03); padding: 2px; border-radius: 4px; word-break: break-all; }
   
   .week-card.has-work { background: #fff3e0; border-color: #ffe0b2; }
   .week-card.is-off { background: #f2f3f5; border-color: #e0e0e0; }
   .week-card.is-off .loc-lbl { color: #7f8c8d; }
 
-  .calendar-cell { min-height: 65px; border: 1px solid #e0e0e0; border-radius: 8px; padding: 6px; background: #fff; font-size: 11px; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; }
+  /* 月曆月檢視樣式 */
+  .calendar-cell { min-height: 60px; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px 2px; background: #fff; font-size: 11px; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; overflow: hidden; }
   .calendar-cell.other-month { background: #f2f3f5; opacity: 0.75; }
   .calendar-cell.is-off { background: #f2f3f5; }
   .calendar-cell.has-work { background: #fff3e0; border-color: #ffe0b2; }
-  .calendar-cell .day-num { font-weight: bold; font-size: 12px; color: #333; }
-  .calendar-cell .day-loc { color: #e65100; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+  .calendar-cell .day-num { font-weight: bold; font-size: 11px; color: #333; }
+  .calendar-cell .day-loc { color: #e65100; font-weight: bold; font-size: 10px; line-height: 1.1; margin-top: 2px; word-break: break-all; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 
   .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: none; align-items: center; justify-content: center; }
   .modal-overlay.active { display: flex; }
@@ -311,11 +301,18 @@
   .site-footer .brand-info { display: flex; align-items: center; gap: 6px; font-weight: 600; color: #24292f; }
   .site-footer a { color: #0969da; text-decoration: none; transition: color 0.2s; }
 
+  /* 📍 RWD 手機版網格溢出修復 */
   @media (max-width: 600px) {
-    .schedule-grid { grid-template-columns: repeat(7, 1fr); gap: 3px; }
-    .week-card { min-height: 75px; padding: 4px; }
-    .week-card .loc-lbl { font-size: 11px; }
+    .tab-content { padding: 8px; }
+    .card { padding: 10px; }
+    .schedule-grid { gap: 2px; }
+    .schedule-grid-head { font-size: 10px; padding: 4px 0; }
+    .week-card { min-height: 65px; padding: 2px; }
+    .week-card .loc-lbl { font-size: 10px; }
     .week-card .time-lbl { font-size: 9px; }
+    .calendar-cell { min-height: 52px; padding: 2px; }
+    .calendar-cell .day-num { font-size: 10px; }
+    .calendar-cell .day-loc { font-size: 9px; -webkit-line-clamp: 2; }
     .site-footer { gap: 8px 12px; font-size: 11px; }
   }
 
@@ -328,11 +325,11 @@
 
 <div id="toast-container"></div>
 
-<!-- 📍 全域頂部標題與導覽列 -->
+<!-- 全域頂部標題與導覽列 -->
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: center;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店科目回報與排班系統 v4.1.3
+      📦 蝦皮智取店科目回報與排班系統 v4.1.4
     </h1>
   </div>
   <div class="main-nav">
@@ -364,7 +361,6 @@
     </div>
   </div>
 
-  <!-- 📍 需求一修改：將儲存按鈕拆分為「單純儲存」與「儲存並同步至班表」 -->
   <div class="storage-btn-group">
     <button class="btn-save-only" onclick="saveDataOnly(true)">💾 僅儲存巡店紀錄</button>
     <button class="btn-save-sync" onclick="saveDataAndSyncToSchedule(true)">🔄 儲存並同步至班表</button>
@@ -413,7 +409,7 @@
     </div>
   </div>
 
-  <!-- 各科目卡片 (科目3 ~ 15) -->
+  <!-- 科目卡片 (科目3 ~ 15) -->
   <div class="card" id="card_c3" data-shift="早">
     <h3>科目3 逾期包裹 <span class="shift-tag tag-morning">早班專屬</span></h3>
     <label>逾期</label>
@@ -669,10 +665,9 @@
     
     <div id="day-schedule-info" style="font-size: 15px; line-height: 1.6; margin: 15px 0;"></div>
     
-    <!-- 📍 需求二修改：新增「同步本日班表至巡店表單」按鈕 -->
     <div style="display: flex; flex-direction: column; gap: 8px;">
       <button class="copy-btn" style="background: #2e7d32; margin-top: 0;" onclick="syncCurrentDayScheduleToReportDraft()">
-        🔄 將本日班表帶入至巡店回報
+        🔄 將本日班表帶入至巡店表單 (自動拆分多門市)
       </button>
       <button class="copy-btn" style="background: #ee4d2d; margin-top: 0;" onclick="openModal(currentSelectedDayKey)">✏️ 編輯本日排班</button>
       <button class="copy-btn" id="btn-load-report-data" style="background: #2196f3; margin-top: 0; display: none;" onclick="restoreReportDataToForm()">📦 查看/還原當天巡店填表內容</button>
@@ -693,11 +688,11 @@
 
 </div>
 
-<!-- 📍 全域頁尾 Footer -->
+<!-- 全域頁尾 Footer -->
 <footer class="site-footer">
   <div class="brand-info">
     <span>📦 蝦皮智取店回報與排班系統</span>
-    <span>v4.1.3 (Cloud Sync)</span>
+    <span>v4.1.4 (Mobile Optimized)</span>
   </div>
   <span class="divider">•</span>
   <span>© 2026 Developed by <b>willy huang (WSOFT)</b></span>
@@ -719,13 +714,13 @@
   <input type="file" id="backup-file-input" style="display:none;" onchange="handleFileImport(event)" accept=".json">
 </footer>
 
-<!-- 📍 編輯 Modal 彈窗 -->
+<!-- 編輯 Modal 彈窗 -->
 <div id="edit-day-modal" class="modal-overlay">
   <div class="modal-card">
     <h3 id="modal-date-title" style="margin-top:0; color:#ee4d2d; font-size:16px;">編輯排班</h3>
     <input type="hidden" id="modal-date-key">
-    <label>📍 地點 / 門市 (填 X 表示休假)</label>
-    <input type="text" id="modal-loc-input" placeholder="例: 公館 / 萬福 / X">
+    <label>📍 地點 / 門市 (填 X 表示休假，多門市用 / 隔開)</label>
+    <input type="text" id="modal-loc-input" placeholder="例: 公館/萬福 / X">
     <label>⏰ 班次時間 (可留空)</label>
     <input type="text" id="modal-time-input" placeholder="例: 09:00-18:00">
     <div style="display: flex; gap: 8px; margin-top: 15px;">
@@ -998,7 +993,28 @@ function renderDayView() {
   }
 }
 
-/* 📍 需求二：將班表當天資料同步帶入至巡店回報 */
+/**
+ * 📍 門市智慧比對函數
+ * 傳入文字 (例如："公館(含NDD打包)")，自動尋找比對 storesData 內最符合的門市全名
+ */
+function matchStoreName(rawText) {
+  if (!rawText) return '';
+  const cleanStr = rawText.trim();
+  
+  // 1. 完全或包含比對
+  for (let s of storesData) {
+    const shortName = s.name.replace(/-智取店$/, '').replace(/智取店$/, '');
+    if (cleanStr.includes(shortName) || cleanStr.includes(s.name)) {
+      return s.name;
+    }
+  }
+  // 2. 若無精確比對，回傳括號前的文字或原文字
+  return cleanStr.split('(')[0].split('{')[0].trim();
+}
+
+/**
+ * 📍 關鍵功能：班表當天資料智慧拆分多門市並同步至巡店草稿
+ */
 function syncCurrentDayScheduleToReportDraft() {
   const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
   const dayData = savedSchedule[currentSelectedDayKey];
@@ -1008,30 +1024,51 @@ function syncCurrentDayScheduleToReportDraft() {
     return;
   }
 
-  switchMainTab('report-tab', document.querySelectorAll('.nav-btn')[0]);
+  // 1. 依照 '/' 或 '\n' 拆解地點字串
+  const storeTokens = dayData.loc.split(/[\/\n]/).map(t => t.trim()).filter(Boolean);
 
-  // 解析日期 (月/日)
+  if (storeTokens.length === 0) {
+    showToast('⚠️ 無法解析有效的門市名稱！');
+    return;
+  }
+
+  // 2. 解析日期 (月/日) 與班別
+  let dateStr = getTodayString();
   const parts = currentSelectedDayKey.split('-');
   if (parts.length === 3) {
-    const m = parseInt(parts[1], 10);
-    const d = parseInt(parts[2], 10);
-    document.getElementById('date').value = `${m}/${d}`;
+    dateStr = `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
   }
+  const shiftVal = (dayData.t1 && dayData.t1.includes('晚')) ? '晚' : '早';
 
-  // 帶入門市與班別
-  document.getElementById('shopName').value = dayData.loc;
-  if (dayData.t1 && dayData.t1.includes('晚')) {
-    document.getElementById('shift').value = '晚';
-  } else {
-    document.getElementById('shift').value = '早';
-  }
+  // 3. 依序填入草稿 draft_1, draft_2, draft_3 ...
+  let matchedCount = 0;
+  storeTokens.forEach((token, index) => {
+    if (index >= 5) return; // 最高支援 5 家門市
 
-  updateStoreInfo();
-  applyShiftLock();
-  autoSave();
+    const draftKey = `shopee_report_draft_${index + 1}`;
+    const matchedShopName = matchStoreName(token);
+
+    // 取得現有草稿資料，避免覆蓋已填寫的科目數據
+    let draftData = {};
+    try {
+      draftData = JSON.parse(localStorage.getItem(draftKey) || '{}');
+    } catch(e) {}
+
+    draftData.date = dateStr;
+    draftData.shopName = matchedShopName;
+    draftData.shift = shiftVal;
+
+    localStorage.setItem(draftKey, JSON.stringify(draftData));
+    matchedCount++;
+  });
+
+  // 4. 切換頁籤並載入第一張草稿
+  switchMainTab('report-tab', document.querySelectorAll('.nav-btn')[0]);
+  currentDraftKey = 'shopee_report_draft_1';
+  loadData(false);
   updateDraftLabels();
 
-  showToast(`🔄 已成功將 ${currentSelectedDayKey} [${dayData.loc}] 帶入巡店表單！`);
+  showToast(`🔄 已成功將 ${currentSelectedDayKey} 的 ${matchedCount} 家門市拆分帶入巡店草稿！`);
 }
 
 function restoreReportDataToForm() {
@@ -1255,7 +1292,6 @@ function autoSave() {
   localStorage.setItem(currentDraftKey, getAllData());
 }
 
-/* 📍 需求一改動 1: 單純儲存巡店紀錄 (不上推班表) */
 function saveDataOnly(showAlert) {
   const dataStr = getAllData();
   localStorage.setItem(currentDraftKey, dataStr);
@@ -1267,7 +1303,6 @@ function saveDataOnly(showAlert) {
   }
 }
 
-/* 📍 需求一改動 2: 儲存並同步至班表 */
 function saveDataAndSyncToSchedule(showAlert) {
   const dataStr = getAllData();
   localStorage.setItem(currentDraftKey, dataStr);
@@ -1850,8 +1885,6 @@ function handleExcelImport(event) {
       }
 
       localStorage.setItem('shopee_user_schedule', JSON.stringify(scheduleData));
-      
-      // 📍 匯入完成後全套同步推送到雲端
       syncScheduleToDrive();
 
       showToast(`📊 成功匯入 ${importedCount} 天的班表！`);
@@ -1964,7 +1997,7 @@ function exportBackupData() {
   }
 
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
-  const downloadAnchor = document.createElement('a');
+  downloadAnchor = document.createElement('a');
   const todayStr = new Date().toISOString().split('T')[0];
   
   downloadAnchor.setAttribute("href", dataStr);
