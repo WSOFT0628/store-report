@@ -2,8 +2,8 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>蝦皮智取店科目回報與排班系統v3.2.7</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>蝦皮智取店科目回報與排班系統v3.2.9</title>
 <style>
   /* ==========================================================================
      【全域基礎樣式與版面配置】
@@ -152,16 +152,37 @@
   .modal-overlay.active { display: flex; }
   .modal-card { background: white; width: 88%; max-width: 360px; border-radius: 12px; padding: 18px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
 
+  /* 頁尾 Footer 樣式 (已加入 Safe Area 避讓) */
+  .site-footer {
+    margin-top: 30px;
+    padding: 20px 15px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid #e1e4e8;
+    background-color: #ffffff;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 12px 18px;
+    font-size: 12px;
+    color: #57606a;
+  }
+  .site-footer .brand-info { display: flex; align-items: center; gap: 6px; font-weight: 600; color: #24292f; }
+  .site-footer a { color: #0969da; text-decoration: none; transition: color 0.2s; }
+  .site-footer a:hover { text-decoration: underline; color: #0550ae; }
+  .site-footer .divider { color: #d0d7de; }
+
   /* RWD 手機版優化 */
   @media (max-width: 600px) {
     .schedule-grid { grid-template-columns: repeat(7, 1fr); gap: 3px; }
     .week-card { min-height: 75px; padding: 4px; }
     .week-card .loc-lbl { font-size: 11px; }
     .week-card .time-lbl { font-size: 9px; }
+    .site-footer { gap: 8px 12px; font-size: 11px; }
   }
 
   /* Toast 非阻斷式訊息提示框 */
-  #toast-container { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%); z-index: 9999; pointer-events: none; }
+  #toast-container { position: fixed; bottom: calc(25px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 9999; pointer-events: none; }
   .toast { background: rgba(33, 33, 33, 0.9); color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-top: 8px; opacity: 0; transform: translateY(10px); transition: all 0.3s ease; text-align: center; white-space: pre-line; }
   .toast.show { opacity: 1; transform: translateY(0); }
 </style>
@@ -174,7 +195,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: center;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店科目回報與排班系統 v3.2.7
+      📦 蝦皮智取店科目回報與排班系統 v3.2.9
     </h1>
   </div>
   <div class="main-nav">
@@ -184,7 +205,7 @@
 </div>
 
 <!-- ==========================================================================
-     【頁籤一：巡店回報系統 (v3.2.7)】
+     【頁籤一：巡店回報系統 (v3.2.9)】
      ========================================================================== -->
 <div id="report-tab" class="tab-content active">
 
@@ -616,7 +637,7 @@
   <div class="card">
     <div class="sub-tab-group">
       <button class="sub-tab-btn" onclick="switchScheduleView('day')">日檢視</button>
-      <button class="sub-tab-btn active" onclick="switchScheduleView('week')">週檢視 (排班表)</button>
+      <button class="sub-tab-btn active" onclick="switchScheduleView('week')">週檢視</button>
       <button class="sub-tab-btn" onclick="switchScheduleView('month')">月檢視</button>
     </div>
 
@@ -646,7 +667,7 @@
   <!-- 週檢視模式 -->
   <div id="week-view-container" class="card">
     <div style="display: flex; justify-content: space-between; align-items: center;">
-      <h3 style="color: #ee4d2d; border-bottom-color: #ffe0b2; margin: 0;">當週勤務總覽</h3>
+      <h3 style="color: #ee4d2d; border-bottom-color: #ffe0b2; margin: 0;">本週勤務</h3>
       <span style="font-size: 12px; color: #888;">💡 點擊下方卡片即可編輯該天排班</span>
     </div>
     
@@ -669,7 +690,7 @@
   <!-- 日檢視模式 -->
   <div id="day-view-container" class="card" style="display:none;">
     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #bbdefb; padding-bottom: 5px;">
-      <h3 style="color: #2196f3; border-bottom: none; margin: 0;">本日勤務明細</h3>
+      <h3 style="color: #2196f3; border-bottom: none; margin: 0;">本日勤務</h3>
       <div style="display: flex; gap: 4px;">
         <button onclick="changeDayOffset(-1)" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; background: #fff; cursor: pointer;">◀ 前一天</button>
         <button onclick="changeDayOffset(1)" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; background: #fff; cursor: pointer;">後一天 ▶</button>
@@ -687,7 +708,7 @@
   <!-- 月檢視模式 -->
   <div id="month-view-container" class="card" style="display:none;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
-      <h3 style="color: #6a1b9a; border-bottom-color: #e1bee7; margin: 0;">本月勤務總覽</h3>
+      <h3 style="color: #6a1b9a; border-bottom-color: #e1bee7; margin: 0;">本月勤務</h3>
       <span style="font-size: 12px; color: #888;">💡 點擊日期格（含跨月日期）皆可編輯排班</span>
     </div>
     <div class="schedule-grid">
@@ -703,6 +724,25 @@
   </div>
 
 </div>
+
+<!-- 📍 全域頁尾 Footer (包含動態狀態與容量監測，已加入 Safe Area) -->
+<footer class="site-footer">
+  <div class="brand-info">
+    <span>📦 蝦皮智取店回報與排班系統</span>
+    <span>v3.2.9</span>
+  </div>
+  <span class="divider">•</span>
+  <span>© 2026 Developed by <b>willy huang (WSOFT)</b></span>
+  <span class="divider">•</span>
+  <span id="system-status-text">系統狀態：<span style="color:#2ea44f; font-weight:bold;">● 檢測中...</span></span>
+  <span class="divider">•</span>
+  <span id="storage-usage-text" style="color:#666;">容量：計算中...</span>
+  <span class="divider">•</span>
+  <a href="javascript:void(0)" onclick="exportBackupData()">💾 匯出備份</a>
+  <span class="divider">•</span>
+  <a href="javascript:void(0)" onclick="importBackupData()">📂 還原備份</a>
+  <input type="file" id="backup-file-input" style="display:none;" onchange="handleFileImport(event)" accept=".json">
+</footer>
 
 <!-- 📍 全域統一排班編輯 Modal 彈窗 -->
 <div id="edit-day-modal" class="modal-overlay">
@@ -1792,6 +1832,124 @@ function showToast(message, duration = 2000) {
     setTimeout(() => toast.remove(), 300);
   }, duration);
 }
+
+/* ==========================================================================
+   【系統狀態監測、容量管理與資料備份 (v3.2.9)】
+   ========================================================================== */
+
+// 1. 動態網路與儲存狀態監測
+function updateSystemStatus() {
+  const statusEl = document.getElementById('system-status-text');
+  if (!statusEl) return;
+
+  const isOnline = navigator.onLine;
+  let isStorageOk = true;
+
+  try {
+    const testKey = '__storage_test__';
+    localStorage.setItem(testKey, testKey);
+    localStorage.removeItem(testKey);
+  } catch (e) {
+    isStorageOk = false;
+  }
+
+  if (!isStorageOk) {
+    statusEl.innerHTML = '系統狀態：<span style="color:#d32f2f; font-weight:bold;">● 儲存空間已滿/受限</span>';
+  } else if (isOnline) {
+    statusEl.innerHTML = '系統狀態：<span style="color:#2ea44f; font-weight:bold;">● 連線正常</span>';
+  } else {
+    statusEl.innerHTML = '系統狀態：<span style="color:#ff9800; font-weight:bold;">● 離線模式 (本機儲存)</span>';
+  }
+
+  updateStorageUsage();
+}
+
+// 監聽網路連線切換事件
+window.addEventListener('online', updateSystemStatus);
+window.addEventListener('offline', updateSystemStatus);
+
+// 2. 計算 localStorage 使用空間
+function updateStorageUsage() {
+  const usageEl = document.getElementById('storage-usage-text');
+  if (!usageEl) return;
+
+  let totalChar = 0;
+  for (let key in localStorage) {
+    if (localStorage.hasOwnProperty(key)) {
+      totalChar += (localStorage[key].length + key.length);
+    }
+  }
+
+  // 以 5MB (約 5,242,880 字元) 作為參考估算
+  const usedKB = (totalChar / 1024).toFixed(1);
+  const percent = ((totalChar / 5242880) * 100).toFixed(1);
+
+  usageEl.innerText = `空間：${usedKB} KB (${percent}%)`;
+  if (parseFloat(percent) > 80) {
+    usageEl.style.color = '#d32f2f';
+    usageEl.style.fontWeight = 'bold';
+  } else {
+    usageEl.style.color = '#666';
+    usageEl.style.fontWeight = 'normal';
+  }
+}
+
+// 3. 匯出完整 JSON 備份檔
+function exportBackupData() {
+  const backupData = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key.startsWith('shopee_')) {
+      backupData[key] = localStorage.getItem(key);
+    }
+  }
+
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+  const downloadAnchor = document.createElement('a');
+  const todayStr = new Date().toISOString().split('T')[0];
+  
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", `蝦皮智取店系統備份_${todayStr}.json`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+  
+  showToast('📦 已成功下載系統資料備份檔！');
+}
+
+// 4. 還原 JSON 備份檔
+function importBackupData() {
+  document.getElementById('backup-file-input').click();
+}
+
+function handleFileImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const importedData = JSON.parse(e.target.result);
+      let count = 0;
+      for (let key in importedData) {
+        if (key.startsWith('shopee_')) {
+          localStorage.setItem(key, importedData[key]);
+          count++;
+        }
+      }
+      showToast(`📂 成功還原 ${count} 筆紀錄！頁面即將刷新...`);
+      setTimeout(() => { location.reload(); }, 1500);
+    } catch (err) {
+      showToast('❌ 還原失敗：無效的備份檔案格式！');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// 初始化時執行狀態檢查
+window.addEventListener('load', () => {
+  updateSystemStatus();
+});
 </script>
 </body>
 </html>
