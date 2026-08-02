@@ -3,7 +3,93 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店科目回報與排班系統v3.2.9</title>
+<title>蝦皮智取店科目回報與排班系統v4.1.0</title>
+
+<!-- 🌐 Google API & GIS 官方 SDK 庫 -->
+<script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+<script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+
+<!-- ☁️ Google Drive AppData 同步 SDK 初始化腳本 (v4.1.0) -->
+<script>
+  /* ==========================================================================
+     【Google Drive AppData 自動同步邏輯 (v4.1.0)】
+     ========================================================================== */
+  const CLIENT_ID = '879549181954-r1eai9agafnkp69o0cgbfcttegh39vju.apps.googleusercontent.com';
+  const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+  const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
+
+  let tokenClient;
+  let gapiInited = false;
+  let gsisInited = false;
+
+  function gapiLoaded() {
+      gapi.load('client', initializeGapiClient);
+  }
+
+  async function initializeGapiClient() {
+      try {
+          await gapi.client.init({
+              discoveryDocs: [DISCOVERY_DOC],
+          });
+          gapiInited = true;
+          maybeEnableSyncUI();
+      } catch (err) {
+          console.error("GAPI 初始化失敗:", err);
+      }
+  }
+
+  function gisLoaded() {
+      try {
+          tokenClient = google.accounts.oauth2.initTokenClient({
+              client_id: CLIENT_ID,
+              scope: SCOPES,
+              callback: '', // 授權完成後動態處理 Callback
+          });
+          gsisInited = true;
+          maybeEnableSyncUI();
+      } catch (err) {
+          console.error("GIS 初始化失敗:", err);
+      }
+  }
+
+  function maybeEnableSyncUI() {
+      if (gapiInited && gsisInited) {
+          console.log("[v4.1.0] Google Drive API SDK 初始化成功！");
+          const loginBtn = document.getElementById('gdrive-login-btn');
+          if (loginBtn) {
+              loginBtn.style.opacity = '1';
+          }
+      }
+  }
+
+  // 觸發 Google 登入驗證與連線
+  function handleAuthClick() {
+      if (!gsisInited || !tokenClient) {
+          showToast("⏳ Google 服務加載中，請稍後再試...");
+          return;
+      }
+      
+      tokenClient.callback = async (resp) => {
+          if (resp.error !== undefined) {
+              showToast("❌ 登入授權失敗或已取消");
+              throw (resp);
+          }
+          showToast("☁️ Google 雲端授權成功！");
+          const loginBtn = document.getElementById('gdrive-login-btn');
+          if (loginBtn) {
+              loginBtn.innerText = "✅ 雲端已連線";
+              loginBtn.style.background = "#2ea44f";
+          }
+      };
+
+      if (gapi.client.getToken() === null) {
+          tokenClient.requestAccessToken({prompt: 'consent'});
+      } else {
+          tokenClient.requestAccessToken({prompt: ''});
+      }
+  }
+</script>
+
 <style>
   /* ==========================================================================
      【全域基礎樣式與版面配置】
@@ -195,7 +281,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: center;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店科目回報與排班系統 v3.2.9
+      📦 蝦皮智取店科目回報與排班系統 v4.1.0
     </h1>
   </div>
   <div class="main-nav">
@@ -205,7 +291,7 @@
 </div>
 
 <!-- ==========================================================================
-     【頁籤一：巡店回報系統 (v3.2.9)】
+     【頁籤一：巡店回報系統 】
      ========================================================================== -->
 <div id="report-tab" class="tab-content active">
 
@@ -725,11 +811,11 @@
 
 </div>
 
-<!-- 📍 全域頁尾 Footer (包含動態狀態與容量監測，已加入 Safe Area) -->
+<!-- 📍 全域頁尾 Footer (Google 雲端同步 v4.1.0) -->
 <footer class="site-footer">
   <div class="brand-info">
     <span>📦 蝦皮智取店回報與排班系統</span>
-    <span>v3.2.9</span>
+    <span>v4.1.0 (Cloud Sync)</span>
   </div>
   <span class="divider">•</span>
   <span>© 2026 Developed by <b>willy huang (WSOFT)</b></span>
@@ -738,9 +824,14 @@
   <span class="divider">•</span>
   <span id="storage-usage-text" style="color:#666;">容量：計算中...</span>
   <span class="divider">•</span>
-  <a href="javascript:void(0)" onclick="exportBackupData()">💾 匯出備份</a>
+  <!-- Google 雲端同步區 -->
+  <span id="google-sync-box">
+    <button id="gdrive-login-btn" onclick="handleAuthClick()" style="background:#4285f4; color:white; border:none; padding:4px 10px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">☁️ 登入 Google 雲端</button>
+  </span>
   <span class="divider">•</span>
-  <a href="javascript:void(0)" onclick="importBackupData()">📂 還原備份</a>
+  <a href="javascript:void(0)" onclick="exportBackupData()">💾 本機備份</a>
+  <span class="divider">•</span>
+  <a href="javascript:void(0)" onclick="importBackupData()">📂 本機還原</a>
   <input type="file" id="backup-file-input" style="display:none;" onchange="handleFileImport(event)" accept=".json">
 </footer>
 
@@ -1834,10 +1925,9 @@ function showToast(message, duration = 2000) {
 }
 
 /* ==========================================================================
-   【系統狀態監測、容量管理與資料備份 (v3.2.9)】
+   【系統狀態監測、容量管理與資料備份 (v4.1.0)】
    ========================================================================== */
 
-// 1. 動態網路與儲存狀態監測
 function updateSystemStatus() {
   const statusEl = document.getElementById('system-status-text');
   if (!statusEl) return;
@@ -1864,11 +1954,9 @@ function updateSystemStatus() {
   updateStorageUsage();
 }
 
-// 監聽網路連線切換事件
 window.addEventListener('online', updateSystemStatus);
 window.addEventListener('offline', updateSystemStatus);
 
-// 2. 計算 localStorage 使用空間
 function updateStorageUsage() {
   const usageEl = document.getElementById('storage-usage-text');
   if (!usageEl) return;
@@ -1880,11 +1968,10 @@ function updateStorageUsage() {
     }
   }
 
-  // 以 5MB (約 5,242,880 字元) 作為參考估算
   const usedKB = (totalChar / 1024).toFixed(1);
   const percent = ((totalChar / 5242880) * 100).toFixed(1);
 
-  usageEl.innerText = `空間：${usedKB} KB (${percent}%)`;
+  usageEl.innerText = `容量：${usedKB} KB (${percent}%)`;
   if (parseFloat(percent) > 80) {
     usageEl.style.color = '#d32f2f';
     usageEl.style.fontWeight = 'bold';
@@ -1894,7 +1981,6 @@ function updateStorageUsage() {
   }
 }
 
-// 3. 匯出完整 JSON 備份檔
 function exportBackupData() {
   const backupData = {};
   for (let i = 0; i < localStorage.length; i++) {
@@ -1917,7 +2003,6 @@ function exportBackupData() {
   showToast('📦 已成功下載系統資料備份檔！');
 }
 
-// 4. 還原 JSON 備份檔
 function importBackupData() {
   document.getElementById('backup-file-input').click();
 }
@@ -1946,7 +2031,6 @@ function handleFileImport(event) {
   reader.readAsText(file);
 }
 
-// 初始化時執行狀態檢查
 window.addEventListener('load', () => {
   updateSystemStatus();
 });
