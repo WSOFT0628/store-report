@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店科目回報與排班系統v4.1.1</title>
+<title>蝦皮智取店科目回報與排班系統v4.1.2</title>
 
 <!-- 引入 SheetJS 解析 Excel -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  
@@ -57,7 +57,7 @@
 
   function maybeEnableSyncUI() {
       if (gapiInited && gsisInited) {
-          console.log("[v4.1.1] Google Drive API SDK 初始化成功！");
+          console.log("[v4.1.2] Google Drive API SDK 初始化成功！");
           const loginBtn = document.getElementById('gdrive-login-btn');
           if (loginBtn) {
               loginBtn.style.opacity = '1';
@@ -83,6 +83,9 @@
               loginBtn.innerText = "✅ 雲端已連線";
               loginBtn.style.background = "#2ea44f";
           }
+          
+          // 📍 v4.1.2 新增：登入成功後自動從雲端拉取最新班表
+          pullScheduleFromDrive();
       };
 
       if (gapi.client.getToken() === null) {
@@ -90,6 +93,111 @@
       } else {
           tokenClient.requestAccessToken({prompt: ''});
       }
+  }
+
+  /* ==========================================================================
+     【Google Drive 班表檔案上傳與下載 - v4.1.2】
+     ========================================================================== */
+
+  // 1. 將本機 LocalStorage 班表上傳至 Google Drive AppData
+  async function syncScheduleToDrive() {
+    if (!gapiInited || !gapi.client.getToken()) {
+      console.log("未連線至 Google 雲端，僅儲存於本機");
+      return;
+    }
+
+    try {
+      showToast("☁️ 正在同步班表至 Google 雲端...");
+      const scheduleData = localStorage.getItem('shopee_user_schedule') || '{}';
+      
+      const response = await gapi.client.drive.files.list({
+        spaces: 'appDataFolder',
+        fields: 'files(id, name)',
+        pageSize: 10
+      });
+
+      const files = response.result.files;
+      let fileId = files && files.length > 0 ? files[0].id : null;
+
+      const fileContent = scheduleData;
+      const metadata = {
+        name: 'shopee_user_schedule.json',
+        mimeType: 'application/json',
+        parents: fileId ? [] : ['appDataFolder']
+      };
+
+      if (fileId) {
+        // 覆蓋既有備份檔案
+        await gapi.client.request({
+          path: `/upload/drive/v3/files/${fileId}`,
+          method: 'PATCH',
+          params: { uploadType: 'media' },
+          body: fileContent
+        });
+      } else {
+        // 建立新檔案
+        const boundary = '314159265358979323846';
+        const delimiter = "\r\n--" + boundary + "\r\n";
+        const close_delim = "\r\n--" + boundary + "--";
+
+        const multipartResponseBody =
+          delimiter +
+          'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+          JSON.stringify(metadata) +
+          delimiter +
+          'Content-Type: application/json\r\n\r\n' +
+          fileContent +
+          close_delim;
+
+        await gapi.client.request({
+          path: '/upload/drive/v3/files',
+          method: 'POST',
+          params: { uploadType: 'multipart' },
+          headers: {
+            'Content-Type': 'multipart/related; boundary="' + boundary + '"'
+          },
+          body: multipartResponseBody
+        });
+      }
+
+      showToast("✅ 班表已成功同步至雲端！");
+    } catch (err) {
+      console.error("雲端同步失敗:", err);
+      showToast("❌ 雲端同步失敗，請重新連線 Google 雲端");
+    }
+  }
+
+  // 2. 從 Google Drive AppData 下載最新班表並更新本機
+  async function pullScheduleFromDrive() {
+    if (!gapiInited || !gapi.client.getToken()) return;
+
+    try {
+      const response = await gapi.client.drive.files.list({
+        spaces: 'appDataFolder',
+        fields: 'files(id, name)',
+        pageSize: 1
+      });
+
+      const files = response.result.files;
+      if (files && files.length > 0) {
+        const fileId = files[0].id;
+        const fileRes = await gapi.client.drive.files.get({
+          fileId: fileId,
+          alt: 'media'
+        });
+
+        if (fileRes.body) {
+          localStorage.setItem('shopee_user_schedule', fileRes.body);
+          updateHistoryDropdown();
+          loadWeekSchedule();
+          renderMonthView();
+          renderDayView();
+          showToast("☁️ 已自動從雲端拉取最新班表！");
+        }
+      }
+    } catch (err) {
+      console.error("拉取雲端資料失敗:", err);
+    }
   }
 </script>
 
@@ -284,7 +392,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: center;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店科目回報與排班系統 v4.1.1
+      📦 蝦皮智取店科目回報與排班系統 v4.1.2
     </h1>
   </div>
   <div class="main-nav">
@@ -824,7 +932,7 @@
 <footer class="site-footer">
   <div class="brand-info">
     <span>📦 蝦皮智取店回報與排班系統</span>
-    <span>v4.1.1 (Cloud Sync)</span>
+    <span>v4.1.2 (Cloud Sync)</span>
   </div>
   <span class="divider">•</span>
   <span>© 2026 Developed by <b>willy huang (WSOFT)</b></span>
@@ -1054,7 +1162,7 @@ function loadWeekSchedule() {
 }
 
 /* ==========================================================================
-   【班表刪除邏輯 - v4.1.1 支援單週刪除與全域清空】
+   【班表刪除邏輯 - 支援單週刪除與全域清空】
    ========================================================================== */
 
 let deleteWeekConfirmTimer = null;
@@ -1093,6 +1201,9 @@ function deleteCurrentWeekSchedule() {
     loadWeekSchedule();
     renderMonthView();
     renderDayView();
+    
+    // 📍 刪除後自動同步雲端
+    syncScheduleToDrive();
     return;
   }
 
@@ -1110,6 +1221,9 @@ function clearAllScheduleData() {
     localStorage.removeItem('shopee_user_schedule');
     showToast('🗑️ 已徹底清空所有班表歷史資料！');
     initWeekPicker();
+    
+    // 📍 清空後自動同步雲端
+    syncScheduleToDrive();
     return;
   }
 
@@ -1315,6 +1429,9 @@ function saveModalDay() {
   renderMonthView();
   renderDayView();
   updateHistoryDropdown();
+
+  // 📍 編輯手動更新後同步雲端
+  syncScheduleToDrive();
 }
 
 function deleteModalDay() {
@@ -1332,6 +1449,9 @@ function deleteModalDay() {
   renderMonthView();
   renderDayView();
   updateHistoryDropdown();
+
+  // 📍 清空後同步雲端
+  syncScheduleToDrive();
 }
 
 /* ==========================================================================
@@ -1449,11 +1569,14 @@ function saveData(showAlert) {
 
       loadWeekSchedule();
       renderMonthView();
+      
+      // 📍 巡店寫入同時更新班表並同步雲端
+      syncScheduleToDrive();
     }
   } catch (e) {}
 
   if (showAlert) {
-    showToast(`💾 已成功寫入巡店紀錄，並自動同步至排班表！`);
+    showToast(`💾 已成功寫入巡店紀錄，並自動同步至排班表與雲端！`);
   }
 }
 
@@ -1986,7 +2109,7 @@ function showToast(message, duration = 2000) {
 }
 
 /* ==========================================================================
-   【處理 Excel 班表匯入 - v4.1.0 支援多週/多區塊垂直堆疊匯入】
+   【處理 Excel 班表匯入 - v4.1.2 支援多週匯入與自動雲端同步】
    ========================================================================== */  
 function handleExcelImport(event) {
   const file = event.target.files[0];
@@ -2013,7 +2136,7 @@ function handleExcelImport(event) {
       let importedCount = 0;
       let firstImportedMonday = null;
 
-      // 📍 核心修復：以每 3 列 (一週) 為單位進行遍歷 (0, 3, 6, 9...)
+      // 📍 核心邏輯：以每 3 列 (一週) 為單位進行遍歷 (0, 3, 6, 9...)
       for (let r = 0; r < rawData.length; r += 3) {
         const dateRow = rawData[r];       // 第 r 列：日期
         const contentRow = rawData[r + 2];// 第 r+2 列：班表內容與地點
@@ -2064,6 +2187,9 @@ function handleExcelImport(event) {
       // 寫入本機儲存
       localStorage.setItem('shopee_user_schedule', JSON.stringify(scheduleData));
       
+      // 📍 v4.1.2 新增：匯入成功後自動同步推送至 Google 雲端
+      syncScheduleToDrive();
+
       showToast(`📊 成功匯入 ${importedCount} 天的班表！`);
       
       // 自動切換至第一筆週次並更新畫面
