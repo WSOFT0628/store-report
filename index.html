@@ -1932,7 +1932,7 @@ function showToast(message, duration = 2000) {
 }
 
 /* ==========================================================================
-   【處理 Excel 班表匯入 - 高相容日期解析】
+   【處理 Excel 班表匯入 - v4.1.0 支援多週/多區塊垂直堆疊匯入】
    ========================================================================== */  
 function handleExcelImport(event) {
   const file = event.target.files[0];
@@ -1942,7 +1942,7 @@ function handleExcelImport(event) {
   reader.onload = function(e) {
     try {
       const data = new Uint8Array(e.target.result);
-      // 關鍵點：開啟 cellDates: true 讓 SheetJS 直接回傳原生 Date 物件
+      // 開啟 cellDates: true 讓 SheetJS 自動轉換原生 Date 物件
       const workbook = XLSX.read(data, { type: 'array', cellDates: true });
       
       const firstSheetName = workbook.SheetNames[0];
@@ -1955,48 +1955,56 @@ function handleExcelImport(event) {
         return;
       }
 
-      // row 0: 日期列
-      // row 2: 班表地點與時間內容列
-      const dateRow = rawData[0];
-      const contentRow = rawData[2];
-
       let scheduleData = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
       let importedCount = 0;
       let firstImportedMonday = null;
 
-      for (let col = 0; col < dateRow.length; col++) {
-        let rawDateVal = dateRow[col];
-        let content = contentRow[col] ? contentRow[col].toString().trim() : '';
+      // 📍 核心修復：以每 3 列 (一週) 為單位進行遍歷 (0, 3, 6, 9...)
+      for (let r = 0; r < rawData.length; r += 3) {
+        const dateRow = rawData[r];       // 第 r 列：日期
+        const contentRow = rawData[r + 2];// 第 r+2 列：班表內容與地點
 
-        if (!rawDateVal) continue;
-        
-        // 使用強化版日期解析工具
-        let dateStr = parseExcelDateToISO(rawDateVal);
+        if (!dateRow || !contentRow) continue;
 
-        if (dateStr && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-          if (!firstImportedMonday) {
-            firstImportedMonday = formatDateISO(getMonday(new Date(dateStr)));
+        for (let col = 0; col < dateRow.length; col++) {
+          let rawDateVal = dateRow[col];
+          let content = contentRow[col] ? contentRow[col].toString().trim() : '';
+
+          if (!rawDateVal) continue;
+          
+          let dateStr = parseExcelDateToISO(rawDateVal);
+
+          if (dateStr && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            // 記錄第一個被讀取到的週一日期，以便匯入後自動切換 UI
+            if (!firstImportedMonday) {
+              firstImportedMonday = formatDateISO(getMonday(new Date(dateStr)));
+            }
+
+            if (content.toUpperCase() === 'X' || content === '') {
+              scheduleData[dateStr] = {
+                loc: 'X',
+                t1: '',
+                isOff: true
+              };
+            } else {
+              const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+              const location = lines[0] || '';
+              const times = lines.slice(1).join(' / ');
+
+              scheduleData[dateStr] = {
+                loc: location,
+                t1: times,
+                isOff: false
+              };
+            }
+            importedCount++;
           }
-
-          if (content.toUpperCase() === 'X' || content === '') {
-            scheduleData[dateStr] = {
-              loc: 'X',
-              t1: '',
-              isOff: true
-            };
-          } else {
-            const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-            const location = lines[0] || '';
-            const times = lines.slice(1).join(' / ');
-
-            scheduleData[dateStr] = {
-              loc: location,
-              t1: times,
-              isOff: false
-            };
-          }
-          importedCount++;
         }
+      }
+
+      if (importedCount === 0) {
+        showToast('⚠️ 未能成功讀取任何日期，請確認 Excel 日期格式！');
+        return;
       }
 
       // 寫入本機儲存
@@ -2004,7 +2012,7 @@ function handleExcelImport(event) {
       
       showToast(`📊 成功匯入 ${importedCount} 天的班表！`);
       
-      // 自動切換至匯入的週次並刷新 UI
+      // 自動切換至第一筆週次並更新畫面
       if (firstImportedMonday) {
         document.getElementById('week-picker').value = firstImportedMonday;
       }
@@ -2023,7 +2031,6 @@ function handleExcelImport(event) {
 
   reader.readAsArrayBuffer(file);
 }
-
 /**
  * 萬能 Excel 日期格式化工具 (支援 Date 物件、字串與 Excel 數字天數)
  */
