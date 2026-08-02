@@ -3,16 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店科目回報與排班系統v4.1.0</title>
+<title>蝦皮智取店科目回報與排班系統v4.0.2</title>
+
+<!-- 引入 SheetJS 解析 Excel -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  
 
 <!-- 🌐 Google API & GIS 官方 SDK 庫 -->
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 
-<!-- ☁️ Google Drive AppData 同步 SDK 初始化腳本 (v4.1.0) -->
+<!-- ☁️ Google Drive AppData 同步 SDK 初始化腳本 (v4.0.2) -->
 <script>
   /* ==========================================================================
-     【Google Drive AppData 自動同步邏輯 (v4.1.0)】
+     【Google Drive AppData 自動同步邏輯 (v4.0.2)】
      ========================================================================== */
   const CLIENT_ID = '879549181954-r1eai9agafnkp69o0cgbfcttegh39vju.apps.googleusercontent.com';
   const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
@@ -54,7 +57,7 @@
 
   function maybeEnableSyncUI() {
       if (gapiInited && gsisInited) {
-          console.log("[v4.1.0] Google Drive API SDK 初始化成功！");
+          console.log("[v4.0.2] Google Drive API SDK 初始化成功！");
           const loginBtn = document.getElementById('gdrive-login-btn');
           if (loginBtn) {
               loginBtn.style.opacity = '1';
@@ -281,7 +284,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: center;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店科目回報與排班系統 v4.1.0
+      📦 蝦皮智取店科目回報與排班系統 v4.0.2
     </h1>
   </div>
   <div class="main-nav">
@@ -811,11 +814,11 @@
 
 </div>
 
-<!-- 📍 全域頁尾 Footer (Google 雲端同步 v4.1.0) -->
+<!-- 📍 全域頁尾 Footer (Google 雲端同步 & Excel 匯入 v4.0.2) -->
 <footer class="site-footer">
   <div class="brand-info">
     <span>📦 蝦皮智取店回報與排班系統</span>
-    <span>v4.1.0 (Cloud Sync)</span>
+    <span>v4.0.2 (Cloud Sync)</span>
   </div>
   <span class="divider">•</span>
   <span>© 2026 Developed by <b>willy huang (WSOFT)</b></span>
@@ -828,6 +831,10 @@
   <span id="google-sync-box">
     <button id="gdrive-login-btn" onclick="handleAuthClick()" style="background:#4285f4; color:white; border:none; padding:4px 10px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">☁️ 登入 Google 雲端</button>
   </span>
+  <span class="divider">•</span>
+  <!-- 📊 新增 Excel 班表匯入區 -->
+  <a href="javascript:void(0)" onclick="document.getElementById('excel-file-input').click()" style="color:#2e7d32; font-weight:bold;">📊 匯入 Excel 班表</a>
+  <input type="file" id="excel-file-input" style="display:none;" onchange="handleExcelImport(event)" accept=".xlsx, .xls">
   <span class="divider">•</span>
   <a href="javascript:void(0)" onclick="exportBackupData()">💾 本機備份</a>
   <span class="divider">•</span>
@@ -1925,7 +1932,110 @@ function showToast(message, duration = 2000) {
 }
 
 /* ==========================================================================
-   【系統狀態監測、容量管理與資料備份 (v4.1.0)】
+   【處理 Excel 班表匯入】
+   ========================================================================== */  
+function handleExcelImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      
+      // 轉為二維陣列
+      const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
+
+      if (!rawData || rawData.length < 2) {
+        showToast('⚠️ Excel 格式不符或無資料！');
+        return;
+      }
+
+      // row 0: 日期 (例: 2026-07-27)
+      // row 1: 排班內容 (例: 公館(含NDD打包)\n18:30-22:00)
+      const dateRow = rawData[0];
+      const contentRow = rawData[1];
+
+      let scheduleData = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+      let importedCount = 0;
+      let firstImportedMonday = null;
+
+      for (let col = 0; col < dateRow.length; col++) {
+        let dateStr = dateRow[col];
+        let content = contentRow[col] ? contentRow[col].toString().trim() : '';
+
+        if (!dateStr) continue;
+        dateStr = formatDateString(dateStr);
+
+        if (dateStr && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          if (!firstImportedMonday) {
+            firstImportedMonday = formatDateISO(getMonday(new Date(dateStr)));
+          }
+
+          if (content.toUpperCase() === 'X' || content === '') {
+            scheduleData[dateStr] = {
+              loc: 'X',
+              t1: '',
+              isOff: true
+            };
+          } else {
+            const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+            const location = lines[0] || '';
+            const times = lines.slice(1).join(' / ');
+
+            scheduleData[dateStr] = {
+              loc: location,
+              t1: times,
+              isOff: false
+            };
+          }
+          importedCount++;
+        }
+      }
+
+      // 寫入本機儲存
+      localStorage.setItem('shopee_user_schedule', JSON.stringify(scheduleData));
+      
+      showToast(`📊 成功匯入 ${importedCount} 天的班表！`);
+      
+      // 自動切換與刷新班表 UI
+      if (firstImportedMonday) {
+        document.getElementById('week-picker').value = firstImportedMonday;
+      }
+      updateHistoryDropdown();
+      loadWeekSchedule();
+      renderMonthView();
+      renderDayView();
+
+  } catch (err) {
+      console.error('Excel 解析失敗:', err);
+      showToast('❌ 檔案解析失敗，請確認是否為標準 Excel 格式！');
+  } finally {
+      event.target.value = '';
+  }
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
+function formatDateString(str) {
+  if (!str) return '';
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return str;
+}
+  
+/* ==========================================================================
+   【系統狀態監測、容量管理與資料備份】
    ========================================================================== */
 
 function updateSystemStatus() {
