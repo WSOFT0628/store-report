@@ -1934,7 +1934,7 @@ function showToast(message, duration = 2000) {
 /* ==========================================================================
    【處理 Excel 班表匯入】
    ========================================================================== */  
-function handleExcelImport(event) {
+   function handleExcelImport(event) {
   const file = event.target.files[0];
   if (!file) return;
 
@@ -1950,15 +1950,17 @@ function handleExcelImport(event) {
       // 轉為二維陣列
       const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
 
-      if (!rawData || rawData.length < 2) {
+      if (!rawData || rawData.length < 3) {
         showToast('⚠️ Excel 格式不符或無資料！');
         return;
       }
 
-      // row 0: 日期 (例: 2026-07-27)
-      // row 1: 排班內容 (例: 公館(含NDD打包)\n18:30-22:00)
+      // 📍 關鍵修正：
+      // row 0 (索引 0): 日期
+      // row 1 (索引 1): 星期 (忽略)
+      // row 2 (索引 2): 班表地點與時間內容
       const dateRow = rawData[0];
-      const contentRow = rawData[1];
+      const contentRow = rawData[2]; // 👈 修正為讀取第三列 (索引 2)
 
       let scheduleData = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
       let importedCount = 0;
@@ -2002,7 +2004,7 @@ function handleExcelImport(event) {
       
       showToast(`📊 成功匯入 ${importedCount} 天的班表！`);
       
-      // 自動切換與刷新班表 UI
+      // 自動切換至匯入的週次並刷新 UI
       if (firstImportedMonday) {
         document.getElementById('week-picker').value = firstImportedMonday;
       }
@@ -2011,12 +2013,12 @@ function handleExcelImport(event) {
       renderMonthView();
       renderDayView();
 
-  } catch (err) {
+    } catch (err) {
       console.error('Excel 解析失敗:', err);
       showToast('❌ 檔案解析失敗，請確認是否為標準 Excel 格式！');
-  } finally {
+    } finally {
       event.target.value = '';
-  }
+    }
   };
 
   reader.readAsArrayBuffer(file);
