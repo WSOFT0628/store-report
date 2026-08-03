@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店勤務助手 v5.3.4</title>
+<title>蝦皮智取店勤務助手 v6.0.4</title>
 
 <!-- 引入 SheetJS 解析 Excel -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  
@@ -97,10 +97,13 @@
   }
 
   async function syncScheduleToDrive() {
-    if (!gapiInited || !gapi.client || !gapi.client.getToken()) return;
+    if (!gapiInited || !gapi.client || !gapi.client.getToken()) {
+      showToast('⚠️ 請先點擊「連接 Google 雲端」完成授權，才能同步至雲端！');
+      return;
+    }
 
     try {
-      showToast("☁️ 正在同步資料至 Google 雲端...");
+      showToast("☁️ 正在準備打包資料並寫入 Google 雲端...");
       
       const allData = {};
       for (let i = 0; i < localStorage.length; i++) {
@@ -158,9 +161,11 @@
         });
       }
 
-      showToast("✅ 資料已成功同步至雲端！");
+      showToast("✅ 雲端同步完成！所有巡店與班表資料已安全備份。");
+      updateSystemStatus();
     } catch (err) {
       console.error("雲端同步失敗:", err);
+      showToast("❌ 雲端同步失敗，請檢查網路連線後重試！");
     }
   }
 
@@ -210,36 +215,62 @@
 </script>
 
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f5f7; margin: 0; padding: 0; color: #333; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--ops-bg); margin: 0; padding: 0; color: var(--ops-text); }
   
-  .main-header { background-color: #2c3e50; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-  .main-nav { display: flex; background-color: #2c3e50; }
-  .nav-btn { flex: 1; padding: 12px 0; text-align: center; background: none; border: none; color: #bdc3c7; font-size: 15px; font-weight: bold; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.3s ease; }
-  .nav-btn.active { color: #ffffff; background-color: #34495e; border-bottom: 3px solid #ee4d2d; }
+  .main-header { background-color: var(--ops-navy); position: sticky; top: 0; z-index: 1000; box-shadow: 0 1px 0 rgba(255,255,255,.08); }
+  .main-header > div:first-child { padding: 11px 16px !important; text-align: left !important; max-width: 920px; margin: auto; }
+  .main-header h1 { font-size: 16px !important; display: flex; align-items: center; justify-content: space-between; color: #fff; margin: 0; }
+  .main-header h1::after { content: 'OPS'; font-size: 10px; letter-spacing: 1.2px; color: #ffb6a6; border: 1px solid rgba(255,182,166,.45); border-radius: 6px; padding: 3px 6px; }
+
+  .main-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1100; height: 64px; padding-bottom: env(safe-area-inset-bottom); background: rgba(255,255,255,.96); border-top: 1px solid var(--ops-border); box-shadow: 0 -6px 20px rgba(16,24,40,.08); backdrop-filter: blur(14px); display: flex; }
+  [data-theme="dark"] .main-nav { background: rgba(29,41,57,.96); }
+  .nav-btn { flex: 1; color: var(--ops-muted); padding: 7px 0 5px; border: 0; font-size: 11px; display: flex; flex-direction: column; align-items: center; gap: 2px; background: transparent !important; cursor: pointer; }
+  .nav-btn .nav-icon { font-size: 20px; line-height: 22px; filter: grayscale(1); opacity: .75; }
+  .nav-btn.active { color: var(--ops-orange); }
+  .nav-btn.active .nav-icon { filter: none; opacity: 1; transform: translateY(-1px); }
+
   .tab-content { display: none; padding: 15px; }
   .tab-content.active { display: block; }
 
-  .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: opacity 0.3s; overflow: hidden; }
-  .card.disabled-card { opacity: 0.5; background: #eee; }
-  .card h3 { margin-top: 0; color: #ff5722; border-bottom: 2px solid #ffe0b2; padding-bottom: 5px; font-size: 15px; }
+  .workspace { max-width: 920px; margin: 0 auto; padding-top: 15px; }
+
+  .card { background: var(--ops-surface); border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: var(--ops-shadow); border: 1px solid var(--ops-border); transition: opacity 0.3s; overflow: hidden; }
+  .card.disabled-card { opacity: 0.5; background: var(--ops-surface); }
+  .card h3 { margin-top: 0; color: var(--ops-text); border-bottom: 2px solid var(--ops-border); padding-bottom: 5px; font-size: 15px; }
   
-  label { display: block; font-size: 13px; font-weight: bold; margin-top: 10px; color: #555; }
-  input, select { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
-  input:disabled, select:disabled { background-color: #e0e0e0; cursor: not-allowed; }
+  label { display: block; font-size: 13px; font-weight: bold; margin-top: 10px; color: var(--ops-muted); }
+  input, select, textarea { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid var(--ops-border); border-radius: 6px; box-sizing: border-box; font-size: 14px; background: var(--ops-surface); color: var(--ops-text); min-height: 42px; }
+  input:disabled, select:disabled { background-color: var(--ops-border); cursor: not-allowed; }
   
-  input[type="radio"] {
-    width: 16px !important;
-    height: 16px !important;
-    margin: 0 4px 0 0;
+  /* 📍 修復 Checkbox 與 Radio 按鈕樣式跑版問題 */
+  input[type="checkbox"] {
+    width: 18px !important;
+    height: 18px !important;
+    min-height: 18px !important;
+    margin: 0 6px 0 0;
     accent-color: var(--ops-orange);
     cursor: pointer;
     vertical-align: middle;
+    box-sizing: border-box;
+    display: inline-block !important;
+  }
+
+  input[type="radio"] {
+    width: 18px !important;
+    height: 18px !important;
+    min-height: 18px !important;
+    margin: 0 6px 0 0;
+    accent-color: var(--ops-orange);
+    cursor: pointer;
+    vertical-align: middle;
+    box-sizing: border-box;
+    display: inline-block !important;
   }
 
   .row { display: flex; gap: 10px; }
   .row > div { flex: 1; }
   
-  button.copy-btn { width: 100%; background: #ee4d2d; color: white; border: none; padding: 12px; border-radius: 8px; font-size: 15px; font-weight: bold; margin-top: 12px; cursor: pointer; }
+  button.copy-btn { width: 100%; background: var(--ops-orange); color: white; border: none; padding: 12px; border-radius: 8px; font-size: 15px; font-weight: bold; margin-top: 12px; cursor: pointer; }
   button.copy-btn:disabled { background: #b0bec5; cursor: not-allowed; }
   
   .storage-btn-group { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
@@ -247,7 +278,7 @@
   .btn-save-only { background: #2196f3; }
   .btn-save-sync { background: #4caf50; }
   .btn-clear-form { background: #ff9800; }
-  .btn-clear-data { background: #d92d20; }
+  .btn-clear-data { background: var(--ops-danger); }
 
   .btn-sync-header {
     background: #2e7d32;
@@ -282,25 +313,66 @@
   .btn-add-support:active { transform: scale(0.98); }
 
   .draft-badge {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     background: #e3f2fd;
     color: #1565c0;
     font-size: 12px;
     padding: 6px 12px;
     border-radius: 20px;
     font-weight: bold;
-    cursor: pointer;
+    cursor: grab;
     border: 1px solid #90caf9;
     user-select: none;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.15s ease;
   }
-  .draft-badge:hover { background: #bbdefb; }
+  .draft-badge:active { cursor: grabbing; }
+  .draft-badge:hover { background: #bbdefb; transform: translateY(-1px); }
   .draft-badge.active {
     background: #1976d2;
     color: #ffffff;
     border-color: #1565c0;
     box-shadow: 0 2px 5px rgba(25, 118, 210, 0.3);
   }
+  .draft-badge.dragging {
+    opacity: 0.4;
+    transform: scale(0.95);
+  }
+
+  .subject-confirm-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; padding:10px 11px; border:1px solid var(--ops-border); border-radius:10px; background:var(--ops-bg); }
+  .subject-confirm-state { display:flex; align-items:center; gap:7px; color:var(--ops-muted); font-size:12px; font-weight:700; }
+  .subject-confirm-state::before { content:''; width:9px; height:9px; border-radius:50%; background:#98a2b3; }
+  .subject-confirm-row.confirmed { border-color:rgba(18,161,80,.38); background:rgba(18,161,80,.08); }
+  .subject-confirm-row.confirmed .subject-confirm-state { color:var(--ops-success); }
+  .subject-confirm-row.confirmed .subject-confirm-state::before { background:var(--ops-success); box-shadow:0 0 0 3px rgba(18,161,80,.12); }
+  .subject-confirm-btn { border:1px solid var(--ops-orange); background:var(--ops-surface); color:var(--ops-orange); border-radius:8px; padding:7px 10px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap; }
+  .confirmed .subject-confirm-btn { border-color:var(--ops-danger); color:var(--ops-danger); }
+  .card.subject-confirmed { border-color:rgba(18,161,80,.45) !important; }
+  
+  .overview-launch-btn { width: 100%; margin-top: 10px; min-height: 42px; border: 1px solid var(--ops-info); border-radius: 10px; background: var(--ops-surface); color: var(--ops-info); font-weight: 800; cursor: pointer; transition: all 0.2s; }
+  .overview-launch-btn:hover { background: rgba(40,120,208,0.08); }
+
+  .home-overview-panel { margin-top: 14px; border: 1px solid var(--ops-border); border-radius: 12px; background: var(--ops-surface); padding: 12px; }
+  .home-overview-panel h4 { margin: 0 0 8px 0; font-size: 14px; color: var(--ops-text); display: flex; align-items: center; justify-content: space-between; }
+  .home-overview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
+  .home-overview-chip { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 8px; background: var(--ops-bg); border: 1px solid var(--ops-border); font-size: 11px; font-weight: bold; cursor: pointer; color: var(--ops-text); }
+  .home-overview-chip.confirmed { background: rgba(18,161,80,0.1); border-color: rgba(18,161,80,0.3); color: var(--ops-success); }
+
+  .overview-modal-card { width:min(92vw,760px); max-height:82vh; overflow:auto; }
+  .overview-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; border-bottom:1px solid var(--ops-border); padding-bottom:12px; margin-bottom:10px; }
+  .overview-head h3 { margin:0; color:var(--ops-text); }
+  .overview-close { border:0; background:var(--ops-bg); color:var(--ops-muted); width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:18px; }
+  .overview-list { display:grid; gap:8px; }
+  .overview-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; padding:12px; border:1px solid var(--ops-border); border-radius:11px; background:var(--ops-surface); }
+  .overview-item.confirmed { border-color:rgba(18,161,80,.42); background:rgba(18,161,80,.06); }
+  .overview-title { display:flex; align-items:center; gap:7px; font-weight:800; font-size:14px; }
+  .overview-dot { width:9px; height:9px; border-radius:50%; background:#98a2b3; }
+  .overview-item.confirmed .overview-dot { background:var(--ops-success); }
+  .overview-summary { color:var(--ops-muted); font-size:12px; line-height:1.55; margin-top:5px; word-break:break-word; }
+  .overview-status { color:var(--ops-muted); font-size:11px; font-weight:800; margin-top:4px; }
+  .overview-item.confirmed .overview-status { color:var(--ops-success); }
+  .overview-go { align-self:center; border:0; border-radius:8px; padding:8px 10px; background:var(--ops-orange-soft); color:var(--ops-orange); font-weight:800; cursor:pointer; white-space:nowrap; }
 
   .tag { display: inline-block; background: #ffe0b2; color: #e65100; font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 4px; }
   .tag-key { background: #ffcdd2; color: #b71c1c; }
@@ -311,47 +383,47 @@
   .tag-both { background: #e8f5e9; color: #2e7d32; }
 
   .batch-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-  .batch-table th { font-size: 11px; color: #666; background: #fafafa; padding: 4px; border: 1px solid #eee; text-align: center; }
-  .batch-table td { padding: 3px; border: 1px solid #eee; }
+  .batch-table th { font-size: 11px; color: var(--ops-muted); background: var(--ops-bg); padding: 4px; border: 1px solid var(--ops-border); text-align: center; }
+  .batch-table td { padding: 3px; border: 1px solid var(--ops-border); }
   .batch-table input { padding: 5px; font-size: 12px; margin-top: 0; }
 
   .sub-tab-group { display: flex; gap: 8px; margin-bottom: 12px; }
-  .sub-tab-btn { flex: 1; padding: 8px; border: 1px solid #dcdfe6; background: #f8f9fa; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; text-align: center; }
+  .sub-tab-btn { flex: 1; padding: 8px; border: 1px solid var(--ops-border); background: var(--ops-surface); color: var(--ops-text); border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; text-align: center; }
   .sub-tab-btn.active { background: #ee4d2d; color: white; border-color: #ee4d2d; }
 
   .schedule-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
   .schedule-grid-head { text-align: center; font-weight: bold; font-size: 12px; padding: 6px 0; background: #2c3e50; color: white; border-radius: 4px; }
 
-  .week-card { min-height: 85px; border: 1px solid #e0e0e0; border-radius: 6px; padding: 6px 4px; background: #fff; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; transition: all 0.15s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .week-card { min-height: 85px; border: 1px solid var(--ops-border); border-radius: 6px; padding: 6px 4px; background: var(--ops-surface); display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; transition: all 0.15s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
   .week-card:hover { transform: translateY(-2px); box-shadow: 0 3px 8px rgba(0,0,0,0.1); }
-  .week-card .date-lbl { font-size: 11px; color: #777; font-weight: bold; border-bottom: 1px dashed #eee; padding-bottom: 2px; margin-bottom: 2px; text-align: center; }
+  .week-card .date-lbl { font-size: 11px; color: var(--ops-muted); font-weight: bold; border-bottom: 1px dashed var(--ops-border); padding-bottom: 2px; margin-bottom: 2px; text-align: center; }
   .week-card .loc-lbl { font-size: 12px; font-weight: bold; color: #e65100; text-align: center; margin-top: 2px; line-height: 1.2; word-break: break-all; }
-  .week-card .time-lbl { font-size: 10px; color: #555; text-align: center; margin-top: 2px; background: rgba(0,0,0,0.03); padding: 2px; border-radius: 4px; word-break: break-all; }
+  .week-card .time-lbl { font-size: 10px; color: var(--ops-muted); text-align: center; margin-top: 2px; background: var(--ops-bg); padding: 2px; border-radius: 4px; word-break: break-all; }
   
-  .week-card.has-work { background: #fff3e0; border-color: #ffe0b2; }
-  .week-card.is-off { background: #f2f3f5; border-color: #e0e0e0; }
-  .week-card.is-off .loc-lbl { color: #7f8c8d; }
+  .week-card.has-work { background: rgba(255,152,0,0.08); border-color: #ffe0b2; }
+  .week-card.is-off { background: var(--ops-bg); border-color: var(--ops-border); }
+  .week-card.is-off .loc-lbl { color: var(--ops-muted); }
 
-  .day-card-clickable { background: #fdfdfd; border: 2px dashed #64b5f6; border-radius: 10px; padding: 16px; margin: 15px 0; cursor: pointer; transition: all 0.2s ease; position: relative; }
-  .day-card-clickable:hover { background: #e3f2fd; border-color: #2196f3; box-shadow: 0 3px 10px rgba(33, 150, 243, 0.2); transform: translateY(-2px); }
+  .day-card-clickable { background: var(--ops-surface); border: 2px dashed #64b5f6; border-radius: 10px; padding: 16px; margin: 15px 0; cursor: pointer; transition: all 0.2s ease; position: relative; }
+  .day-card-clickable:hover { background: var(--ops-bg); border-color: #2196f3; box-shadow: 0 3px 10px rgba(33, 150, 243, 0.2); transform: translateY(-2px); }
 
-  .support-store-text { color: #1976d2 !important; font-weight: bold; }
+  .support-store-text { color: var(--ops-info) !important; font-weight: bold; }
 
-  .calendar-cell { min-height: 60px; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px 2px; background: #fff; font-size: 11px; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; overflow: hidden; transition: all 0.15s ease; }
+  .calendar-cell { min-height: 60px; border: 1px solid var(--ops-border); border-radius: 6px; padding: 4px 2px; background: var(--ops-surface); font-size: 11px; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; overflow: hidden; transition: all 0.15s ease; }
   .calendar-cell:hover { transform: translateY(-2px); box-shadow: 0 3px 8px rgba(0,0,0,0.1); }
-  .calendar-cell.other-month { background: #f2f3f5; opacity: 0.75; }
-  .calendar-cell.is-off { background: #f2f3f5; }
-  .calendar-cell.has-work { background: #fff3e0; border-color: #ffe0b2; }
-  .calendar-cell .day-num { font-weight: bold; font-size: 11px; color: #333; }
+  .calendar-cell.other-month { background: var(--ops-bg); opacity: 0.75; }
+  .calendar-cell.is-off { background: var(--ops-bg); }
+  .calendar-cell.has-work { background: rgba(255,152,0,0.08); border-color: #ffe0b2; }
+  .calendar-cell .day-num { font-weight: bold; font-size: 11px; color: var(--ops-text); }
   .calendar-cell .day-loc { color: #e65100; font-weight: bold; font-size: 10px; line-height: 1.1; margin-top: 2px; word-break: break-all; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 
   .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: none; align-items: center; justify-content: center; }
   .modal-overlay.active { display: flex; }
-  .modal-card { background: white; width: 88%; max-width: 380px; border-radius: 12px; padding: 18px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+  .modal-card { background: var(--ops-surface); color: var(--ops-text); width: 88%; max-width: 380px; border-radius: 12px; padding: 18px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); border: 1px solid var(--ops-border); }
 
-  .site-footer { margin-top: 30px; padding: 16px 15px; padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid #e1e4e8; background-color: #ffffff; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 16px; font-size: 12px; color: #57606a; }
-  .site-footer .brand-info { display: flex; align-items: center; gap: 6px; font-weight: 600; color: #24292f; }
-  .site-footer .divider { color: #d0d7de; }
+  .site-footer { margin-top: 30px; padding: 16px 15px; padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--ops-border); background-color: var(--ops-surface); color: var(--ops-muted); display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 16px; font-size: 12px; }
+  .site-footer .brand-info { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ops-text); }
+  .site-footer .divider { color: var(--ops-border); }
 
   #toast-container { position: fixed; bottom: calc(75px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 9999; pointer-events: none; }
   .toast { background: rgba(33, 33, 33, 0.9); color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-top: 8px; opacity: 0; transform: translateY(10px); transition: all 0.3s ease; text-align: center; white-space: pre-line; }
@@ -370,38 +442,7 @@
     --ops-navy:#0c1424; --ops-shadow:0 4px 18px rgba(0,0,0,.28);
   }
   * { -webkit-tap-highlight-color:transparent; }
-  body { background:var(--ops-bg); color:var(--ops-text); padding-bottom:calc(78px + env(safe-area-inset-bottom)); }
-  .workspace { max-width:920px; margin:0 auto; }
-  .main-header { position:sticky; top:0; z-index:1000; background:var(--ops-navy); box-shadow:0 1px 0 rgba(255,255,255,.08); }
-  .main-header > div:first-child { padding:11px 16px !important; text-align:left !important; max-width:920px; margin:auto; }
-  .main-header h1 { font-size:16px !important; display:flex; align-items:center; justify-content:space-between; color:#fff; }
-  .main-header h1::after { content:'OPS'; font-size:10px; letter-spacing:1.2px; color:#ffb6a6; border:1px solid rgba(255,182,166,.45); border-radius:6px; padding:3px 6px; }
   
-  .main-nav { position:fixed; left:0; right:0; bottom:0; z-index:1100; height:64px; padding-bottom:env(safe-area-inset-bottom); background:rgba(255,255,255,.96); border-top:1px solid var(--ops-border); box-shadow:0 -6px 20px rgba(16,24,40,.08); backdrop-filter:blur(14px); display:flex; }
-  [data-theme="dark"] .main-nav { background:rgba(29,41,57,.96); }
-  .nav-btn { flex:1; color:var(--ops-muted); padding:7px 0 5px; border:0; font-size:11px; display:flex; flex-direction:column; align-items:center; gap:2px; background:transparent !important; cursor:pointer; }
-  .nav-btn .nav-icon { font-size:20px; line-height:22px; filter:grayscale(1); opacity:.75; }
-  .nav-btn.active { color:var(--ops-orange); }
-  .nav-btn.active .nav-icon { filter:none; opacity:1; transform:translateY(-1px); }
-
-  .card, .report-group, .report-group-toggle, .report-group-body, .modal-card, .report-filter-panel { 
-    background: var(--ops-surface) !important; 
-    color: var(--ops-text) !important; 
-    border-color: var(--ops-border) !important; 
-  }
-  .card { border:1px solid var(--ops-border); border-radius:var(--ops-radius); box-shadow:var(--ops-shadow); }
-  .card h3 { color:var(--ops-text); border-bottom:1px solid var(--ops-border); font-size:15px; }
-  
-  label { color:var(--ops-muted); }
-  input, select, textarea { 
-    background:var(--ops-surface) !important; 
-    color:var(--ops-text) !important; 
-    border-color:var(--ops-border) !important; 
-    min-height:42px; 
-  }
-  input:focus, select:focus { outline:3px solid rgba(238,77,45,.14); border-color:var(--ops-orange); }
-
-  /* 📍 修復今日頁面頂部黏住問題，加入自適應上下安全留白 */
   .today-hero { color:#fff; background:linear-gradient(135deg,#d94023 0%,#ee4d2d 52%,#ff7859 100%); padding:20px; border-radius:0 0 22px 22px; box-shadow:0 10px 28px rgba(238,77,45,.2); display:flex; justify-content:space-between; align-items:center; }
   .today-date { margin:0 0 6px; font-size:13px; opacity:.9; }
   .today-title { margin:0; font-size:23px; }
@@ -432,7 +473,6 @@
   
   .secondary-action { width:100%; border:1px solid var(--ops-orange); border-radius:10px; padding:11px 14px; background:var(--ops-surface); color:var(--ops-orange); font-weight:800; cursor:pointer; min-height:44px; }
   
-  /* 📍 調整報表生成按鈕寬度，不再過度巨大佔滿全行 */
   .btn-generate-report {
     display: inline-block;
     width: auto;
@@ -451,18 +491,7 @@
   }
   .btn-generate-report:active { transform: scale(0.99); }
 
-  .report-group { margin-bottom:12px; border:1px solid var(--ops-border); border-radius:12px; background:var(--ops-surface); overflow:hidden; box-shadow:var(--ops-shadow); }
-  .report-group-toggle { width:100%; display:flex; align-items:center; justify-content:space-between; border:0; background:var(--ops-surface); padding:15px; text-align:left; cursor:pointer; color:var(--ops-text); }
-  .report-group-title { font-size:15px; font-weight:800; color:var(--ops-text); }
-  .report-group-meta { color:var(--ops-muted); font-size:12px; }
-  .report-group-body { display:none; padding:0 10px 2px; }
-  .report-group.open .report-group-body { display:block; }
-  .report-group.open .report-group-chevron { transform:rotate(180deg); }
-  .report-group .card { box-shadow:none; border:1px solid var(--ops-border); }
-  .report-group-chevron { transition:.2s; color:var(--ops-muted); }
-
-  .bottom-action-bar { position:sticky; bottom:64px; z-index:900; display:flex; align-items:center; gap:8px; padding:10px max(10px,env(safe-area-inset-right)) 10px max(10px,env(safe-area-inset-left)); background:rgba(255,255,255,.96); border-top:1px solid var(--ops-border); box-shadow:0 -5px 18px rgba(0,0,0,.08); }
-  [data-theme="dark"] .bottom-action-bar { background:rgba(29,41,57,.97); color:var(--ops-text); }
+  .bottom-action-bar { position:sticky; bottom:64px; z-index:900; display:flex; align-items:center; gap:8px; padding:10px max(10px,env(safe-area-inset-right)) 10px max(10px,env(safe-area-inset-left)); background:var(--ops-surface); border-top:1px solid var(--ops-border); box-shadow:0 -5px 18px rgba(0,0,0,.08); }
   .bottom-action-bar .progress-label { min-width:72px; color:var(--ops-muted); font-size:12px; font-weight:700; }
   .bottom-action-bar button { flex:1; border:0; border-radius:9px; padding:11px 8px; font-weight:800; cursor:pointer; }
   .btn-preview { background:var(--ops-orange-soft); color:var(--ops-orange); }
@@ -480,14 +509,14 @@
   .badge-btn:hover { background: #0056b3; }
 
   .duty-timeline { position:relative; margin:4px 0 0; }
-  .duty-stop { position:relative; display:grid; grid-template-columns:24px 1fr auto; gap:10px; align-items:start; padding:9px 0; cursor:pointer; }
-  .duty-stop:not(:last-child)::after { content:''; position:absolute; left:11px; top:31px; bottom:-7px; width:2px; background:var(--ops-border); }
-  .stop-dot { width:22px; height:22px; border-radius:50%; display:grid; place-items:center; background:var(--ops-bg); border:2px solid var(--ops-border); color:var(--ops-muted); font-size:11px; z-index:1; }
+  .duty-stop { position:relative; display:grid; grid-template-columns:28px 1fr auto; gap:12px; align-items:center; padding:10px 0; cursor:pointer; border-bottom:1px dashed var(--ops-border); }
+  .duty-stop:last-child { border-bottom:none; }
+  .stop-dot { width:26px; height:26px; border-radius:50%; display:grid; place-items:center; background:var(--ops-bg); border:2px solid var(--ops-border); color:var(--ops-muted); font-size:12px; font-weight:bold; z-index:1; }
   .duty-stop.active .stop-dot { border-color:var(--ops-orange); color:#fff; background:var(--ops-orange); box-shadow:0 0 0 4px var(--ops-orange-soft); }
-  .duty-stop.ready .stop-dot { border-color:var(--ops-info); color:var(--ops-info); }
+  .duty-stop.ready .stop-dot { border-color:var(--ops-info); color:#fff; background:var(--ops-info); }
   .stop-name { font-weight:800; font-size:14px; }
-  .stop-meta { color:var(--ops-muted); font-size:11px; margin-top:3px; }
-  .stop-action { color:var(--ops-orange); font-size:12px; font-weight:800; padding-top:2px; }
+  .stop-meta { color:var(--ops-muted); font-size:11px; margin-top:2px; }
+  .stop-action { color:var(--ops-orange); font-size:12px; font-weight:800; padding:4px 10px; background:var(--ops-orange-soft); border-radius:6px; }
   
   .ops-progress { margin:12px 0 2px; }
   .ops-progress-head { display:flex; justify-content:space-between; font-size:12px; color:var(--ops-muted); margin-bottom:6px; }
@@ -498,10 +527,7 @@
   .settings-grid button, .badge-btn, .sub-tab-btn { border-radius:9px; }
   
   .theme-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; border:1px solid var(--ops-border); border-radius:12px; background:var(--ops-bg); }
-  .theme-toggle { border:0; background:var(--ops-navy); color:white; border-radius:99px; padding:9px 14px; font-weight:800; cursor:pointer; }
-  
-  .site-footer { padding-bottom:22px; background:var(--ops-surface); color:var(--ops-muted); border-color:var(--ops-border); }
-  .storage-btn-group .btn-clear-data { background:var(--ops-danger); }
+  .theme-toggle { border:0; background:var(--ops-navy); color:white; border-radius:9px; padding:8px 14px; font-weight:800; cursor:pointer; }
 
   @media (min-width: 760px) { 
     .today-hero { margin-top:15px; border-radius:22px; } 
@@ -524,7 +550,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店勤務助手 v5.3.4
+      📦 蝦皮智取店勤務助手 v6.0.4
     </h1>
   </div>
   <div class="main-nav">
@@ -560,10 +586,15 @@
     <div class="today-loc" id="today-location-label">今日尚未排班</div>
     <div class="today-meta" id="today-progress-label">可以前往班表新增今日勤務</div>
     <div style="display:grid;gap:8px;margin-top:16px;">
-      <button class="primary-action" id="today-start-btn" onclick="startTodayReport()">開始今日巡店</button>
-      <button class="secondary-action" onclick="openTodaySchedule()">查看／編輯今日班表</button>
+      <button class="primary-action" onclick="openTodaySchedule()">查看／編輯今日班表</button>
+    </div>
+
+    <div id="home-overview-panel" class="home-overview-panel" style="display:none;">
+      <h4><span>📍 今日門市回報總覽 (即時同步)</span><button class="badge-btn" style="padding:2px 8px;font-size:11px;" onclick="openReportOverview()">展開詳情</button></h4>
+      <div id="home-overview-chips" class="home-overview-grid"></div>
     </div>
   </section>
+
   <section class="card">
     <h3>今日勤務路線</h3>
     <div id="today-reminders" style="font-size:13px;line-height:1.8;color:var(--ops-muted);">完成排班後，系統會在這裡整理今日門市與勤務提醒。</div>
@@ -571,18 +602,22 @@
 </div>
 
 <!-- ==========================================================================
-     【頁籤一：巡店回報系統 】
+     【頁籤一：巡店回報系統】
      ========================================================================== -->
 <div id="report-tab" class="tab-content">
 
   <h2 style="color: #ee4d2d; font-size: 16px; text-align: center; margin: 5px 0 15px 0;">📋 巡店門市填表與回報區</h2>
 
-  <div class="card" style="background: #e3f2fd; border: 1px solid #90caf9;">
+  <!-- 支援拖曳排序的進度膠囊列與總覽按鈕 -->
+  <div class="card" style="background: var(--ops-surface); border: 1px solid var(--ops-border);">
     <div style="display: flex; flex-direction: column; gap: 8px;">
       <div style="display: flex; align-items: center; justify-content: space-between;">
-        <span style="font-weight: bold; color: #1565c0; font-size: 14px;">🏪 今日巡店進度 (點擊快捷切換)：</span>
+        <span style="font-weight: bold; color: var(--ops-info); font-size: 14px;">🏪 今日巡店進度 (左右拖曳可調整順序)：</span>
       </div>
       <div id="draft_status_bar" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;"></div>
+      <button type="button" class="overview-launch-btn" onclick="openReportOverview()">
+        ☷ 查看本店所有回報項目總覽
+      </button>
     </div>
   </div>
 
@@ -593,8 +628,8 @@
     <button class="btn-clear-data" onclick="clearData()">🗑️ 刪除此店</button>
   </div>
 
-  <div class="card" style="background: #fff8f6; border: 1px solid #ffccbc;">
-    <h3 style="color: #e65100; border-bottom-color: #ffab91;">基本資訊</h3>
+  <div class="card" style="background: var(--ops-surface); border: 1px solid var(--ops-border);">
+    <h3 style="color: var(--ops-orange); border-bottom-color: var(--ops-border);">基本資訊</h3>
     
     <div class="row">
       <div>
@@ -619,21 +654,25 @@
       <datalist id="shopList"></datalist>
     </div>
 
-    <div id="storeDetailCard" style="margin-top: 12px; padding: 10px; background: var(--ops-surface); border-radius: 8px; border: 1px dashed #ffab91; display: none;">
+    <!-- 📍 門市詳細資訊卡片 (已全面完美適配深色模式背景與文字對比) -->
+    <div id="storeDetailCard" style="margin-top: 12px; padding: 10px; background: var(--ops-bg); border-radius: 8px; border: 1px dashed var(--ops-border); display: none;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-        <span style="font-size: 13px; font-weight: bold; color: #d84315;">📍 門市地址</span>
-        <button onclick="copyAddress()" style="background: #e65100; color: white; border: none; border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer; font-weight: bold;">📋 複製地址</button>
+        <span style="font-size: 13px; font-weight: bold; color: var(--ops-orange);">📍 門市地址</span>
+        <div style="display: flex; gap: 6px;">
+          <button onclick="copyAddress()" style="background: var(--ops-orange); color: white; border: none; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; font-weight: bold;">📋 複製</button>
+          <button onclick="openNavigation()" style="background: var(--ops-info); color: white; border: none; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; font-weight: bold;">🗺️ 導航</button>
+        </div>
       </div>
       <div id="storeAddressText" style="font-size: 13px; color: var(--ops-text); margin-bottom: 8px; font-weight: 500;"></div>
       
-      <div style="font-size: 12px; font-weight: bold; color: #d84315; margin-bottom: 4px;">🏷️ 本店任務標籤</div>
+      <div style="font-size: 12px; font-weight: bold; color: var(--ops-orange); margin-bottom: 4px;">🏷️ 本店任務標籤</div>
       <div id="storeTagList" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;"></div>
       
-      <div id="storeNotesBox" style="display: none; background: #fff3e0; padding: 6px 8px; border-radius: 6px; font-size: 12px; color: #bf360c; font-weight: bold;"></div>
+      <div id="storeNotesBox" style="display: none; background: var(--ops-surface); border: 1px solid var(--ops-border); padding: 6px 8px; border-radius: 6px; font-size: 12px; color: var(--ops-text); font-weight: bold;"></div>
     </div>
   </div>
 
-  <!-- 科目卡片 (科目3 ~ 15) -->
+  <!-- 📍 科目卡片 (科目 3 ➡️ 15) -->
   <div class="card" id="card_c3" data-shift="早">
     <h3>科目3 逾期包裹 <span class="shift-tag tag-morning">早班專屬</span></h3>
     <label>逾期</label>
@@ -919,7 +958,7 @@
 
 </div>
 
-<!-- 📍 設定頁面：專業報表生成與自由輸入指定門市篩選 -->
+<!-- 📍 設定頁面 -->
 <div id="settings-tab" class="tab-content">
   <h2 style="color:#ee4d2d;font-size:18px;margin:6px 0 15px;">設定與資料</h2>
   
@@ -934,7 +973,20 @@
     </div>
   </div>
 
-  <!-- 📍 工作日報表生成中心 -->
+  <!-- 📍 門市與任務標籤動態管理中心 -->
+  <div class="card" style="border: 1px solid var(--ops-info);">
+    <h3 style="color: var(--ops-info); border-bottom-color: rgba(40,120,208,0.3);">🏪 門市資料與回報任務標籤管理</h3>
+    <p style="font-size: 12px; color: var(--ops-muted); margin-bottom: 10px;">
+      在此可自由檢視與調整各門市地址、注意事項及適用的回報任務。新開店或店型異動時直接在此修改！
+    </p>
+    <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+      <input type="text" id="settings-store-search" placeholder="輸入店名搜尋 (如: 興隆)" oninput="renderStoreManageList()" style="flex: 1; margin: 0;">
+      <button class="btn-add-support" onclick="openStoreEditModal()">+ 新增門市</button>
+    </div>
+    <div id="settings-store-list-container" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--ops-border); border-radius: 8px; padding: 6px; background: var(--ops-bg);"></div>
+  </div>
+
+  <!-- 工作日報表生成中心 -->
   <div class="card" style="border: 1px solid var(--ops-success);">
     <h3 style="color: var(--ops-success); border-bottom-color: rgba(18,161,80,0.3);">📊 工作日報表生成與篩選中心</h3>
     
@@ -964,9 +1016,18 @@
       </div>
     </div>
 
-    <!-- 📍 調整後適中的報表生成按鈕 -->
     <div style="text-align: center; margin-top: 10px;">
       <button class="btn-generate-report" onclick="generateAdvancedTextReport()">📋 產出並複製自訂工作日報表</button>
+    </div>
+  </div>
+
+  <!-- 系統維護與狀態 -->
+  <div class="card">
+    <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
+    <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
+      <div><b>目前版本：</b> v6.0.4 Shopee Ops Pro</div>
+      <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
+      <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
   </div>
 
@@ -985,18 +1046,13 @@
 </div>
 </main>
 
-<!-- 全域頁尾 Footer -->
+<!-- 全域簡化版 Footer -->
 <footer class="site-footer">
   <div class="brand-info">
-    <span>📦 蝦皮智取店回報與排班系統</span>
-    <span>v5.3.4 Shopee Ops UI/UX Refine</span>
+    <span>📦 蝦皮智取店勤務助手</span>
+    <span class="divider">•</span>
+    <span>© 2026 willy huang (WSOFT)</span>
   </div>
-  <span class="divider">•</span>
-  <span>© 2026 Developed by <b>willy huang (WSOFT)</b></span>
-  <span class="divider">•</span>
-  <span id="system-status-text">系統狀態：<span style="color:#2ea44f; font-weight:bold;">● 檢測中...</span></span>
-  <span class="divider">•</span>
-  <span id="storage-usage-text" style="color:#666;">容量：計算中...</span>
   
   <input type="file" id="excel-file-input" style="display:none;" onchange="handleExcelImport(event)" accept=".xlsx, .xls">
   <input type="file" id="backup-file-input" style="display:none;" onchange="handleFileImport(event)" accept=".json">
@@ -1025,6 +1081,46 @@
   </div>
 </div>
 
+<!-- 門市編輯/新增彈窗 -->
+<div id="store-edit-modal" class="modal-overlay">
+  <div class="modal-card" style="max-width: 440px;">
+    <h3 id="store-modal-title" style="margin-top:0; color:var(--ops-info); font-size:16px;">編輯門市資料</h3>
+    <input type="hidden" id="store-modal-index" value="-1">
+    
+    <label>🏪 門市名稱</label>
+    <input type="text" id="store-modal-name" placeholder="例: 文山新店-智取店">
+
+    <label>📍 門市地址</label>
+    <input type="text" id="store-modal-address" placeholder="例: 台北市文山區...">
+
+    <label>💡 注意事項 (備註)</label>
+    <input type="text" id="store-modal-notes" placeholder="例: HD滯留放隔壁小房間">
+
+    <label>🏷️ 任務標籤 (勾選代表本店適用該回報項目)</label>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; font-size: 13px;">
+      <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="NDD打包" style="width:auto;"> NDD打包</label>
+      <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="FBS打包" style="width:auto;"> FBS打包</label>
+      <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="SCS HD打包" style="width:auto;"> SCS HD打包</label>
+      <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="HD上架" style="width:auto;"> HD上架</label>
+      <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="包裹重新分配" style="width:auto;"> 包裹重新分配</label>
+      <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="夜間上架" style="width:auto;"> 夜間上架</label>
+      <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="中正速配倉" style="width:auto;"> 中正速配倉</label>
+      <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="⭐重點店" style="width:auto;"> ⭐重點店</label>
+      <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="👤有人店" style="width:auto;"> 👤有人店</label>
+    </div>
+
+    <div style="display: flex; gap: 8px; margin-top: 18px;">
+      <button style="flex:1; background: var(--ops-success); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;" onclick="saveStoreModalData()">💾 儲存門市</button>
+      <button style="flex:1; background: #95a5a6; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;" onclick="closeStoreEditModal()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 總覽詳情 Modal 彈窗 -->
+<div id="report-overview-modal" class="modal-overlay">
+  <div class="modal-card overview-modal-card" id="overview-modal-inner"></div>
+</div>
+
 <!-- Excel 匯入完成詢問同步 Modal 彈窗 -->
 <div id="import-sync-modal" class="modal-overlay">
   <div class="modal-card" style="text-align: center;">
@@ -1048,8 +1144,8 @@ let currentDraftKey = 'shopee_report_draft_1';
 let currentSelectedDayKey = new Date().toISOString().split('T')[0];
 let is12HourFormat = localStorage.getItem('clock_format_12h') === 'true';
 
-const storesData = [
-  {"name": "中正台大店", "address": "台北市中正區羅斯福路三段304號", "tags": ["👤有人店", "NDD打包", "FBS打包"], "notes": "中正速配倉"},
+let storesData = JSON.parse(localStorage.getItem('shopee_custom_stores_data') || 'null') || [
+  {"name": "中正台大店", "address": "台北市中正區羅斯福路三段304號", "tags": ["👤有人店", "NDD打包", "FBS打包", "中正速配倉"], "notes": "中正速配倉"},
   {"name": "大安溫州店", "address": "台北市大安區溫州街8號1樓", "tags": ["👤有人店", "NDD打包", "FBS打包"], "notes": ""},
   {"name": "文山興隆-智取店", "address": "台北市文山區興隆路一段86號", "tags": ["⭐重點店", "SCS HD打包", "HD上架"], "notes": "HD滯留放 隔壁小房間"},
   {"name": "文山景興-智取店", "address": "台北市文山區景興路87號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包", "包裹重新分配", "夜間上架"], "notes": "特選離店放後場"},
@@ -1086,10 +1182,10 @@ const storesData = [
   {"name": "大安泰順-智取店", "address": "台北市大安區泰順街42之1號1樓", "tags": ["⭐重點店", "SCS HD打包", "HD上架", "包裹重新分配"], "notes": "HD滯留放後場"},
   {"name": "大安麗水-智取店", "address": "台北市大安區永康街10巷7號1樓", "tags": [], "notes": ""},
   {"name": "大安師大-智取店", "address": "台北市大安區羅斯福路三段135號1樓", "tags": ["包裹重新分配", "夜間上架"], "notes": ""},
-  {"name": "大安錦安-智取店", "address": "台北市大安區潮州街114號1樓", "tags": [], "notes": "中正速配倉"},
-  {"name": "中正公館-智取店", "address": "台北市中正區汀州路三段122號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包", "HD上架", "包裹重新分配"], "notes": "HD滯留放後場、 中正速配倉"},
-  {"name": "中正軍總-智取店", "address": "台北市中正區汀州路三段52號1樓", "tags": [], "notes": "中正速配倉、 掃騎樓"},
-  {"name": "中正東門-智取店", "address": "台北市中正區臨沂街56之1號1樓", "tags": [], "notes": "中正速配倉"},
+  {"name": "大安錦安-智取店", "address": "台北市大安區潮州街114號1樓", "tags": ["中正速配倉"], "notes": "中正速配倉"},
+  {"name": "中正公館-智取店", "address": "台北市中正區汀州路三段122號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包", "HD上架", "包裹重新分配", "中正速配倉"], "notes": "HD滯留放後場、 中正速配倉"},
+  {"name": "中正軍總-智取店", "address": "台北市中正區汀州路三段52號1樓", "tags": ["中正速配倉"], "notes": "中正速配倉、 掃騎樓"},
+  {"name": "中正東門-智取店", "address": "台北市中正區臨沂街56之1號1樓", "tags": ["中正速配倉"], "notes": "中正速配倉"},
   {"name": "信義景聯-智取店", "address": "台北市信義區吳興街50巷17號1樓", "tags": ["⭐重點店", "SCS HD打包", "HD上架"], "notes": "HD滯留放後場"},
   {"name": "信義三興-智取店", "address": "台北市信義區吳興街156巷24號1樓", "tags": ["純取店"], "notes": ""},
   {"name": "松菸旗艦店", "address": "台北市信義區忠孝東路四段553巷24號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包", "HD上架"], "notes": "0930開門&拍貼機 2130關門&拍貼機"},
@@ -1103,7 +1199,10 @@ function switchMainTab(tabId, btn) {
   document.getElementById(tabId).classList.add('active');
   if (btn) btn.classList.add('active');
   if (tabId === 'today-tab') renderTodayDashboard();
-  if (tabId === 'settings-tab') populateReportStoreDatalist();
+  if (tabId === 'settings-tab') {
+    populateReportStoreDatalist();
+    renderStoreManageList();
+  }
 }
 
 function navButtonFor(tabId) {
@@ -1166,18 +1265,40 @@ function toggleTheme() {
 }
 
 /**
- * 📍 修復進度判定 Bug：數值為空白或 "0" 時一律視為未填寫
+ * 📍 智慧判定本店適用的科目清單 (基於 storesData 的 tags 動態過濾)
  */
+function getApplicableSubjects(shopName, shift) {
+  const store = storesData.find(s => s.name === shopName || s.name.replace(/-智取店$/, '') === shopName);
+  const tags = store ? store.tags : [];
+  
+  const isHdStore = tags.some(t => t.includes('SCS HD打包') || t.includes('HD上架'));
+  const isWarehouseStore = tags.some(t => t.includes('中正速配倉'));
+
+  let base = shift === '晚'
+    ? ['c4','c5','c6','c8','c11','c12','c14','c15']
+    : ['c3','c4','c5','c6','c8','c9','c10','c12','c15'];
+
+  return base.filter(id => {
+    if (['c9','c10','c11','c14'].includes(id) && !isHdStore) return false;
+    if (id === 'c12' && !isWarehouseStore) return false;
+    return true;
+  });
+}
+
 function getDraftCompletion(index) {
   try {
     const draft = JSON.parse(localStorage.getItem(`shopee_report_draft_${index + 1}`) || '{}');
-    const important = ['shopName','c4_boxes','c5_count','c6_wrong','c8_abnormal'];
-    const filled = important.filter(key => {
-      const val = String(draft[key] ?? '').trim();
-      return val !== '' && val !== '0';
-    }).length;
-    return { exists:Boolean(draft.shopName), percent:Math.round(filled / important.length * 100) };
-  } catch(e) { return { exists:false, percent:0 }; }
+    if (!draft.shopName) return { exists: false, percent: 0, total: 0, confirmed: 0 };
+    
+    const subjects = getApplicableSubjects(draft.shopName, draft.shift || '早');
+    const confirmed = subjects.filter(id => draft._confirmedSubjects?.[id] === true).length;
+    return { 
+      exists: true, 
+      percent: subjects.length ? Math.round(confirmed / subjects.length * 100) : 100,
+      total: subjects.length,
+      confirmed
+    };
+  } catch(e) { return { exists:false, percent:0, total:0, confirmed:0 }; }
 }
 
 function openDutyStop(index) {
@@ -1186,6 +1307,21 @@ function openDutyStop(index) {
   loadData(false);
   updateDraftLabels();
   updateReportProgress();
+}
+
+function getParsedLocations(dayData) {
+  if (!dayData) return [];
+  if (Array.isArray(dayData.routeOrder) && dayData.routeOrder.length) {
+    return dayData.routeOrder.map(s => String(s).trim()).filter(Boolean);
+  }
+  let locs = [];
+  if (dayData.loc && dayData.loc.trim().toUpperCase() !== 'X' && !dayData.isOff) {
+    locs = locs.concat(dayData.loc.split(/[\/\n]/).map(s => s.trim()).filter(Boolean));
+  }
+  if (dayData.supportLocs && dayData.supportLocs.length > 0) {
+    locs = locs.concat(dayData.supportLocs.map(s => s.trim()).filter(Boolean));
+  }
+  return locs;
 }
 
 function renderTodayDashboard() {
@@ -1199,7 +1335,7 @@ function renderTodayDashboard() {
   const shiftLabel = document.getElementById('today-shift-label');
   const progressLabel = document.getElementById('today-progress-label');
   const reminderBox = document.getElementById('today-reminders');
-  const startBtn = document.getElementById('today-start-btn');
+  const homePanel = document.getElementById('home-overview-panel');
   
   const statusDot = document.getElementById('today-status-dot');
   const syncText = document.getElementById('today-sync-text');
@@ -1221,12 +1357,9 @@ function renderTodayDashboard() {
   if (!dayData || (!dayData.loc && !(dayData.supportLocs || []).length)) {
     if (locLabel) locLabel.textContent = '今日尚未排班';
     if (shiftLabel) shiftLabel.textContent = '尚未設定班別';
-    if (progressLabel) progressLabel.textContent = '可以先新增今日勤務，再開始巡店回報。';
+    if (progressLabel) progressLabel.textContent = '可以先前往班表新增今日勤務。';
     if (reminderBox) reminderBox.innerHTML = '<div style="color:var(--ops-muted);">完成排班後，系統會在這裡整理今日門市與勤務提醒。</div>';
-    if (startBtn) {
-      startBtn.textContent = '建立今日班表';
-      startBtn.onclick = openTodaySchedule;
-    }
+    if (homePanel) homePanel.style.display = 'none';
     return;
   }
 
@@ -1235,31 +1368,43 @@ function renderTodayDashboard() {
     if (shiftLabel) shiftLabel.textContent = '無勤務安排';
     if (progressLabel) progressLabel.textContent = '好好休息，明天再繼續。';
     if (reminderBox) reminderBox.innerHTML = '<div style="color:var(--ops-muted);">今日沒有巡店任務。</div>';
-    if (startBtn) {
-      startBtn.textContent = '查看班表';
-      startBtn.onclick = openTodaySchedule;
-    }
+    if (homePanel) homePanel.style.display = 'none';
     return;
   }
 
-  const locations = [dayData.loc, ...(dayData.supportLocs || [])].filter(Boolean);
+  const locations = getParsedLocations(dayData);
   const draftCount = locations.slice(0,5).filter((_, i) => {
     try { return Boolean(JSON.parse(localStorage.getItem(`shopee_report_draft_${i+1}`) || '{}').shopName); }
     catch(e) { return false; }
   }).length;
+
   if (locLabel) locLabel.textContent = locations.join(' → ');
   if (shiftLabel) shiftLabel.textContent = dayData.t1 ? `勤務時間／班別：${dayData.t1}` : '勤務時間尚未設定';
-  if (progressLabel) progressLabel.innerHTML = `共 ${locations.length} 家門市・已建立 ${draftCount} 份巡店草稿<div class="ops-progress"><div class="ops-progress-head"><span>今日準備進度</span><b>${draftCount}/${locations.length}</b></div><div class="ops-progress-track"><div class="ops-progress-fill" style="width:${locations.length ? draftCount/locations.length*100 : 0}%"></div></div></div>`;
-  if (reminderBox) reminderBox.innerHTML = `<div class="duty-timeline">${locations.map((loc, i) => {
-    const draft = getDraftCompletion(i);
-    const active = currentDraftKey === `shopee_report_draft_${i+1}`;
-    const stateClass = active ? 'active' : (draft.exists ? 'ready' : '');
-    const meta = active ? '目前使用中的巡店草稿' : (draft.exists ? `草稿完成度 ${draft.percent}%` : '尚未建立草稿');
-    return `<div class="duty-stop ${stateClass}" onclick="openDutyStop(${i})"><span class="stop-dot">${active ? '●' : (draft.exists ? '✓' : i+1)}</span><div><div class="stop-name">${loc}</div><div class="stop-meta">${meta}</div></div><span class="stop-action">填寫 ›</span></div>`;
-  }).join('')}</div>`;
-  if (startBtn) {
-    startBtn.textContent = draftCount ? '繼續今日巡店' : '開始今日巡店';
-    startBtn.onclick = startTodayReport;
+  
+  if (progressLabel) {
+    progressLabel.innerHTML = `共 ${locations.length} 家門市・已建立 ${draftCount} 份巡店資料<div class="ops-progress"><div class="ops-progress-head"><span>今日準備進度</span><b>${draftCount}/${locations.length}</b></div><div class="ops-progress-track"><div class="ops-progress-fill" style="width:${locations.length ? draftCount/locations.length*100 : 0}%"></div></div></div>`;
+  }
+
+  if (reminderBox) {
+    reminderBox.innerHTML = `<div class="duty-timeline">${locations.map((loc, i) => {
+      const draft = getDraftCompletion(i);
+      const active = currentDraftKey === `shopee_report_draft_${i+1}`;
+      const stateClass = active ? 'active' : (draft.exists ? 'ready' : '');
+      const meta = active ? '目前使用中的巡店資料' : (draft.exists ? `完成度 ${draft.confirmed}/${draft.total} 項` : '尚未建立資料');
+      return `<div class="duty-stop ${stateClass}" onclick="openDutyStop(${i})"><span class="stop-dot">${i+1}</span><div><div class="stop-name">${loc}</div><div class="stop-meta">${meta}</div></div><span class="stop-action">填寫 ›</span></div>`;
+    }).join('')}</div>`;
+  }
+
+  if (homePanel) {
+    homePanel.style.display = 'block';
+    const chipsContainer = document.getElementById('home-overview-chips');
+    if (chipsContainer) {
+      chipsContainer.innerHTML = locations.map((loc, i) => {
+        const comp = getDraftCompletion(i);
+        const isDone = comp.exists && comp.confirmed === comp.total;
+        return `<div class="home-overview-chip ${isDone ? 'confirmed' : ''}" onclick="openDutyStop(${i})"><span>${i+1}.${loc.replace(/-智取店$|智取店$/g, '')}</span><span>${isDone ? '✓完成' : (comp.exists ? `${comp.confirmed}/${comp.total}` : '未填')}</span></div>`;
+      }).join('');
+    }
   }
 }
 
@@ -1396,45 +1541,38 @@ function generateAdvancedTextReport() {
   copyText(fullText, '自訂工作日報表');
 }
 
+/**
+ * 📍 標準編號順序排列 (科目 3 ➡️ 15)
+ */
 function buildReportGroups() {
-  if (document.querySelector('.report-group')) return;
   const report = document.getElementById('report-tab');
   if (!report) return;
 
-  const definitions = [
-    { title:'配送與上架', ids:['card_c4','card_c5','card_c10','card_c11','card_c14'] },
-    { title:'異常與滯留', ids:['card_c3','card_c6'] },
-    { title:'離店與空箱', ids:['card_c8'] },
-    { title:'其他勤務', ids:['card_c9','card_c12','card_c15'] }
-  ];
-  const firstCard = document.getElementById('card_c3');
-  if (!firstCard) return;
+  const oldAnchor = document.getElementById('report-groups-anchor');
+  if (oldAnchor) oldAnchor.remove();
 
-  const anchor = document.createElement('div');
-  anchor.id = 'report-groups-anchor';
-  report.insertBefore(anchor, firstCard);
+  const standardOrder = ['card_c3','card_c4','card_c5','card_c6','card_c8','card_c9','card_c10','card_c11','card_c12','card_c14','card_c15'];
+  const baseCard = document.querySelector('.card[style*="background: var(--ops-surface)"]') || document.querySelector('.card');
   
-  definitions.forEach((group, index) => {
-    const wrapper = document.createElement('section');
-    wrapper.className = `report-group${index === 0 ? ' open' : ''}`;
-    wrapper.innerHTML = `<button type="button" class="report-group-toggle" onclick="toggleReportGroup(this)"><span><span class="report-group-title">${group.title}</span><br><span class="report-group-meta">點擊展開需要填寫的科目</span></span><span class="report-group-chevron">⌄</span></button><div class="report-group-body"></div>`;
-    anchor.before(wrapper);
-    const body = wrapper.querySelector('.report-group-body');
-    group.ids.forEach(id => { const card = document.getElementById(id); if (card) body.appendChild(card); });
-  });
-  anchor.remove();
+  if (baseCard) {
+    standardOrder.forEach(id => {
+      const card = document.getElementById(id);
+      if (card) report.appendChild(card);
+    });
+  }
 
-  const bar = document.createElement('div');
-  bar.className = 'bottom-action-bar';
-  bar.innerHTML = `<span class="progress-label" id="report-progress-label">檢查中</span><button class="btn-preview" onclick="previewReport()">預覽</button><button class="btn-finish" onclick="finishReport()">完成並複製</button>`;
-  report.appendChild(bar);
-  report.addEventListener('input', updateReportProgress);
-  report.addEventListener('change', updateReportProgress);
+  setupSubjectConfirmationControls();
+
+  if (!document.querySelector('.bottom-action-bar')) {
+    const bar = document.createElement('div');
+    bar.className = 'bottom-action-bar';
+    bar.innerHTML = `<span class="progress-label" id="report-progress-label">檢查中</span><button class="btn-preview" onclick="previewReport()">預覽</button><button class="btn-finish" onclick="finishReport()">完成並複製</button>`;
+    report.appendChild(bar);
+  }
+
+  report.addEventListener('input', handleSubjectMutation);
+  report.addEventListener('change', handleSubjectMutation);
   updateReportProgress();
-}
-
-function toggleReportGroup(button) {
-  button.closest('.report-group').classList.toggle('open');
 }
 
 function isReportFieldApplicable(el) {
@@ -1443,32 +1581,188 @@ function isReportFieldApplicable(el) {
   return !conditional || conditional.style.display !== 'none';
 }
 
+const subjectConfirmLabels = {
+  c3:'確認逾期資料', c4:'確認配送資料', c5:'確認驗收資料',
+  c6:'確認異常資料', c8:'確認離店盤點', c9:'確認打包資料',
+  c10:'確認上架資料', c11:'確認打包資料', c12:'確認進貨資料',
+  c14:'確認上架資料', c15:'確認入庫／維修'
+};
+
+function readCurrentDraftObject() {
+  try { return JSON.parse(localStorage.getItem(currentDraftKey) || '{}'); }
+  catch(e) { return {}; }
+}
+
+function setupSubjectConfirmationControls() {
+  document.querySelectorAll('#report-tab .card[data-shift]').forEach(card => {
+    if (card.querySelector('.subject-confirm-row')) return;
+    const subjectId = card.id.replace('card_', '');
+    const copyButton = card.querySelector('.copy-btn');
+    const row = document.createElement('div');
+    row.className = 'subject-confirm-row';
+    row.dataset.subject = subjectId;
+    row.innerHTML = `<span class="subject-confirm-state">尚未確認</span><button type="button" class="subject-confirm-btn" onclick="toggleSubjectConfirmation('${subjectId}')">${subjectConfirmLabels[subjectId] || '確認本項資料'}</button>`;
+    if (copyButton) card.insertBefore(row, copyButton);
+    else card.appendChild(row);
+  });
+  updateSubjectConfirmationUI();
+}
+
+function isSubjectConfirmed(subjectId, data = readCurrentDraftObject()) {
+  return data._confirmedSubjects?.[subjectId] === true;
+}
+
+function toggleSubjectConfirmation(subjectId) {
+  autoSave();
+  const data = readCurrentDraftObject();
+  data._confirmedSubjects ||= {};
+  const willConfirm = data._confirmedSubjects[subjectId] !== true;
+  data._confirmedSubjects[subjectId] = willConfirm;
+  data._confirmedAt ||= {};
+  if (willConfirm) data._confirmedAt[subjectId] = new Date().toISOString();
+  else delete data._confirmedAt[subjectId];
+  localStorage.setItem(currentDraftKey, JSON.stringify(data));
+  updateSubjectConfirmationUI();
+  updateReportProgress();
+  updateDraftLabels();
+  renderTodayDashboard();
+  showToast(willConfirm ? `✅ ${subjectConfirmLabels[subjectId] || '本項資料'}已完成` : '↩️ 已取消本項確認');
+}
+
+function markSubjectUnconfirmed(subjectId) {
+  const data = readCurrentDraftObject();
+  if (!data._confirmedSubjects?.[subjectId]) return;
+  data._confirmedSubjects[subjectId] = false;
+  if (data._confirmedAt) delete data._confirmedAt[subjectId];
+  localStorage.setItem(currentDraftKey, JSON.stringify(data));
+  updateSubjectConfirmationUI();
+  renderTodayDashboard();
+}
+
+function handleSubjectMutation(event) {
+  const card = event.target.closest?.('.card[data-shift]');
+  if (card) markSubjectUnconfirmed(card.id.replace('card_', ''));
+  updateSubjectConfirmationUI();
+  updateReportProgress();
+}
+
+function updateSubjectConfirmationUI() {
+  const data = readCurrentDraftObject();
+  const currentShop = getCleanShopName();
+  const shift = document.getElementById('shift')?.value || '早';
+  const applicable = getApplicableSubjects(currentShop, shift);
+  const override = document.getElementById('unlockOverride') ? document.getElementById('unlockOverride').checked : false;
+
+  document.querySelectorAll('#report-tab .card[data-shift]').forEach(card => {
+    const subjectId = card.id.replace('card_', '');
+    const cardShift = card.getAttribute('data-shift');
+    const isShiftMatched = (cardShift === '雙' || cardShift === shift || override);
+    const isApplicable = override ? true : applicable.includes(subjectId);
+    
+    if (!isShiftMatched || !isApplicable) {
+      card.style.display = 'none';
+    } else {
+      card.style.display = 'block';
+    }
+
+    const confirmed = isSubjectConfirmed(subjectId, data);
+    const row = card.querySelector('.subject-confirm-row');
+    if (!row) return;
+    row.classList.toggle('confirmed', confirmed);
+    card.classList.toggle('subject-confirmed', confirmed);
+    const state = row.querySelector('.subject-confirm-state');
+    const button = row.querySelector('.subject-confirm-btn');
+    if (state) state.textContent = confirmed ? '本項已確認' : '尚未確認';
+    if (button) button.textContent = confirmed ? '取消確認' : (subjectConfirmLabels[subjectId] || '確認本項資料');
+  });
+}
+
+const subjectOverviewNames = {
+  c3:'科目3・逾期包裹', c4:'科目4・配送數據', c5:'科目5・上架與滯留',
+  c6:'科目6・異常包裹', c8:'科目8・離店與空箱', c9:'科目9・早班打包',
+  c10:'科目10・早班上架', c11:'科目11・晚班打包', c12:'科目12・中正速配倉',
+  c14:'科目14・晚班HD上架', c15:'科目15・AMS入庫／維修'
+};
+
+function escapeOverviewHTML(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+}
+
+function getSubjectOverviewSummary(subjectId, data) {
+  const v = (key, fallback='—') => escapeOverviewHTML(String(data[key] ?? '').trim() || fallback);
+  const c5Count = data.c5_multi_mode
+    ? [data.c5_b1_count, data.c5_b2_count, data.c5_b3_count].map(value => String(value ?? '').trim()).filter(Boolean).join('/') || '—'
+    : String(data.c5_count ?? '').trim() || '—';
+  const summaries = {
+    c3:`逾期 ${v('c3_overdue','0')}・SCS ${v('c3_scs','0')}・FBS ${v('c3_fbs','0')}`,
+    c4:`配送 ${v('c4_delivery')}・箱數 ${v('c4_boxes','0')}・滯留 ${v('c4_stay','0')}・NDD ${v('c4_ndd','0')}`,
+    c5:`驗收 ${escapeOverviewHTML(c5Count)}・${v('c5_startTime')}～${v('c5_endTime')}・平均 ${v('c5_avg')}・滯留 ${v('c5_stay_box','0')}`,
+    c6:`錯店 ${v('c6_wrong','0')}・破損 ${v('c6_damaged','0')}・濕損 ${v('c6_wet','0')}・SOC ${v('c6_soc','0')}`,
+    c8:`逆物流 ${v('c8_reverse','0')}・異常 ${v('c8_abnormal','0')}・WH空箱 ${v('c8_wh_empty','0')}・橘箱 ${v('c8_orange_empty','0')}`,
+    c9:`本次打包 ${v('c9_pack','0')}・昨晚 ${v('c9_last_night','0')}・合計 ${v('c9_total','0')}`,
+    c10:`成功上架 ${v('c10_success','0')}・滯留 ${v('c10_stay','0')}`,
+    c11:`SCS HD打包 ${v('c11_pack','0')}`,
+    c12:`進貨 ${v('c12_bags','0')} 袋`,
+    c14:`系統 ${v('c14_sys','0')}・實際 ${v('c14_real','0')}・不需上架 ${v('c14_no_need','無')}`,
+    c15:`入庫 ${v('c15_in','無')}・維修 ${v('c15_repair','無')}`
+  };
+  return summaries[subjectId] || '尚無摘要';
+}
+
+function openReportOverview() {
+  autoSave();
+  const data = readCurrentDraftObject();
+  const currentShop = getCleanShopName();
+  const shift = document.getElementById('shift')?.value || '早';
+  const applicable = getApplicableSubjects(currentShop, shift);
+  const override = document.getElementById('unlockOverride') ? document.getElementById('unlockOverride').checked : false;
+
+  const cards = Array.from(document.querySelectorAll('#report-tab .card[data-shift]'))
+    .filter(card => card.style.display !== 'none')
+    .filter(card => override || applicable.includes(card.id.replace('card_', '')));
+
+  const confirmedCount = cards.filter(card => isSubjectConfirmed(card.id.replace('card_', ''), data)).length;
+  let modal = document.getElementById('report-overview-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'report-overview-modal';
+    modal.className = 'modal-overlay';
+    document.body.appendChild(modal);
+  }
+  const inner = document.getElementById('overview-modal-inner') || modal;
+  inner.innerHTML = `<div class="overview-head"><div><h3>${escapeOverviewHTML(data.shopName || '本店')}・回報總覽</h3><div style="font-size:12px;color:var(--ops-muted);margin-top:5px;">已確認 ${confirmedCount}/${cards.length} 個適用科目</div></div><button class="overview-close" onclick="closeReportOverview()">×</button></div><div class="overview-list">${cards.map(card => {
+    const id = card.id.replace('card_', '');
+    const confirmed = isSubjectConfirmed(id, data);
+    return `<div class="overview-item ${confirmed ? 'confirmed' : ''}"><div><div class="overview-title"><span class="overview-dot"></span>${subjectOverviewNames[id] || id}</div><div class="overview-summary">${getSubjectOverviewSummary(id, data)}</div><div class="overview-status">${confirmed ? '✓ 已確認' : '○ 尚未確認'}</div></div><button class="overview-go" onclick="focusSubjectFromOverview('${id}')">${confirmed ? '查看' : '前往確認'}</button></div>`;
+  }).join('')}</div>`;
+  modal.classList.add('active');
+}
+
+function closeReportOverview() {
+  document.getElementById('report-overview-modal')?.classList.remove('active');
+}
+
+function focusSubjectFromOverview(subjectId) {
+  closeReportOverview();
+  switchMainTab('report-tab', navButtonFor('report-tab'));
+  const card = document.getElementById('card_' + subjectId);
+  setTimeout(() => card?.scrollIntoView({behavior:'smooth', block:'center'}), 80);
+}
+
 function updateReportProgress() {
-  const cards = Array.from(document.querySelectorAll('#report-tab .card[data-shift]')).filter(card => !card.classList.contains('disabled-card'));
-  const complete = cards.filter(card => {
-    const fields = Array.from(card.querySelectorAll('input:not([type="checkbox"]):not([readonly]), select')).filter(isReportFieldApplicable);
-    return fields.length && fields.every(el => {
-      const val = String(el.value).trim();
-      return val !== '' && val !== '0';
-    });
-  }).length;
+  const data = readCurrentDraftObject();
+  const currentShop = getCleanShopName();
+  const shift = document.getElementById('shift')?.value || '早';
+  const applicable = getApplicableSubjects(currentShop, shift);
+  const override = document.getElementById('unlockOverride') ? document.getElementById('unlockOverride').checked : false;
+
+  const cards = Array.from(document.querySelectorAll('#report-tab .card[data-shift]'))
+    .filter(card => card.style.display !== 'none')
+    .filter(card => override || applicable.includes(card.id.replace('card_', '')));
+
+  const complete = cards.filter(card => isSubjectConfirmed(card.id.replace('card_', ''), data)).length;
   const label = document.getElementById('report-progress-label');
   if (label) label.textContent = `完成 ${complete}/${cards.length}`;
-  document.querySelectorAll('.report-group').forEach(group => {
-    const groupCards = Array.from(group.querySelectorAll('.card[data-shift]')).filter(card => !card.classList.contains('disabled-card'));
-    const groupComplete = groupCards.filter(card => {
-      const fields = Array.from(card.querySelectorAll('input:not([type="checkbox"]):not([readonly]), select')).filter(isReportFieldApplicable);
-      return fields.length && fields.every(el => {
-        const val = String(el.value).trim();
-        return val !== '' && val !== '0';
-      });
-    }).length;
-    const meta = group.querySelector('.report-group-meta');
-    if (meta) {
-      const percent = groupCards.length ? Math.round(groupComplete/groupCards.length*100) : 0;
-      meta.innerHTML = groupCards.length ? `${groupComplete}/${groupCards.length} 完成<div class="group-progress"><i style="width:${percent}%"></i></div>` : '本班別無適用科目';
-    }
-  });
 }
 
 function previewReport() {
@@ -1483,9 +1777,140 @@ function finishReport() {
     showToast('⚠️ 請先選擇巡店門市');
     return;
   }
+  const data = readCurrentDraftObject();
+  const currentShop = getCleanShopName();
+  const shift = document.getElementById('shift')?.value || '早';
+  const applicable = getApplicableSubjects(currentShop, shift);
+  const override = document.getElementById('unlockOverride') ? document.getElementById('unlockOverride').checked : false;
+
+  const pendingCards = Array.from(document.querySelectorAll('#report-tab .card[data-shift]'))
+    .filter(card => card.style.display !== 'none')
+    .filter(card => override || applicable.includes(card.id.replace('card_', '')))
+    .filter(card => !isSubjectConfirmed(card.id.replace('card_', ''), data));
+
+  if (pendingCards.length) {
+    pendingCards[0].scrollIntoView({ behavior:'smooth', block:'center' });
+    showToast(`⚠️ 尚有 ${pendingCards.length} 個適用科目未確認`);
+    return;
+  }
   saveDataAndSyncToSchedule(false);
   copySupportReport();
   renderTodayDashboard();
+}
+
+/**
+ * 📍 門市與任務標籤動態管理中心邏輯
+ */
+function renderStoreManageList() {
+  const container = document.getElementById('settings-store-list-container');
+  const searchInput = document.getElementById('settings-store-search');
+  if (!container) return;
+
+  const keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  const filtered = storesData.filter(s => s.name.toLowerCase().includes(keyword) || s.address.toLowerCase().includes(keyword));
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div style="text-align:center; padding:15px; color:var(--ops-muted); font-size:13px;">找不到符合的門市</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map((store) => {
+    const originalIndex = storesData.findIndex(s => s.name === store.name);
+    return `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid var(--ops-border); background:var(--ops-surface); border-radius:6px; margin-bottom:4px;">
+      <div>
+        <div style="font-weight:bold; font-size:13px; color:var(--ops-text);">${store.name}</div>
+        <div style="font-size:11px; color:var(--ops-muted);">${store.address || '無地址'} | 標籤: ${(store.tags || []).join(', ') || '無'}</div>
+      </div>
+      <div style="display:flex; gap:4px;">
+        <button class="badge-btn" style="padding:4px 8px; font-size:11px; background:var(--ops-info);" onclick="openStoreEditModal(${originalIndex})">編輯</button>
+        <button class="badge-btn" style="padding:4px 8px; font-size:11px; background:var(--ops-danger);" onclick="deleteStoreItem(${originalIndex})">刪除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openStoreEditModal(index = -1) {
+  const modal = document.getElementById('store-edit-modal');
+  const title = document.getElementById('store-modal-title');
+  const idxInput = document.getElementById('store-modal-index');
+  const nameInput = document.getElementById('store-modal-name');
+  const addrInput = document.getElementById('store-modal-address');
+  const notesInput = document.getElementById('store-modal-notes');
+  const checkboxes = document.querySelectorAll('.store-tag-cb');
+  
+  idxInput.value = index;
+  checkboxes.forEach(cb => cb.checked = false);
+
+  if (index >= 0 && storesData[index]) {
+    const store = storesData[index];
+    title.innerText = `編輯門市：${store.name}`;
+    nameInput.value = store.name;
+    addrInput.value = store.address || '';
+    notesInput.value = store.notes || '';
+    const storeTags = store.tags || [];
+    checkboxes.forEach(cb => {
+      if (storeTags.includes(cb.value)) cb.checked = true;
+    });
+  } else {
+    title.innerText = '新增門市';
+    nameInput.value = '';
+    addrInput.value = '';
+    notesInput.value = '';
+  }
+  modal.classList.add('active');
+}
+
+function closeStoreEditModal() {
+  document.getElementById('store-edit-modal')?.classList.remove('active');
+}
+
+function saveStoreModalData() {
+  const index = parseInt(document.getElementById('store-modal-index').value, 10);
+  const name = document.getElementById('store-modal-name').value.trim();
+  const address = document.getElementById('store-modal-address').value.trim();
+  const notes = document.getElementById('store-modal-notes').value.trim();
+
+  if (!name) {
+    showToast('⚠️ 門市名稱不可為空！');
+    return;
+  }
+
+  const tags = [];
+  document.querySelectorAll('.store-tag-cb').forEach(cb => {
+    if (cb.checked) tags.push(cb.value);
+  });
+
+  const storeObj = { name, address, tags, notes };
+
+  if (index >= 0) {
+    storesData[index] = storeObj;
+    showToast(`💾 已成功更新門市：${name}`);
+  } else {
+    storesData.push(storeObj);
+    showToast(`+ 已成功新增門市：${name}`);
+  }
+
+  localStorage.setItem('shopee_custom_stores_data', JSON.stringify(storesData));
+  closeStoreEditModal();
+  renderStoreManageList();
+  populateShopOptions();
+  populateReportStoreDatalist();
+  updateStoreInfo();
+  applyShiftLock();
+  syncScheduleToDrive();
+}
+
+function deleteStoreItem(index) {
+  if (index >= 0 && index < storesData.length) {
+    const storeName = storesData[index].name;
+    storesData.splice(index, 1);
+    localStorage.setItem('shopee_custom_stores_data', JSON.stringify(storesData));
+    showToast(`🗑️ 已刪除門市：${storeName}`);
+    renderStoreManageList();
+    populateShopOptions();
+    populateReportStoreDatalist();
+    syncScheduleToDrive();
+  }
 }
 
 function switchScheduleView(view) {
@@ -1732,45 +2157,6 @@ function renderDayView() {
   }
 }
 
-function matchStoreName(rawText) {
-  if (!rawText) return '';
-  let cleanStr = rawText.trim().replace(/[\{\(].*?[\}\)]/g, '').trim();
-
-  if (!cleanStr) return '';
-
-  for (let s of storesData) {
-    const shortName = s.name.replace(/-智取店$/, '').replace(/智取店$/, '');
-    if (s.name.includes(cleanStr) || cleanStr.includes(shortName)) {
-      return s.name;
-    }
-  }
-
-  for (let s of storesData) {
-    if (cleanStr.length >= 2) {
-      if (s.name.includes(cleanStr.substring(0, 2))) {
-        return s.name;
-      }
-    }
-  }
-
-  return cleanStr;
-}
-
-function determineShiftFromTime(timeStr) {
-  if (!timeStr) return '早';
-  
-  if (timeStr.includes('晚')) return '晚';
-  if (timeStr.includes('早')) return '早';
-
-  const match = timeStr.match(/(\d{1,2}):(\d{2})/);
-  if (match) {
-    const hour = parseInt(match[1], 10);
-    return (hour >= 17) ? '晚' : '早';
-  }
-
-  return '早';
-}
-
 function syncCurrentDayScheduleToReportDraft() {
   const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
   const dayData = savedSchedule[currentSelectedDayKey];
@@ -1780,13 +2166,7 @@ function syncCurrentDayScheduleToReportDraft() {
     return;
   }
 
-  let allStores = [];
-  if (dayData.loc) {
-    allStores = allStores.concat(dayData.loc.split(/[\/\n]/).map(t => t.trim()).filter(Boolean));
-  }
-  if (dayData.supportLocs && dayData.supportLocs.length > 0) {
-    allStores = allStores.concat(dayData.supportLocs);
-  }
+  let allStores = getParsedLocations(dayData);
 
   if (allStores.length === 0) {
     showToast('⚠️ 無法解析有效的門市名稱！');
@@ -1813,6 +2193,10 @@ function syncCurrentDayScheduleToReportDraft() {
       draftData = JSON.parse(localStorage.getItem(draftKey) || '{}');
     } catch(e) {}
 
+    if (draftData.shopName && draftData.shopName !== matchedShopName) {
+      draftData._confirmedSubjects = {};
+      draftData._confirmedAt = {};
+    }
     draftData.date = dateStr;
     draftData.shopName = matchedShopName;
     draftData.shift = shiftVal;
@@ -2073,10 +2457,143 @@ function updateDraftLabels() {
     const activeClass = isCurrent ? 'draft-badge active' : 'draft-badge';
     const statusText = `${index + 1}.${storeName}`;
     
-    badgeHTML += `<div class="${activeClass}" onclick="switchDraft('${key}')">${statusText}</div>`;
+    badgeHTML += `<div class="${activeClass}" draggable="true" data-index="${index}" data-key="${key}" onclick="handleDraftBadgeClick('${key}')">${statusText}</div>`;
   });
 
   statusBar.innerHTML = badgeHTML;
+  initDraftDragAndDrop();
+}
+
+let suppressDraftClickUntil = 0;
+
+function handleDraftBadgeClick(key) {
+  if (Date.now() < suppressDraftClickUntil) return;
+  switchDraft(key);
+}
+
+function initDraftDragAndDrop() {
+  const container = document.getElementById('draft_status_bar');
+  if (!container) return;
+  const badges = container.querySelectorAll('.draft-badge');
+
+  let draggedItem = null;
+
+  badges.forEach(badge => {
+    badge.addEventListener('dragstart', function(e) {
+      draggedItem = this;
+      setTimeout(() => this.classList.add('dragging'), 0);
+    });
+
+    badge.addEventListener('dragend', function(e) {
+      this.classList.remove('dragging');
+      draggedItem = null;
+    });
+
+    badge.addEventListener('dragover', function(e) {
+      e.preventDefault();
+    });
+
+    badge.addEventListener('drop', function(e) {
+      e.preventDefault();
+      if (draggedItem && draggedItem !== this) {
+        const fromIdx = parseInt(draggedItem.getAttribute('data-index'));
+        const toIdx = parseInt(this.getAttribute('data-index'));
+        moveDraftData(fromIdx, toIdx);
+      }
+    });
+
+    let touchSrcEl = null;
+    badge.addEventListener('touchstart', function(e) {
+      touchSrcEl = this;
+    }, {passive: true});
+
+    badge.addEventListener('touchend', function(e) {
+      const touch = e.changedTouches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY);
+      const targetBadge = target ? target.closest('.draft-badge') : null;
+      if (touchSrcEl && targetBadge && touchSrcEl !== targetBadge) {
+        const fromIdx = parseInt(touchSrcEl.getAttribute('data-index'));
+        const toIdx = parseInt(targetBadge.getAttribute('data-index'));
+        moveDraftData(fromIdx, toIdx);
+      }
+    });
+  });
+}
+
+function moveDraftData(fromIdx, toIdx) {
+  if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0 || fromIdx > 4 || toIdx > 4) return;
+  const keys = ['draft_1', 'draft_2', 'draft_3', 'draft_4', 'draft_5'];
+  const currentIndex = keys.findIndex(key => currentDraftKey === 'shopee_report_' + key);
+  const items = keys.map((key, originalIndex) => ({
+    originalIndex,
+    data: localStorage.getItem('shopee_report_' + key)
+  }));
+  const [moved] = items.splice(fromIdx, 1);
+  items.splice(toIdx, 0, moved);
+
+  items.forEach((item, index) => {
+    const targetKey = 'shopee_report_' + keys[index];
+    if (item.data !== null) localStorage.setItem(targetKey, item.data);
+    else localStorage.removeItem(targetKey);
+  });
+
+  const newCurrentIndex = items.findIndex(item => item.originalIndex === currentIndex);
+  if (newCurrentIndex >= 0) currentDraftKey = 'shopee_report_' + keys[newCurrentIndex];
+
+  suppressDraftClickUntil = Date.now() + 450;
+  syncTodayRouteOrderFromDrafts();
+  updateDraftLabels();
+  loadData(false);
+  renderTodayDashboard();
+  showToast(`🔄 已成功調整巡店順序！`);
+}
+
+function getScheduleLocationsWithoutRouteOrder(dayData) {
+  if (!dayData) return [];
+  const result = [];
+  if (dayData.loc && String(dayData.loc).trim().toUpperCase() !== 'X' && !dayData.isOff) {
+    result.push(...String(dayData.loc).split(/[\/\n]/).map(s => s.trim()).filter(Boolean));
+  }
+  (dayData.supportLocs || []).forEach(value => {
+    result.push(...String(value).split(/[\/\n]/).map(s => s.trim()).filter(Boolean));
+  });
+  return result;
+}
+
+function syncTodayRouteOrderFromDrafts() {
+  const todayKey = formatDateISO(new Date());
+  const schedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const dayData = schedule[todayKey];
+  if (!dayData) return;
+
+  const draftNames = ['draft_1','draft_2','draft_3','draft_4','draft_5'].map(key => {
+    try { return JSON.parse(localStorage.getItem('shopee_report_' + key) || '{}').shopName || ''; }
+    catch(e) { return ''; }
+  }).map(name => name.trim()).filter(Boolean);
+  const originalNames = getScheduleLocationsWithoutRouteOrder(dayData);
+  const normalize = name => matchStoreName(name).replace(/-智取店$|智取店$/g, '').trim();
+  const ordered = [];
+  [...draftNames, ...originalNames].forEach(name => {
+    if (!ordered.some(existing => normalize(existing) === normalize(name))) ordered.push(name);
+  });
+  dayData.routeOrder = ordered;
+  schedule[todayKey] = dayData;
+  localStorage.setItem('shopee_user_schedule', JSON.stringify(schedule));
+  renderTodayDashboard();
+  loadWeekSchedule();
+  renderMonthView();
+  syncScheduleToDrive();
+}
+
+function openNavigation() {
+  const addrEl = document.getElementById('storeAddressText');
+  if (!addrEl || !addrEl.innerText.trim()) {
+    showToast('⚠️ 目前尚無門市地址可供導航！');
+    return;
+  }
+  const address = encodeURIComponent(addrEl.innerText.trim());
+  const navUrl = `https://www.google.com/maps/search/?api=1&query=${address}`;
+  window.open(navUrl, '_blank');
 }
 
 function getTodayString() {
@@ -2119,7 +2636,11 @@ window.onload = function() {
 
 function getAllData() {
   const elements = document.querySelectorAll('#report-tab input, #report-tab select');
-  const data = {};
+  const previous = readCurrentDraftObject();
+  const data = {
+    _confirmedSubjects: previous._confirmedSubjects || {},
+    _confirmedAt: previous._confirmedAt || {}
+  };
   elements.forEach(el => {
     if (el.id) {
       if (el.type === 'checkbox') data[el.id] = el.checked;
@@ -2130,17 +2651,26 @@ function getAllData() {
 }
 
 function autoSave() {
-  localStorage.setItem(currentDraftKey, getAllData());
+  const previous = readCurrentDraftObject();
+  const next = JSON.parse(getAllData());
+  if (previous.shopName && next.shopName !== previous.shopName) {
+    next._confirmedSubjects = {};
+    next._confirmedAt = {};
+  }
+  localStorage.setItem(currentDraftKey, JSON.stringify(next));
+  renderTodayDashboard();
+  applyShiftLock();
 }
 
 function saveDataOnly(showAlert) {
   const dataStr = getAllData();
   localStorage.setItem(currentDraftKey, dataStr);
   updateDraftLabels();
+  renderTodayDashboard();
   syncScheduleToDrive();
 
   if (showAlert) {
-    showToast(`💾 已成功寫入【${getDraftName(currentDraftKey.replace('shopee_report_', ''))}】巡店紀錄！`);
+    showToast(`💾 已成功寫入【${getDraftName(currentDraftKey.replace('shopee_report_', ''))}】巡店資料！`);
   }
 }
 
@@ -2148,6 +2678,7 @@ function saveDataAndSyncToSchedule(showAlert) {
   const dataStr = getAllData();
   localStorage.setItem(currentDraftKey, dataStr);
   updateDraftLabels();
+  renderTodayDashboard();
 
   try {
     const parsed = JSON.parse(dataStr);
@@ -2174,7 +2705,7 @@ function saveDataAndSyncToSchedule(showAlert) {
   syncScheduleToDrive();
 
   if (showAlert) {
-    showToast(`🔄 已成功儲存巡店紀錄，並同步寫入班表與雲端！`);
+    showToast(`🔄 已成功儲存巡店資料，並同步寫入班表與雲端！`);
   }
 }
 
@@ -2230,15 +2761,17 @@ function loadData(showAlert) {
     toggleLockInput();
     updateStoreInfo();
     applyShiftLock();
-    if (showAlert) showToast(`📂 已載入【${getDraftName(currentDraftKey.replace('shopee_report_', ''))}】巡店紀錄`);
+    if (showAlert) showToast(`📂 已載入【${getDraftName(currentDraftKey.replace('shopee_report_', ''))}】巡店資料`);
   } else {
     if (showAlert) showToast('此巡店位置尚無儲存紀錄！');
   }
+  updateSubjectConfirmationUI();
+  updateReportProgress();
 }
 
 function clearFormOnly() {
   resetFormFields();
-  showToast('🧹 已清空目前畫面輸入欄位（已存巡店紀錄不受影響）');
+  showToast('🧹 已清空目前畫面輸入欄位（已存巡店資料不受影響）');
 }
 
 let clearConfirmTimer = null;
@@ -2247,8 +2780,8 @@ function clearData() {
     clearTimeout(clearConfirmTimer);
     clearConfirmTimer = null;
     localStorage.removeItem(currentDraftKey);
-    showToast('🗑️ 已徹底刪除此店巡店紀錄！');
-    setTimeout(() => { resetFormFields(); updateDraftLabels(); }, 400);
+    showToast('🗑️ 已徹底刪除此店巡店資料！');
+    setTimeout(() => { resetFormFields(); updateDraftLabels(); updateSubjectConfirmationUI(); updateReportProgress(); renderTodayDashboard(); }, 400);
     return;
   }
 
@@ -2288,7 +2821,11 @@ function applyShiftLock() {
 
     const btn = card.querySelector('.copy-btn');
     if (btn) btn.disabled = !isMatched;
+    const confirmBtn = card.querySelector('.subject-confirm-btn');
+    if (confirmBtn) confirmBtn.disabled = !isMatched;
   });
+  updateSubjectConfirmationUI();
+  updateReportProgress();
 }
 
 function populateShopOptions() {
@@ -2343,6 +2880,8 @@ function updateStoreInfo() {
   } else {
     detailCard.style.display = 'none';
   }
+  updateSubjectConfirmationUI();
+  updateReportProgress();
 }
 
 function copyAddress() {
@@ -2614,7 +3153,7 @@ function copySupportReport() {
   const c5_to_in = document.getElementById('c5_to_in')?.value || '';
   const c5_to_out = document.getElementById('c5_to_out')?.value || '';
 
-  reportLines.push(`【科目5 驗收回報】\n驗收包裹數量：${countStr}\n第一顆上架時間：${startStr}\n完成驗收時間：${endStr}\n平均驗收時間：${c5_avg}\nNDD完成驗收時間：${nddVal}\nWH NDD完成驗收時間：${c5_whndd}\n滯留：${c5_stay} | 剩餘櫃位：${c5_seats}\n到店TO單：${c5_to_in} | 離店TO單：${c5_to_out}`);
+  reportLines.push(`【科目5 驗收回報】\n驗收包裹數量：${countStr}\n第一顆上架時間：${startStr}\n完成驗收時間：${endStr}\n平均驗收時間：${c5_avg}\nNDD完成驗收時間：${c5_ndd}\nWH NDD完成驗收時間：${c5_whndd}\n滯留：${c5_stay} | 剩餘櫃位：${c5_seats}\n到店TO單：${c5_to_in} | 離店TO單：${c5_to_out}`);
 
   const c6_wrong = document.getElementById('c6_wrong')?.value || '0';
   const c6_damaged = document.getElementById('c6_damaged')?.value || '0';
@@ -2668,22 +3207,6 @@ function copySupportReport() {
 
   const fullText = reportLines.join('\n\n');
   copyText(fullText, '支援群全科目匯報');
-}
-
-function showToast(message, duration = 2000) {
-  const container = document.getElementById('toast-container');
-  if (!container) return;
-
-  const toast = document.createElement('div');
-  toast.className = 'toast';
-  toast.innerText = message;
-  container.appendChild(toast);
-
-  setTimeout(() => toast.classList.add('show'), 10);
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => toast.remove(), 300);
-  }, duration);
 }
 
 function handleExcelImport(event) {
@@ -2826,26 +3349,30 @@ function parseExcelDateToISO(val) {
 
 function updateSystemStatus() {
   const statusEl = document.getElementById('system-status-text');
-  if (statusEl) {
-    const isOnline = navigator.onLine;
-    let isStorageOk = true;
+  const setStatusEl = document.getElementById('settings-system-status');
 
-    try {
-      const testKey = '__storage_test__';
-      localStorage.setItem(testKey, testKey);
-      localStorage.removeItem(testKey);
-    } catch (e) {
-      isStorageOk = false;
-    }
+  const isOnline = navigator.onLine;
+  let isStorageOk = true;
 
-    if (!isStorageOk) {
-      statusEl.innerHTML = '系統狀態：<span style="color:#d32f2f; font-weight:bold;">● 儲存空間已滿/受限</span>';
-    } else if (isOnline) {
-      statusEl.innerHTML = '系統狀態：<span style="color:#2ea44f; font-weight:bold;">● 連線正常</span>';
-    } else {
-      statusEl.innerHTML = '系統狀態：<span style="color:#ff9800; font-weight:bold;">● 離線模式 (本機儲存)</span>';
-    }
+  try {
+    const testKey = '__storage_test__';
+    localStorage.setItem(testKey, testKey);
+    localStorage.removeItem(testKey);
+  } catch (e) {
+    isStorageOk = false;
   }
+
+  let statusHtml = '';
+  if (!isStorageOk) {
+    statusHtml = '系統狀態：<span style="color:#d32f2f; font-weight:bold;">● 儲存空間已滿/受限</span>';
+  } else if (isOnline) {
+    statusHtml = '系統狀態：<span style="color:#2ea44f; font-weight:bold;">● 連線正常</span>';
+  } else {
+    statusHtml = '系統狀態：<span style="color:#ff9800; font-weight:bold;">● 離線模式 (本機儲存)</span>';
+  }
+
+  if (statusEl) statusEl.innerHTML = statusHtml;
+  if (setStatusEl) setStatusEl.innerHTML = `<b>系統連線狀態：</b> ${isOnline ? '<span style="color:#2ea44f;">● 連線正常 (雲端同步就緒)</span>' : '<span style="color:#ff9800;">● 離線模式</span>'}`;
 
   updateStorageUsage();
   if (typeof renderTodayDashboard === 'function') renderTodayDashboard();
@@ -2856,7 +3383,7 @@ window.addEventListener('offline', updateSystemStatus);
 
 function updateStorageUsage() {
   const usageEl = document.getElementById('storage-usage-text');
-  if (!usageEl) return;
+  const setStorageEl = document.getElementById('settings-storage-usage');
 
   let totalChar = 0;
   for (let key in localStorage) {
@@ -2868,12 +3395,9 @@ function updateStorageUsage() {
   const usedKB = (totalChar / 1024).toFixed(1);
   const percent = ((totalChar / 5242880) * 100).toFixed(1);
 
-  usageEl.innerText = `容量：${usedKB} KB (${percent}%)`;
-  if (parseFloat(percent) > 80) {
-    usageEl.style.color = '#d32f2f'; usageEl.style.fontWeight = 'bold';
-  } else {
-    usageEl.style.color = '#666'; usageEl.style.fontWeight = 'normal';
-  }
+  const usageText = `${usedKB} KB (${percent}%)`;
+  if (usageEl) usageEl.innerText = `容量：${usageText}`;
+  if (setStorageEl) setStorageEl.innerHTML = `<b>本機儲存空間：</b> ${usageText}`;
 }
 
 function exportBackupData() {
@@ -2923,6 +3447,22 @@ function handleFileImport(event) {
     }
   };
   reader.readAsText(file);
+}
+
+function showToast(message, duration = 2000) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerText = message;
+  container.appendChild(toast);
+
+  setTimeout(() => toast.classList.add('show'), 10);
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
 }
 </script>
 </body>
