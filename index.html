@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店科目回報與排班系統v4.2.2</title>
+<title>蝦皮智取店科目回報與排班系統v4.2.3</title>
 
 <!-- 引入 SheetJS 解析 Excel -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  
@@ -79,7 +79,7 @@
 
   function maybeEnableSyncUI() {
       if (gapiInited && gsisInited) {
-          console.log("[v4.2.2] Google Drive API SDK 初始化成功！");
+          console.log("[v4.2.3] Google Drive API SDK 初始化成功！");
           const loginBtn = document.getElementById('gdrive-login-btn');
           if (loginBtn) loginBtn.style.opacity = '1';
 
@@ -266,7 +266,7 @@
   .btn-sync-header:hover { background: #1b5e20; }
   .btn-sync-header:active { transform: scale(0.97); }
 
-  /* 📍 支援門市追加按鈕：高強對比度修正 */
+  /* 📍 支援門市追加按鈕 */
   .btn-add-support {
     background: #1565c0;
     color: #ffffff;
@@ -336,7 +336,7 @@
   .week-card.is-off { background: #f2f3f5; border-color: #e0e0e0; }
   .week-card.is-off .loc-lbl { color: #7f8c8d; }
 
-  /* 📍 日檢視點擊卡片與 hover 效果 */
+  /* 日檢視點擊卡片與 hover 效果 */
   .day-card-clickable {
     background: #fdfdfd;
     border: 2px dashed #64b5f6;
@@ -354,7 +354,7 @@
     transform: translateY(-2px);
   }
 
-  /* 📍 支援門市亮藍色文字樣式 */
+  /* 支援門市亮藍色文字樣式 */
   .support-store-text { color: #1976d2 !important; font-weight: bold; }
 
   .calendar-cell { min-height: 60px; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px 2px; background: #fff; font-size: 11px; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; overflow: hidden; transition: all 0.15s ease; }
@@ -401,7 +401,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: center;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店科目回報與排班系統 v4.2.2
+      📦 蝦皮智取店科目回報與排班系統 v4.2.3
     </h1>
   </div>
   <div class="main-nav">
@@ -435,18 +435,12 @@
 
   <div class="card" style="background: #fff8f6; border: 1px solid #ffccbc;">
     <h3 style="color: #e65100; border-bottom-color: #ffab91;">基本資訊</h3>
+    
+    <!-- 📍 佈局優化：將日期與班別獨立一行，門市與追加按鈕獨立一行，解決手機擠壓與選單無法彈出問題 -->
     <div class="row">
       <div>
         <label>月/日 (自動帶入當天)</label>
         <input type="text" id="date" placeholder="例: 3/30" oninput="autoSave()">
-      </div>
-      <div style="flex: 1.5;">
-        <label>門市 (可選/可輸入)</label>
-        <div style="display: flex; gap: 6px; align-items: center;">
-          <input type="text" id="shopName" list="shopList" placeholder="選擇或輸入店名" oninput="updateStoreInfo(); autoSave(); updateDraftLabels();">
-          <button class="btn-add-support" onclick="addCurrentStoreToScheduleSupport()">+ 追加至今日班表</button>
-        </div>
-        <datalist id="shopList"></datalist>
       </div>
       <div>
         <label>班別</label>
@@ -455,6 +449,15 @@
           <option value="晚">晚班</option>
         </select>
       </div>
+    </div>
+
+    <div style="margin-top: 4px;">
+      <label>門市 (可選/可輸入)</label>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <input type="text" id="shopName" list="shopList" placeholder="選擇或輸入店名 (如: 福興)" oninput="updateStoreInfo(); autoSave(); updateDraftLabels();" style="flex: 1;">
+        <button class="btn-add-support" onclick="addCurrentStoreToScheduleSupport()">+ 追加至今日班表</button>
+      </div>
+      <datalist id="shopList"></datalist>
     </div>
 
     <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #ffe0b2;">
@@ -726,7 +729,7 @@
     </div>
   </div>
 
-  <!-- 日檢視模式 -->
+  <!-- 日檢視模式 (已移除下方巨大編輯按鈕，改為點擊整張卡片編輯) -->
   <div id="day-view-container" class="card" style="display:none;">
     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #bbdefb; padding-bottom: 5px;">
       <h3 style="color: #2196f3; border-bottom: none; margin: 0;">本日勤務</h3>
@@ -766,7 +769,7 @@
 <footer class="site-footer">
   <div class="brand-info">
     <span>📦 蝦皮智取店回報與排班系統</span>
-    <span>v4.2.2 (Support Store Isolation)</span>
+    <span>v4.2.3 (Mobile Layout & UX)</span>
   </div>
   <span class="divider">•</span>
   <span>© 2026 Developed by <b>willy huang (WSOFT)</b></span>
@@ -866,7 +869,7 @@ const storesData = [
   {"name": "大安建安-智取店", "address": "台北市大安區大安路二段170號1樓", "tags": ["純取店"], "notes": ""},
   {"name": "大安福華-智取店", "address": "台北市大安區復興南路一段251號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包", "包裹重新分配"], "notes": ""},
   {"name": "大安潮州-智取店", "address": "台北市大安區潮州街90號1樓", "tags": ["⭐重點店", "NDD打包", "FBS打包"], "notes": "特選離店放後場"},
-  {"name": "大安新生南-智取店", "address": "台北市大安區新生南路三段60巷2之1號1樓", "tags": ["⭐重點店", "SCS HD打包", "HD上架"], "notes": "HD滯留放後場"},
+  {"name": "大安新生南-智取店", "address": "台北市大安區新生南路3段60巷2之1號1樓", "tags": ["⭐重點店", "SCS HD打包", "HD上架"], "notes": "HD滯留放後場"},
   {"name": "大安永康-智取店", "address": "台北市大安區永康街41巷23號1樓", "tags": [], "notes": ""},
   {"name": "大安泰順-智取店", "address": "台北市大安區泰順街42之1號1樓", "tags": ["⭐重點店", "SCS HD打包", "HD上架", "包裹重新分配"], "notes": "HD滯留放後場"},
   {"name": "大安麗水-智取店", "address": "台北市大安區永康街10巷7號1樓", "tags": [], "notes": ""},
@@ -968,9 +971,6 @@ function formatDateISO(d) {
   return `${y}-${m}-${date}`;
 }
 
-/**
- * 📍 門市顯示字體高亮邏輯 (預定門市橘字 / 支援追加門市藍字)
- */
 function renderStoreLocationHtml(dayData) {
   if (!dayData) return '<span style="color:#bbb;font-weight:normal;">(點擊排班)</span>';
   
@@ -1336,16 +1336,19 @@ function renderMonthView() {
   }
 }
 
-/**
- * 📍 Modal 開啟時自動拆分預定門市與支援門市
- */
 function openModal(dateKey) {
   const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
   const dayData = savedSchedule[dateKey] || { loc: '', supportLocs: [], t1: '' };
 
+  let fullLocStr = dayData.loc || '';
+  if (dayData.supportLocs && dayData.supportLocs.length > 0) {
+    if (fullLocStr) fullLocStr += '/' + dayData.supportLocs.join('/');
+    else fullLocStr = dayData.supportLocs.join('/');
+  }
+
   document.getElementById('modal-date-key').value = dateKey;
   document.getElementById('modal-date-title').innerText = `📅 編輯 ${dateKey} 排班`;
-  document.getElementById('modal-loc-input').value = dayData.loc || '';
+  document.getElementById('modal-loc-input').value = fullLocStr;
   
   const supportStr = (dayData.supportLocs && dayData.supportLocs.length > 0) ? dayData.supportLocs.join('/') : '';
   document.getElementById('modal-support-input').value = supportStr;
@@ -1359,9 +1362,6 @@ function closeModal() {
   document.getElementById('edit-day-modal').classList.remove('active');
 }
 
-/**
- * 📍 儲存 Modal 時分別存入 loc 與 supportLocs，保護支援門市藍色不被覆蓋
- */
 function saveModalDay() {
   const dateKey = document.getElementById('modal-date-key').value;
   const locVal = document.getElementById('modal-loc-input').value.trim();
