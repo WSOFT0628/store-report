@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店科目回報與排班系統v4.1.4</title>
+<title>蝦皮智取店科目回報與排班系統v4.2.2</title>
 
 <!-- 引入 SheetJS 解析 Excel -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  
@@ -15,7 +15,7 @@
 <!-- ☁️ Google Drive AppData 自動同步與靜默認證腳本 -->
 <script>
   /* ==========================================================================
-     【Google Drive AppData 自動同步與自動還原連線邏輯 - v4.1.4】
+     【Google Drive AppData 自動同步與自動還原連線邏輯】
      ========================================================================== */
   const CLIENT_ID = '879549181954-r1eai9agafnkp69o0cgbfcttegh39vju.apps.googleusercontent.com';
   const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
@@ -79,7 +79,7 @@
 
   function maybeEnableSyncUI() {
       if (gapiInited && gsisInited) {
-          console.log("[v4.1.4] Google Drive API SDK 初始化成功！");
+          console.log("[v4.2.2] Google Drive API SDK 初始化成功！");
           const loginBtn = document.getElementById('gdrive-login-btn');
           if (loginBtn) loginBtn.style.opacity = '1';
 
@@ -244,16 +244,67 @@
   button.copy-btn { width: 100%; background: #ee4d2d; color: white; border: none; padding: 12px; border-radius: 8px; font-size: 15px; font-weight: bold; margin-top: 12px; cursor: pointer; }
   button.copy-btn:disabled { background: #b0bec5; cursor: not-allowed; }
   
-  .storage-btn-group { display: flex; gap: 6px; margin-bottom: 15px; flex-wrap: wrap; }
-  .storage-btn-group button { flex: 1; min-width: 100px; padding: 10px 4px; border-radius: 8px; font-size: 12px; font-weight: bold; border: none; cursor: pointer; color: white; }
+  .storage-btn-group { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
+  .storage-btn-group button { flex: 1; min-width: 120px; padding: 10px 6px; border-radius: 8px; font-size: 13px; font-weight: bold; border: none; cursor: pointer; color: white; }
   .btn-save-only { background: #2196f3; }
   .btn-save-sync { background: #4caf50; }
-  .btn-load { background: #009688; }
   .btn-clear-form { background: #ff9800; }
   .btn-clear-data { background: #757575; }
 
-  .draft-badge { display: inline-block; background: #bbdefb; color: #0d47a1; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-  .draft-badge.active { background: #1976d2; color: #ffffff; }
+  .btn-sync-header {
+    background: #2e7d32;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(46, 125, 50, 0.2);
+    transition: all 0.2s ease;
+  }
+  .btn-sync-header:hover { background: #1b5e20; }
+  .btn-sync-header:active { transform: scale(0.97); }
+
+  /* 📍 支援門市追加按鈕：高強對比度修正 */
+  .btn-add-support {
+    background: #1565c0;
+    color: #ffffff;
+    border: 1px solid #0d47a1;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    white-space: nowrap;
+    margin-top: 4px;
+    box-shadow: 0 2px 4px rgba(21, 101, 192, 0.2);
+    transition: all 0.2s;
+  }
+  .btn-add-support:hover { background: #0d47a1; }
+  .btn-add-support:active { transform: scale(0.98); }
+
+  /* 可點擊式進度標籤 (Draft Pills) */
+  .draft-badge {
+    display: inline-block;
+    background: #e3f2fd;
+    color: #1565c0;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    border: 1px solid #90caf9;
+    user-select: none;
+    transition: all 0.2s ease;
+  }
+  .draft-badge:hover { background: #bbdefb; }
+  .draft-badge.active {
+    background: #1976d2;
+    color: #ffffff;
+    border-color: #1565c0;
+    box-shadow: 0 2px 5px rgba(25, 118, 210, 0.3);
+  }
 
   .tag { display: inline-block; background: #ffe0b2; color: #e65100; font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 4px; }
   .tag-key { background: #ffcdd2; color: #b71c1c; }
@@ -272,11 +323,11 @@
   .sub-tab-btn { flex: 1; padding: 8px; border: 1px solid #dcdfe6; background: #f8f9fa; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; text-align: center; }
   .sub-tab-btn.active { background: #ee4d2d; color: white; border-color: #ee4d2d; }
 
-  /* 網格系統 - 預設 */
   .schedule-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
   .schedule-grid-head { text-align: center; font-weight: bold; font-size: 12px; padding: 6px 0; background: #2c3e50; color: white; border-radius: 4px; }
 
   .week-card { min-height: 85px; border: 1px solid #e0e0e0; border-radius: 6px; padding: 6px 4px; background: #fff; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; transition: all 0.15s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .week-card:hover { transform: translateY(-2px); box-shadow: 0 3px 8px rgba(0,0,0,0.1); }
   .week-card .date-lbl { font-size: 11px; color: #777; font-weight: bold; border-bottom: 1px dashed #eee; padding-bottom: 2px; margin-bottom: 2px; text-align: center; }
   .week-card .loc-lbl { font-size: 12px; font-weight: bold; color: #e65100; text-align: center; margin-top: 2px; line-height: 1.2; word-break: break-all; }
   .week-card .time-lbl { font-size: 10px; color: #555; text-align: center; margin-top: 2px; background: rgba(0,0,0,0.03); padding: 2px; border-radius: 4px; word-break: break-all; }
@@ -285,8 +336,29 @@
   .week-card.is-off { background: #f2f3f5; border-color: #e0e0e0; }
   .week-card.is-off .loc-lbl { color: #7f8c8d; }
 
-  /* 月曆月檢視樣式 */
-  .calendar-cell { min-height: 60px; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px 2px; background: #fff; font-size: 11px; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; overflow: hidden; }
+  /* 📍 日檢視點擊卡片與 hover 效果 */
+  .day-card-clickable {
+    background: #fdfdfd;
+    border: 2px dashed #64b5f6;
+    border-radius: 10px;
+    padding: 16px;
+    margin: 15px 0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+  }
+  .day-card-clickable:hover {
+    background: #e3f2fd;
+    border-color: #2196f3;
+    box-shadow: 0 3px 10px rgba(33, 150, 243, 0.2);
+    transform: translateY(-2px);
+  }
+
+  /* 📍 支援門市亮藍色文字樣式 */
+  .support-store-text { color: #1976d2 !important; font-weight: bold; }
+
+  .calendar-cell { min-height: 60px; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px 2px; background: #fff; font-size: 11px; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; overflow: hidden; transition: all 0.15s ease; }
+  .calendar-cell:hover { transform: translateY(-2px); box-shadow: 0 3px 8px rgba(0,0,0,0.1); }
   .calendar-cell.other-month { background: #f2f3f5; opacity: 0.75; }
   .calendar-cell.is-off { background: #f2f3f5; }
   .calendar-cell.has-work { background: #fff3e0; border-color: #ffe0b2; }
@@ -295,13 +367,12 @@
 
   .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: none; align-items: center; justify-content: center; }
   .modal-overlay.active { display: flex; }
-  .modal-card { background: white; width: 88%; max-width: 360px; border-radius: 12px; padding: 18px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+  .modal-card { background: white; width: 88%; max-width: 380px; border-radius: 12px; padding: 18px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
 
   .site-footer { margin-top: 30px; padding: 20px 15px; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid #e1e4e8; background-color: #ffffff; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 18px; font-size: 12px; color: #57606a; }
   .site-footer .brand-info { display: flex; align-items: center; gap: 6px; font-weight: 600; color: #24292f; }
   .site-footer a { color: #0969da; text-decoration: none; transition: color 0.2s; }
 
-  /* 📍 RWD 手機版網格溢出修復 */
   @media (max-width: 600px) {
     .tab-content { padding: 8px; }
     .card { padding: 10px; }
@@ -314,6 +385,7 @@
     .calendar-cell .day-num { font-size: 10px; }
     .calendar-cell .day-loc { font-size: 9px; -webkit-line-clamp: 2; }
     .site-footer { gap: 8px 12px; font-size: 11px; }
+    .storage-btn-group button { min-width: 45%; }
   }
 
   #toast-container { position: fixed; bottom: calc(25px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 9999; pointer-events: none; }
@@ -329,7 +401,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: center;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店科目回報與排班系統 v4.1.4
+      📦 蝦皮智取店科目回報與排班系統 v4.2.2
     </h1>
   </div>
   <div class="main-nav">
@@ -347,24 +419,16 @@
 
   <div class="card" style="background: #e3f2fd; border: 1px solid #90caf9;">
     <div style="display: flex; flex-direction: column; gap: 8px;">
-      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
-        <span style="font-weight: bold; color: #1565c0; font-size: 14px;">🏪 巡店門市紀錄切換：</span>
-        <select id="draft_selector" onchange="switchDraft(this.value)" style="width: auto; margin: 0; padding: 4px 8px; font-weight: bold;">
-          <option value="draft_1">店 1: (空)</option>
-          <option value="draft_2">店 2: (空)</option>
-          <option value="draft_3">店 3: (空)</option>
-          <option value="draft_4">店 4: (空)</option>
-          <option value="draft_5">店 5: (空)</option>
-        </select>
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-weight: bold; color: #1565c0; font-size: 14px;">🏪 今日巡店進度 (點擊快捷切換)：</span>
       </div>
-      <div id="draft_status_bar" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; background: rgba(255,255,255,0.6); padding: 6px 8px; border-radius: 6px;"></div>
+      <div id="draft_status_bar" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;"></div>
     </div>
   </div>
 
   <div class="storage-btn-group">
     <button class="btn-save-only" onclick="saveDataOnly(true)">💾 僅儲存巡店紀錄</button>
     <button class="btn-save-sync" onclick="saveDataAndSyncToSchedule(true)">🔄 儲存並同步至班表</button>
-    <button class="btn-load" onclick="loadData(true)">📂 載入紀錄</button>
     <button class="btn-clear-form" onclick="clearFormOnly()">🧹 清空畫面</button>
     <button class="btn-clear-data" onclick="clearData()">🗑️ 刪除此店</button>
   </div>
@@ -376,9 +440,12 @@
         <label>月/日 (自動帶入當天)</label>
         <input type="text" id="date" placeholder="例: 3/30" oninput="autoSave()">
       </div>
-      <div>
+      <div style="flex: 1.5;">
         <label>門市 (可選/可輸入)</label>
-        <input type="text" id="shopName" list="shopList" placeholder="選擇或輸入店名" oninput="updateStoreInfo(); autoSave(); updateDraftLabels();">
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <input type="text" id="shopName" list="shopList" placeholder="選擇或輸入店名" oninput="updateStoreInfo(); autoSave(); updateDraftLabels();">
+          <button class="btn-add-support" onclick="addCurrentStoreToScheduleSupport()">+ 追加至今日班表</button>
+        </div>
         <datalist id="shopList"></datalist>
       </div>
       <div>
@@ -610,11 +677,17 @@
       <button class="sub-tab-btn" onclick="switchScheduleView('month')">月檢視</button>
     </div>
 
+    <div style="display: flex; justify-content: center; margin-bottom: 12px;">
+      <button class="btn-sync-header" onclick="syncCurrentDayScheduleToReportDraft()">
+        🔄 將班表同步至巡店回報
+      </button>
+    </div>
+
     <div id="week-control-box">
       <div class="row">
         <div>
           <label for="week-picker"><b>📅 當週週一日期：</b></label>
-          <input type="date" id="week-picker" onchange="loadWeekSchedule()">
+          <input type="date" id="week-picker" onchange="onWeekPickerChange(this.value)">
         </div>
         <div>
           <label for="history-picker"><b>📜 歷史班表紀錄：</b></label>
@@ -657,19 +730,20 @@
   <div id="day-view-container" class="card" style="display:none;">
     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #bbdefb; padding-bottom: 5px;">
       <h3 style="color: #2196f3; border-bottom: none; margin: 0;">本日勤務</h3>
-      <div style="display: flex; gap: 4px;">
-        <button onclick="changeDayOffset(-1)" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; background: #fff; cursor: pointer;">◀ 前一天</button>
-        <button onclick="changeDayOffset(1)" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; background: #fff; cursor: pointer;">後一天 ▶</button>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 12px; color: #888;">💡 點擊卡片即可編輯排班</span>
+        <div style="display: flex; gap: 4px;">
+          <button onclick="changeDayOffset(-1)" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; background: #fff; cursor: pointer;">◀ 前一天</button>
+          <button onclick="changeDayOffset(1)" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; background: #fff; cursor: pointer;">後一天 ▶</button>
+        </div>
       </div>
     </div>
     
-    <div id="day-schedule-info" style="font-size: 15px; line-height: 1.6; margin: 15px 0;"></div>
+    <div id="day-schedule-card-box" class="day-card-clickable" onclick="openModal(currentSelectedDayKey)">
+      <div id="day-schedule-info" style="font-size: 15px; line-height: 1.6;"></div>
+    </div>
     
     <div style="display: flex; flex-direction: column; gap: 8px;">
-      <button class="copy-btn" style="background: #2e7d32; margin-top: 0;" onclick="syncCurrentDayScheduleToReportDraft()">
-        🔄 將本日班表帶入至巡店表單 (自動拆分多門市)
-      </button>
-      <button class="copy-btn" style="background: #ee4d2d; margin-top: 0;" onclick="openModal(currentSelectedDayKey)">✏️ 編輯本日排班</button>
       <button class="copy-btn" id="btn-load-report-data" style="background: #2196f3; margin-top: 0; display: none;" onclick="restoreReportDataToForm()">📦 查看/還原當天巡店填表內容</button>
     </div>
   </div>
@@ -692,7 +766,7 @@
 <footer class="site-footer">
   <div class="brand-info">
     <span>📦 蝦皮智取店回報與排班系統</span>
-    <span>v4.1.4 (Mobile Optimized)</span>
+    <span>v4.2.2 (Support Store Isolation)</span>
   </div>
   <span class="divider">•</span>
   <span>© 2026 Developed by <b>willy huang (WSOFT)</b></span>
@@ -714,19 +788,39 @@
   <input type="file" id="backup-file-input" style="display:none;" onchange="handleFileImport(event)" accept=".json">
 </footer>
 
-<!-- 編輯 Modal 彈窗 -->
+<!-- 編輯 Modal 彈窗 (📍 拆分預定門市與支援追加門市) -->
 <div id="edit-day-modal" class="modal-overlay">
   <div class="modal-card">
     <h3 id="modal-date-title" style="margin-top:0; color:#ee4d2d; font-size:16px;">編輯排班</h3>
     <input type="hidden" id="modal-date-key">
-    <label>📍 地點 / 門市 (填 X 表示休假，多門市用 / 隔開)</label>
-    <input type="text" id="modal-loc-input" placeholder="例: 公館/萬福 / X">
+    
+    <label>📍 預定門市 / 地點 <span style="font-weight:normal; font-size:11px; color:#777;">(橘字顯示，多門市用 / 隔開，填 X 表示休假)</span></label>
+    <input type="text" id="modal-loc-input" placeholder="例: 新生南/師大 或 X">
+
+    <label style="color:#1565c0;">🔹 支援追加門市 <span style="font-weight:normal; font-size:11px; color:#1565c0;">(亮藍字顯示，多門市用 / 隔開)</span></label>
+    <input type="text" id="modal-support-input" placeholder="例: 台大 / 萬福" style="border-color:#90caf9; background:#f4f9ff;">
+
     <label>⏰ 班次時間 (可留空)</label>
-    <input type="text" id="modal-time-input" placeholder="例: 09:00-18:00">
-    <div style="display: flex; gap: 8px; margin-top: 15px;">
+    <input type="text" id="modal-time-input" placeholder="例: 18:30-22:30">
+
+    <div style="display: flex; gap: 8px; margin-top: 18px;">
       <button style="flex:1; background: #ee4d2d; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;" onclick="saveModalDay()">💾 儲存更新</button>
       <button style="flex:1; background: #e74c3c; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;" onclick="deleteModalDay()">🗑️ 清空本日</button>
       <button style="flex:1; background: #95a5a6; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;" onclick="closeModal()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- Excel 匯入完成詢問同步 Modal 彈窗 -->
+<div id="import-sync-modal" class="modal-overlay">
+  <div class="modal-card" style="text-align: center;">
+    <h3 style="margin-top:0; color:#2e7d32; font-size:17px;">📊 Excel 班表匯入完成！</h3>
+    <p style="font-size: 14px; color: #444; line-height: 1.5; margin: 12px 0;" id="import-sync-msg">
+      是否要順便將當天（今日）班表門市自動拆分並帶入巡店回報中？
+    </p>
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;">
+      <button style="background: #2e7d32; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer;" onclick="confirmImportSync()">🔄 立即同步至巡店回報</button>
+      <button style="background: #78909c; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 13px; cursor: pointer;" onclick="closeImportSyncModal()">稍後再說</button>
     </div>
   </div>
 </div>
@@ -831,6 +925,13 @@ function initWeekPicker() {
   loadWeekSchedule();
 }
 
+function onWeekPickerChange(selectedVal) {
+  if (!selectedVal) return;
+  currentSelectedDayKey = selectedVal;
+  loadWeekSchedule();
+  renderDayView();
+}
+
 function updateHistoryDropdown() {
   const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
   const historyPicker = document.getElementById('history-picker');
@@ -854,7 +955,9 @@ function updateHistoryDropdown() {
 function loadHistoryWeek(mondayStr) {
   if (!mondayStr) return;
   document.getElementById('week-picker').value = mondayStr;
+  currentSelectedDayKey = mondayStr;
   loadWeekSchedule();
+  renderDayView();
   showToast(`📜 已載入歷史週次：${mondayStr}`);
 }
 
@@ -863,6 +966,34 @@ function formatDateISO(d) {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const date = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${date}`;
+}
+
+/**
+ * 📍 門市顯示字體高亮邏輯 (預定門市橘字 / 支援追加門市藍字)
+ */
+function renderStoreLocationHtml(dayData) {
+  if (!dayData) return '<span style="color:#bbb;font-weight:normal;">(點擊排班)</span>';
+  
+  const isOff = (dayData.loc && dayData.loc.trim().toUpperCase() === 'X') || dayData.isOff;
+  if (isOff) return '休假 (X)';
+
+  let baseLoc = dayData.loc || '';
+  let supportList = dayData.supportLocs || [];
+
+  let htmlParts = [];
+  if (baseLoc && baseLoc.trim() !== '') {
+    htmlParts.push(`<span>${baseLoc}</span>`);
+  }
+
+  if (supportList.length > 0) {
+    supportList.forEach(sLoc => {
+      if (sLoc && sLoc.trim() !== '') {
+        htmlParts.push(`<span class="support-store-text">${sLoc.trim()}</span>`);
+      }
+    });
+  }
+
+  return htmlParts.length > 0 ? htmlParts.join('/') : '<span style="color:#bbb;font-weight:normal;">(點擊排班)</span>';
 }
 
 function loadWeekSchedule() {
@@ -882,25 +1013,22 @@ function loadWeekSchedule() {
     let month = curDate.getMonth() + 1;
     let date = curDate.getDate();
     let dateKey = formatDateISO(curDate);
-    let dayData = savedSchedule[dateKey] || { loc: '', t1: '', isOff: false };
+    let dayData = savedSchedule[dateKey] || { loc: '', supportLocs: [], t1: '', isOff: false };
 
-    let isOff = dayData.loc.trim().toUpperCase() === 'X' || dayData.isOff;
+    let isOff = (dayData.loc && dayData.loc.trim().toUpperCase() === 'X') || dayData.isOff;
     let cardClass = 'week-card';
-    let locDisplay = dayData.loc || '<span style="color:#bbb;font-weight:normal;">(點擊排班)</span>';
-
-    if (dayData.loc) {
-      if (isOff) {
-        cardClass += ' is-off';
-        locDisplay = '休假 (X)';
-      } else {
-        cardClass += ' has-work';
-      }
+    
+    if (dayData.loc || (dayData.supportLocs && dayData.supportLocs.length > 0)) {
+      if (isOff) cardClass += ' is-off';
+      else cardClass += ' has-work';
     }
+
+    let locDisplayHtml = renderStoreLocationHtml(dayData);
 
     container.innerHTML += `
       <div class="${cardClass}" onclick="openModal('${dateKey}')">
         <div class="date-lbl">${month}月${date}日</div>
-        <div class="loc-lbl">${locDisplay}</div>
+        <div class="loc-lbl">${locDisplayHtml}</div>
         <div class="time-lbl">${dayData.t1 || '-'}</div>
       </div>`;
   }
@@ -971,18 +1099,19 @@ function renderDayView() {
   const container = document.getElementById('day-schedule-info');
   const restoreBtn = document.getElementById('btn-load-report-data');
 
-  if (todayData && todayData.loc) {
-    if (todayData.isOff || todayData.loc.toUpperCase() === 'X') {
-      container.innerHTML = `<p style="color: #7f8c8d; font-weight:bold;">日期：${currentSelectedDayKey}<br>狀態：休假 (X) 🎉</p>`;
+  if (todayData && (todayData.loc || (todayData.supportLocs && todayData.supportLocs.length > 0))) {
+    if (todayData.isOff || (todayData.loc && todayData.loc.toUpperCase() === 'X')) {
+      container.innerHTML = `<p style="color: #7f8c8d; font-weight:bold; margin:0;">日期：${currentSelectedDayKey}<br>狀態：休假 (X) 🎉</p>`;
     } else {
+      let locHtml = renderStoreLocationHtml(todayData);
       container.innerHTML = `
-        <p style="color: #e65100; font-weight:bold; margin-top:0;">日期：${currentSelectedDayKey}</p>
-        <p>📍 <b>地點/任務：</b>${todayData.loc}</p>
-        <p>⏰ <b>班次時間：</b>${todayData.t1 || '無'}</p>
+        <p style="color: #e65100; font-weight:bold; margin-top:0; margin-bottom:8px;">日期：${currentSelectedDayKey}</p>
+        <p style="margin:4px 0;">📍 <b>地點/任務：</b>${locHtml}</p>
+        <p style="margin:4px 0;">⏰ <b>班次時間：</b>${todayData.t1 || '無'}</p>
       `;
     }
   } else {
-    container.innerHTML = `<p style="color:#888;">日期：${currentSelectedDayKey}<br>尚無輸入的班表資訊。</p>`;
+    container.innerHTML = `<p style="color:#888; margin:0;">日期：${currentSelectedDayKey}<br>尚無輸入的班表資訊。<br><span style="font-size:12px; color:#2196f3;">(點擊此處即可新增排班)</span></p>`;
   }
 
   const historyKey = 'shopee_report_history_' + currentSelectedDayKey;
@@ -993,62 +1122,82 @@ function renderDayView() {
   }
 }
 
-/**
- * 📍 門市智慧比對函數
- * 傳入文字 (例如："公館(含NDD打包)")，自動尋找比對 storesData 內最符合的門市全名
- */
 function matchStoreName(rawText) {
   if (!rawText) return '';
-  const cleanStr = rawText.trim();
-  
-  // 1. 完全或包含比對
+  let cleanStr = rawText.trim().replace(/[\{\(].*?[\}\)]/g, '').trim();
+
+  if (!cleanStr) return '';
+
   for (let s of storesData) {
     const shortName = s.name.replace(/-智取店$/, '').replace(/智取店$/, '');
-    if (cleanStr.includes(shortName) || cleanStr.includes(s.name)) {
+    if (s.name.includes(cleanStr) || cleanStr.includes(shortName)) {
       return s.name;
     }
   }
-  // 2. 若無精確比對，回傳括號前的文字或原文字
-  return cleanStr.split('(')[0].split('{')[0].trim();
+
+  for (let s of storesData) {
+    if (cleanStr.length >= 2) {
+      if (s.name.includes(cleanStr.substring(0, 2))) {
+        return s.name;
+      }
+    }
+  }
+
+  return cleanStr;
 }
 
-/**
- * 📍 關鍵功能：班表當天資料智慧拆分多門市並同步至巡店草稿
- */
+function determineShiftFromTime(timeStr) {
+  if (!timeStr) return '早';
+  
+  if (timeStr.includes('晚')) return '晚';
+  if (timeStr.includes('早')) return '早';
+
+  const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+  if (match) {
+    const hour = parseInt(match[1], 10);
+    return (hour >= 17) ? '晚' : '早';
+  }
+
+  return '早';
+}
+
 function syncCurrentDayScheduleToReportDraft() {
   const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
   const dayData = savedSchedule[currentSelectedDayKey];
 
-  if (!dayData || !dayData.loc || dayData.isOff || dayData.loc.toUpperCase() === 'X') {
+  if (!dayData || (!dayData.loc && (!dayData.supportLocs || dayData.supportLocs.length === 0)) || dayData.isOff || (dayData.loc && dayData.loc.toUpperCase() === 'X')) {
     showToast('⚠️ 本日無班表或為休假，無法同步至巡店回報！');
     return;
   }
 
-  // 1. 依照 '/' 或 '\n' 拆解地點字串
-  const storeTokens = dayData.loc.split(/[\/\n]/).map(t => t.trim()).filter(Boolean);
+  let allStores = [];
+  if (dayData.loc) {
+    allStores = allStores.concat(dayData.loc.split(/[\/\n]/).map(t => t.trim()).filter(Boolean));
+  }
+  if (dayData.supportLocs && dayData.supportLocs.length > 0) {
+    allStores = allStores.concat(dayData.supportLocs);
+  }
 
-  if (storeTokens.length === 0) {
+  if (allStores.length === 0) {
     showToast('⚠️ 無法解析有效的門市名稱！');
     return;
   }
 
-  // 2. 解析日期 (月/日) 與班別
   let dateStr = getTodayString();
   const parts = currentSelectedDayKey.split('-');
   if (parts.length === 3) {
     dateStr = `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
   }
-  const shiftVal = (dayData.t1 && dayData.t1.includes('晚')) ? '晚' : '早';
 
-  // 3. 依序填入草稿 draft_1, draft_2, draft_3 ...
+  const shiftVal = determineShiftFromTime(dayData.t1);
+
   let matchedCount = 0;
-  storeTokens.forEach((token, index) => {
-    if (index >= 5) return; // 最高支援 5 家門市
+  allStores.forEach((token, index) => {
+    if (index >= 5) return;
 
     const draftKey = `shopee_report_draft_${index + 1}`;
     const matchedShopName = matchStoreName(token);
 
-    // 取得現有草稿資料，避免覆蓋已填寫的科目數據
     let draftData = {};
     try {
       draftData = JSON.parse(localStorage.getItem(draftKey) || '{}');
@@ -1062,13 +1211,50 @@ function syncCurrentDayScheduleToReportDraft() {
     matchedCount++;
   });
 
-  // 4. 切換頁籤並載入第一張草稿
   switchMainTab('report-tab', document.querySelectorAll('.nav-btn')[0]);
   currentDraftKey = 'shopee_report_draft_1';
   loadData(false);
   updateDraftLabels();
 
-  showToast(`🔄 已成功將 ${currentSelectedDayKey} 的 ${matchedCount} 家門市拆分帶入巡店草稿！`);
+  showToast(`🔄 已成功將 ${currentSelectedDayKey} 的 ${matchedCount} 家門市帶入巡店回報！`);
+}
+
+function addCurrentStoreToScheduleSupport() {
+  const shopNameInput = document.getElementById('shopName').value.trim();
+  if (!shopNameInput) {
+    showToast('⚠️ 請先選擇或輸入要追加的門市名稱！');
+    return;
+  }
+
+  const cleanShop = getCleanShopName();
+  const todayKey = formatDateISO(new Date());
+  const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+
+  let dayData = savedSchedule[todayKey] || { loc: '', supportLocs: [], t1: '', isOff: false };
+
+  if (!dayData.supportLocs) dayData.supportLocs = [];
+
+  if (dayData.loc && dayData.loc.includes(cleanShop)) {
+    showToast(`💡 「${cleanShop}」已存在於今日原排定班表中！`);
+    return;
+  }
+  if (dayData.supportLocs.includes(cleanShop)) {
+    showToast(`💡 「${cleanShop}」已追加過至今日支援班表中！`);
+    return;
+  }
+
+  dayData.supportLocs.push(cleanShop);
+  dayData.isOff = false;
+  savedSchedule[todayKey] = dayData;
+
+  localStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
+  
+  loadWeekSchedule();
+  renderMonthView();
+  renderDayView();
+  syncScheduleToDrive();
+
+  showToast(`+ 已成功將「${cleanShop}」追加至今日支援班表！`);
 }
 
 function restoreReportDataToForm() {
@@ -1110,12 +1296,12 @@ function renderMonthView() {
     const dayData = savedSchedule[dateKey];
 
     let cellClass = 'calendar-cell other-month';
-    let locText = '';
-    if (dayData && dayData.loc) {
-      if (dayData.isOff || dayData.loc.toUpperCase() === 'X') { cellClass += ' is-off'; locText = '休'; }
-      else { cellClass += ' has-work'; locText = dayData.loc; }
+    let locTextHtml = renderStoreLocationHtml(dayData);
+    if (dayData && (dayData.loc || (dayData.supportLocs && dayData.supportLocs.length > 0))) {
+      if (dayData.isOff || (dayData.loc && dayData.loc.toUpperCase() === 'X')) { cellClass += ' is-off'; }
+      else { cellClass += ' has-work'; }
     }
-    container.innerHTML += `<div class="${cellClass}" onclick="openModal('${dateKey}')"><span class="day-num">${pDay}</span><span class="day-loc">${locText}</span></div>`;
+    container.innerHTML += `<div class="${cellClass}" onclick="openModal('${dateKey}')"><span class="day-num">${pDay}</span><span class="day-loc">${locTextHtml}</span></div>`;
   }
 
   for (let d = 1; d <= lastDay.getDate(); d++) {
@@ -1123,12 +1309,12 @@ function renderMonthView() {
     const dayData = savedSchedule[dateKey];
 
     let cellClass = 'calendar-cell';
-    let locText = '';
-    if (dayData && dayData.loc) {
-      if (dayData.isOff || dayData.loc.toUpperCase() === 'X') { cellClass += ' is-off'; locText = '休'; }
-      else { cellClass += ' has-work'; locText = dayData.loc; }
+    let locTextHtml = renderStoreLocationHtml(dayData);
+    if (dayData && (dayData.loc || (dayData.supportLocs && dayData.supportLocs.length > 0))) {
+      if (dayData.isOff || (dayData.loc && dayData.loc.toUpperCase() === 'X')) { cellClass += ' is-off'; }
+      else { cellClass += ' has-work'; }
     }
-    container.innerHTML += `<div class="${cellClass}" onclick="openModal('${dateKey}')"><span class="day-num">${d}</span><span class="day-loc">${locText}</span></div>`;
+    container.innerHTML += `<div class="${cellClass}" onclick="openModal('${dateKey}')"><span class="day-num">${d}</span><span class="day-loc">${locTextHtml}</span></div>`;
   }
 
   const totalCells = padLeft + lastDay.getDate();
@@ -1141,22 +1327,29 @@ function renderMonthView() {
     const dayData = savedSchedule[dateKey];
 
     let cellClass = 'calendar-cell other-month';
-    let locText = '';
-    if (dayData && dayData.loc) {
-      if (dayData.isOff || dayData.loc.toUpperCase() === 'X') { cellClass += ' is-off'; locText = '休'; }
-      else { cellClass += ' has-work'; locText = dayData.loc; }
+    let locTextHtml = renderStoreLocationHtml(dayData);
+    if (dayData && (dayData.loc || (dayData.supportLocs && dayData.supportLocs.length > 0))) {
+      if (dayData.isOff || (dayData.loc && dayData.loc.toUpperCase() === 'X')) { cellClass += ' is-off'; }
+      else { cellClass += ' has-work'; }
     }
-    container.innerHTML += `<div class="${cellClass}" onclick="openModal('${dateKey}')"><span class="day-num">${d}</span><span class="day-loc">${locText}</span></div>`;
+    container.innerHTML += `<div class="${cellClass}" onclick="openModal('${dateKey}')"><span class="day-num">${d}</span><span class="day-loc">${locTextHtml}</span></div>`;
   }
 }
 
+/**
+ * 📍 Modal 開啟時自動拆分預定門市與支援門市
+ */
 function openModal(dateKey) {
   const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
-  const dayData = savedSchedule[dateKey] || { loc: '', t1: '' };
+  const dayData = savedSchedule[dateKey] || { loc: '', supportLocs: [], t1: '' };
 
   document.getElementById('modal-date-key').value = dateKey;
   document.getElementById('modal-date-title').innerText = `📅 編輯 ${dateKey} 排班`;
   document.getElementById('modal-loc-input').value = dayData.loc || '';
+  
+  const supportStr = (dayData.supportLocs && dayData.supportLocs.length > 0) ? dayData.supportLocs.join('/') : '';
+  document.getElementById('modal-support-input').value = supportStr;
+  
   document.getElementById('modal-time-input').value = dayData.t1 || '';
 
   document.getElementById('edit-day-modal').classList.add('active');
@@ -1166,15 +1359,26 @@ function closeModal() {
   document.getElementById('edit-day-modal').classList.remove('active');
 }
 
+/**
+ * 📍 儲存 Modal 時分別存入 loc 與 supportLocs，保護支援門市藍色不被覆蓋
+ */
 function saveModalDay() {
   const dateKey = document.getElementById('modal-date-key').value;
   const locVal = document.getElementById('modal-loc-input').value.trim();
+  const supportVal = document.getElementById('modal-support-input').value.trim();
   const timeVal = document.getElementById('modal-time-input').value.trim();
 
   const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
 
-  if (locVal || timeVal) {
-    savedSchedule[dateKey] = { loc: locVal, t1: timeVal, isOff: locVal.toUpperCase() === 'X' };
+  const supportArr = supportVal ? supportVal.split(/[\/\n]/).map(s => s.trim()).filter(Boolean) : [];
+
+  if (locVal || supportArr.length > 0 || timeVal) {
+    savedSchedule[dateKey] = {
+      loc: locVal,
+      supportLocs: supportArr,
+      t1: timeVal,
+      isOff: locVal.toUpperCase() === 'X'
+    };
   } else {
     delete savedSchedule[dateKey];
   }
@@ -1222,18 +1426,15 @@ function switchDraft(newKey) {
 }
 
 function updateDraftLabels() {
-  const selector = document.getElementById('draft_selector');
   const statusBar = document.getElementById('draft_status_bar');
-  if (!selector) return;
+  if (!statusBar) return;
 
   const currentKeyShort = currentDraftKey.replace('shopee_report_', '');
-  if (selector.value !== currentKeyShort) { selector.value = currentKeyShort; }
-
-  let badgeHTML = '<span style="font-size:11px; font-weight:bold; color:#1565c0; margin-right:4px;">今日巡店進度:</span>';
+  let badgeHTML = '';
 
   ['draft_1', 'draft_2', 'draft_3', 'draft_4', 'draft_5'].forEach((key, index) => {
     const rawData = localStorage.getItem('shopee_report_' + key);
-    let storeName = '(空)';
+    let storeName = '未填';
     let isSaved = false;
 
     if (rawData) {
@@ -1246,14 +1447,14 @@ function updateDraftLabels() {
       } catch (e) {}
     }
 
-    selector.options[index].text = `店 ${index + 1}: ${storeName}`;
     const isCurrent = key === currentKeyShort;
     const activeClass = isCurrent ? 'draft-badge active' : 'draft-badge';
-    const statusText = isSaved ? `${index + 1}.${storeName}` : `${index + 1}.未填`;
-    badgeHTML += `<span class="${activeClass}" style="transition: all 0.2s ease;">${statusText}</span>`;
+    const statusText = `${index + 1}.${storeName}`;
+    
+    badgeHTML += `<div class="${activeClass}" onclick="switchDraft('${key}')">${statusText}</div>`;
   });
 
-  if (statusBar) statusBar.innerHTML = badgeHTML;
+  statusBar.innerHTML = badgeHTML;
 }
 
 function getTodayString() {
@@ -1315,11 +1516,13 @@ function saveDataAndSyncToSchedule(showAlert) {
       const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
       
       const shiftStr = parsed.shift ? `${parsed.shift}班` : '';
-      savedSchedule[todayKey] = {
-        loc: parsed.shopName,
-        t1: shiftStr,
-        isOff: false
-      };
+      let dayData = savedSchedule[todayKey] || { loc: '', supportLocs: [], t1: '', isOff: false };
+      
+      dayData.loc = parsed.shopName;
+      dayData.t1 = shiftStr;
+      dayData.isOff = false;
+
+      savedSchedule[todayKey] = dayData;
       localStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
       localStorage.setItem('shopee_report_history_' + todayKey, dataStr);
 
@@ -1338,7 +1541,7 @@ function saveDataAndSyncToSchedule(showAlert) {
 function resetFormFields() {
   const elements = document.querySelectorAll('#report-tab input, #report-tab select');
   elements.forEach(el => {
-    if (el.id && el.id !== 'draft_selector') {
+    if (el.id) {
       if (el.type === 'checkbox') el.checked = false;
       else if (el.tagName === 'SELECT') el.selectedIndex = 0;
       else if (el.id === 'c3_overdue' || el.id === 'c3_scs' || el.id === 'c3_fbs' || 
@@ -1867,12 +2070,12 @@ function handleExcelImport(event) {
             }
 
             if (content.toUpperCase() === 'X' || content === '') {
-              scheduleData[dateStr] = { loc: 'X', t1: '', isOff: true };
+              scheduleData[dateStr] = { loc: 'X', supportLocs: [], t1: '', isOff: true };
             } else {
               const lines = content.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
               const location = lines[0] || '';
               const times = lines.slice(1).join(' / ');
-              scheduleData[dateStr] = { loc: location, t1: times, isOff: false };
+              scheduleData[dateStr] = { loc: location, supportLocs: [], t1: times, isOff: false };
             }
             importedCount++;
           }
@@ -1887,8 +2090,6 @@ function handleExcelImport(event) {
       localStorage.setItem('shopee_user_schedule', JSON.stringify(scheduleData));
       syncScheduleToDrive();
 
-      showToast(`📊 成功匯入 ${importedCount} 天的班表！`);
-      
       if (firstImportedMonday) {
         document.getElementById('week-picker').value = firstImportedMonday;
       }
@@ -1896,6 +2097,16 @@ function handleExcelImport(event) {
       loadWeekSchedule();
       renderMonthView();
       renderDayView();
+
+      const todayKey = formatDateISO(new Date());
+      const todaySchedule = scheduleData[todayKey];
+      const msgEl = document.getElementById('import-sync-msg');
+      if (todaySchedule && todaySchedule.loc && !todaySchedule.isOff) {
+        msgEl.innerText = `已匯入 ${importedCount} 天班表！檢測到今日 (${todayKey}) 排班門市為：\n「${todaySchedule.loc}」\n\n是否立即自動精準拆分並帶入巡店回報？`;
+      } else {
+        msgEl.innerText = `已成功匯入 ${importedCount} 天班表！\n是否要將今日班表資料同步至巡店回報？`;
+      }
+      openImportSyncModal();
 
     } catch (err) {
       console.error('Excel 解析失敗:', err);
@@ -1906,6 +2117,20 @@ function handleExcelImport(event) {
   };
 
   reader.readAsArrayBuffer(file);
+}
+
+function openImportSyncModal() {
+  document.getElementById('import-sync-modal').classList.add('active');
+}
+
+function closeImportSyncModal() {
+  document.getElementById('import-sync-modal').classList.remove('active');
+  showToast('📊 Excel 班表已成功匯入！');
+}
+
+function confirmImportSync() {
+  closeImportSyncModal();
+  syncCurrentDayScheduleToReportDraft();
 }
 
 function parseExcelDateToISO(val) {
@@ -1997,7 +2222,7 @@ function exportBackupData() {
   }
 
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
-  downloadAnchor = document.createElement('a');
+  const downloadAnchor = document.createElement('a');
   const todayStr = new Date().toISOString().split('T')[0];
   
   downloadAnchor.setAttribute("href", dataStr);
