@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店勤務助手 v5.2.2</title>
+<title>蝦皮智取店勤務助手 v5.3.4</title>
 
 <!-- 引入 SheetJS 解析 Excel -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  
@@ -77,11 +77,7 @@
   function maybeEnableSyncUI() {
       if (gapiInited && gsisInited) {
           const loginBtn = document.getElementById('gdrive-login-btn');
-          if (loginBtn) loginBtn.style.opacity = '1';
-
-          if (!sessionStorage.getItem('gdrive_access_token') && tokenClient) {
-              try { tokenClient.requestAccessToken({ prompt: '' }); } catch(e) {}
-          }
+          if (loginBtn) { loginBtn.style.opacity = '1'; loginBtn.disabled = false; }
       }
   }
 
@@ -96,11 +92,8 @@
           return;
       }
 
-      if (!sessionStorage.getItem('gdrive_access_token')) {
-          tokenClient.requestAccessToken({ prompt: 'consent' });
-      } else {
-          tokenClient.requestAccessToken({ prompt: '' });
-      }
+      const hasToken = Boolean(gapi.client?.getToken()?.access_token);
+      tokenClient.requestAccessToken({ prompt: hasToken ? '' : 'select_account' });
   }
 
   async function syncScheduleToDrive() {
@@ -234,6 +227,15 @@
   input, select { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
   input:disabled, select:disabled { background-color: #e0e0e0; cursor: not-allowed; }
   
+  input[type="radio"] {
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0 4px 0 0;
+    accent-color: var(--ops-orange);
+    cursor: pointer;
+    vertical-align: middle;
+  }
+
   .row { display: flex; gap: 10px; }
   .row > div { flex: 1; }
   
@@ -245,7 +247,7 @@
   .btn-save-only { background: #2196f3; }
   .btn-save-sync { background: #4caf50; }
   .btn-clear-form { background: #ff9800; }
-  .btn-clear-data { background: #757575; }
+  .btn-clear-data { background: #d92d20; }
 
   .btn-sync-header {
     background: #2e7d32;
@@ -355,17 +357,60 @@
   .toast { background: rgba(33, 33, 33, 0.9); color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-top: 8px; opacity: 0; transform: translateY(10px); transition: all 0.3s ease; text-align: center; white-space: pre-line; }
   .toast.show { opacity: 1; transform: translateY(0); }
 
-  /* 工作台 UI 風格 */
-  .workspace { max-width: 920px; margin: 0 auto; }
-  .today-hero { color: #fff; background: linear-gradient(135deg,#ee4d2d,#ff784e); padding: 20px; border-radius: 0 0 22px 22px; box-shadow: 0 8px 24px rgba(238,77,45,.22); display: flex; justify-content: space-between; align-items: center; }
-  .today-date { margin: 0 0 6px; font-size: 13px; opacity: .9; }
-  .today-title { margin: 0; font-size: 23px; }
+  :root {
+    --ops-orange:#ee4d2d; --ops-orange-dark:#cf3f22; --ops-orange-soft:#fff2ee;
+    --ops-navy:#172b4d; --ops-bg:#f5f7fa; --ops-surface:#ffffff;
+    --ops-text:#172b4d; --ops-muted:#667085; --ops-border:#e4e7ec;
+    --ops-success:#12a150; --ops-info:#2878d0; --ops-danger:#d92d20;
+    --ops-radius:14px; --ops-shadow:0 3px 14px rgba(23,43,77,.08);
+  }
+  [data-theme="dark"] {
+    --ops-bg:#101828; --ops-surface:#1d2939; --ops-text:#f2f4f7;
+    --ops-muted:#98a2b3; --ops-border:#344054; --ops-orange-soft:#3b211d;
+    --ops-navy:#0c1424; --ops-shadow:0 4px 18px rgba(0,0,0,.28);
+  }
+  * { -webkit-tap-highlight-color:transparent; }
+  body { background:var(--ops-bg); color:var(--ops-text); padding-bottom:calc(78px + env(safe-area-inset-bottom)); }
+  .workspace { max-width:920px; margin:0 auto; }
+  .main-header { position:sticky; top:0; z-index:1000; background:var(--ops-navy); box-shadow:0 1px 0 rgba(255,255,255,.08); }
+  .main-header > div:first-child { padding:11px 16px !important; text-align:left !important; max-width:920px; margin:auto; }
+  .main-header h1 { font-size:16px !important; display:flex; align-items:center; justify-content:space-between; color:#fff; }
+  .main-header h1::after { content:'OPS'; font-size:10px; letter-spacing:1.2px; color:#ffb6a6; border:1px solid rgba(255,182,166,.45); border-radius:6px; padding:3px 6px; }
   
-  .live-clock-box { text-align: right; background: rgba(255,255,255,0.22); padding: 12px 18px; border-radius: 16px; backdrop-filter: blur(6px); cursor: pointer; transition: all 0.2s; user-select: none; border: 1px solid rgba(255,255,255,0.3); }
-  .live-clock-box:hover { background: rgba(255,255,255,0.32); transform: scale(1.02); }
-  .live-clock-time { font-size: 28px; font-weight: 900; letter-spacing: 1px; line-height: 1.1; }
-  .live-clock-meta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 3px; font-size: 12px; font-weight: 700; opacity: 0.95; }
-  .clock-mode-badge { background: rgba(0,0,0,0.25); padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+  .main-nav { position:fixed; left:0; right:0; bottom:0; z-index:1100; height:64px; padding-bottom:env(safe-area-inset-bottom); background:rgba(255,255,255,.96); border-top:1px solid var(--ops-border); box-shadow:0 -6px 20px rgba(16,24,40,.08); backdrop-filter:blur(14px); display:flex; }
+  [data-theme="dark"] .main-nav { background:rgba(29,41,57,.96); }
+  .nav-btn { flex:1; color:var(--ops-muted); padding:7px 0 5px; border:0; font-size:11px; display:flex; flex-direction:column; align-items:center; gap:2px; background:transparent !important; cursor:pointer; }
+  .nav-btn .nav-icon { font-size:20px; line-height:22px; filter:grayscale(1); opacity:.75; }
+  .nav-btn.active { color:var(--ops-orange); }
+  .nav-btn.active .nav-icon { filter:none; opacity:1; transform:translateY(-1px); }
+
+  .card, .report-group, .report-group-toggle, .report-group-body, .modal-card, .report-filter-panel { 
+    background: var(--ops-surface) !important; 
+    color: var(--ops-text) !important; 
+    border-color: var(--ops-border) !important; 
+  }
+  .card { border:1px solid var(--ops-border); border-radius:var(--ops-radius); box-shadow:var(--ops-shadow); }
+  .card h3 { color:var(--ops-text); border-bottom:1px solid var(--ops-border); font-size:15px; }
+  
+  label { color:var(--ops-muted); }
+  input, select, textarea { 
+    background:var(--ops-surface) !important; 
+    color:var(--ops-text) !important; 
+    border-color:var(--ops-border) !important; 
+    min-height:42px; 
+  }
+  input:focus, select:focus { outline:3px solid rgba(238,77,45,.14); border-color:var(--ops-orange); }
+
+  /* 📍 修復今日頁面頂部黏住問題，加入自適應上下安全留白 */
+  .today-hero { color:#fff; background:linear-gradient(135deg,#d94023 0%,#ee4d2d 52%,#ff7859 100%); padding:20px; border-radius:0 0 22px 22px; box-shadow:0 10px 28px rgba(238,77,45,.2); display:flex; justify-content:space-between; align-items:center; }
+  .today-date { margin:0 0 6px; font-size:13px; opacity:.9; }
+  .today-title { margin:0; font-size:23px; }
+  
+  .live-clock-box { text-align:right; background:rgba(255,255,255,0.22); padding:12px 18px; border-radius:16px; backdrop-filter:blur(6px); cursor:pointer; transition:all 0.2s; user-select:none; border:1px solid rgba(255,255,255,0.3); }
+  .live-clock-box:hover { background:rgba(255,255,255,0.32); transform:scale(1.02); }
+  .live-clock-time { font-size:28px; font-weight:900; letter-spacing:1px; line-height:1.1; }
+  .live-clock-meta { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:3px; font-size:12px; font-weight:700; opacity:0.95; }
+  .clock-mode-badge { background:rgba(0,0,0,0.25); padding:2px 6px; border-radius:4px; font-size:10px; }
 
   .status-badge { display:inline-flex; align-items:center; gap:6px; margin-top:12px; padding:5px 12px; border-radius:99px; background:rgba(255,255,255,.2); font-size:12px; font-weight:bold; backdrop-filter: blur(4px); }
   .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
@@ -379,36 +424,97 @@
   }
 
   .today-card { margin-top: 14px; }
-  .today-loc { font-size:20px; font-weight:800; color:#d84315; margin:8px 0; }
-  .today-meta { color:#667085; font-size:13px; }
-  .primary-action { width:100%; border:0; border-radius:10px; padding:13px 16px; background:#ee4d2d; color:#fff; font-weight:800; font-size:15px; cursor:pointer; }
-  .secondary-action { width:100%; border:1px solid #ee4d2d; border-radius:10px; padding:11px 14px; background:#fff; color:#d84315; font-weight:800; cursor:pointer; }
-  .report-group { margin-bottom:12px; border:1px solid #e4e7ec; border-radius:12px; background:#fff; overflow:hidden; }
-  .report-group-toggle { width:100%; display:flex; align-items:center; justify-content:space-between; border:0; background:#fff; padding:14px 15px; text-align:left; cursor:pointer; }
-  .report-group-title { font-size:15px; font-weight:800; color:#344054; }
-  .report-group-meta { color:#667085; font-size:12px; }
+  .today-loc { font-size:19px; font-weight:800; color:var(--ops-text); margin:8px 0; }
+  .today-meta { color:var(--ops-muted); font-size:13px; }
+  
+  .primary-action { width:100%; border:0; border-radius:10px; padding:13px 16px; background:var(--ops-orange); color:#fff; font-weight:800; font-size:15px; cursor:pointer; box-shadow:0 4px 12px rgba(238,77,45,.24); min-height:46px; }
+  .primary-action:active { background:var(--ops-orange-dark); transform:scale(.99); }
+  
+  .secondary-action { width:100%; border:1px solid var(--ops-orange); border-radius:10px; padding:11px 14px; background:var(--ops-surface); color:var(--ops-orange); font-weight:800; cursor:pointer; min-height:44px; }
+  
+  /* 📍 調整報表生成按鈕寬度，不再過度巨大佔滿全行 */
+  .btn-generate-report {
+    display: inline-block;
+    width: auto;
+    min-width: 220px;
+    border: 0;
+    border-radius: 10px;
+    padding: 12px 24px;
+    background: var(--ops-success);
+    color: #fff;
+    font-weight: 800;
+    font-size: 15px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(18, 161, 80, 0.24);
+    margin-top: 8px;
+    text-align: center;
+  }
+  .btn-generate-report:active { transform: scale(0.99); }
+
+  .report-group { margin-bottom:12px; border:1px solid var(--ops-border); border-radius:12px; background:var(--ops-surface); overflow:hidden; box-shadow:var(--ops-shadow); }
+  .report-group-toggle { width:100%; display:flex; align-items:center; justify-content:space-between; border:0; background:var(--ops-surface); padding:15px; text-align:left; cursor:pointer; color:var(--ops-text); }
+  .report-group-title { font-size:15px; font-weight:800; color:var(--ops-text); }
+  .report-group-meta { color:var(--ops-muted); font-size:12px; }
   .report-group-body { display:none; padding:0 10px 2px; }
   .report-group.open .report-group-body { display:block; }
   .report-group.open .report-group-chevron { transform:rotate(180deg); }
-  .report-group .card { box-shadow:none; border:1px solid #f0f1f3; }
-  .report-group-chevron { transition:.2s; }
-  .bottom-action-bar { position:sticky; bottom:0; z-index:900; display:flex; align-items:center; gap:8px; padding:10px max(10px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left)); background:rgba(255,255,255,.96); border-top:1px solid #e4e7ec; box-shadow:0 -5px 18px rgba(0,0,0,.08); }
-  .bottom-action-bar .progress-label { min-width:72px; color:#475467; font-size:12px; font-weight:700; }
-  .bottom-action-bar button { flex:1; border:0; border-radius:9px; padding:11px 8px; font-weight:800; cursor:pointer; }
-  .btn-preview { background:#fff3ef; color:#d84315; }
-  .btn-finish { background:#ee4d2d; color:#fff; }
-  .settings-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
-  .settings-grid button { padding:14px 8px; border:1px solid #e4e7ec; background:#fff; border-radius:10px; font-weight:700; cursor:pointer; }
+  .report-group .card { box-shadow:none; border:1px solid var(--ops-border); }
+  .report-group-chevron { transition:.2s; color:var(--ops-muted); }
 
-  .report-filter-panel { background: #f8f9fa; border: 1px solid #e1e4e8; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
-  .filter-row { display: flex; align-items: center; border-bottom: 1px solid #eee; padding: 8px 0; font-size: 13px; }
+  .bottom-action-bar { position:sticky; bottom:64px; z-index:900; display:flex; align-items:center; gap:8px; padding:10px max(10px,env(safe-area-inset-right)) 10px max(10px,env(safe-area-inset-left)); background:rgba(255,255,255,.96); border-top:1px solid var(--ops-border); box-shadow:0 -5px 18px rgba(0,0,0,.08); }
+  [data-theme="dark"] .bottom-action-bar { background:rgba(29,41,57,.97); color:var(--ops-text); }
+  .bottom-action-bar .progress-label { min-width:72px; color:var(--ops-muted); font-size:12px; font-weight:700; }
+  .bottom-action-bar button { flex:1; border:0; border-radius:9px; padding:11px 8px; font-weight:800; cursor:pointer; }
+  .btn-preview { background:var(--ops-orange-soft); color:var(--ops-orange); }
+  .btn-finish { background:var(--ops-orange); color:#fff; }
+
+  .settings-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+  .settings-grid button { padding:14px 8px; border:1px solid var(--ops-border); background:var(--ops-surface); color:var(--ops-text); border-radius:10px; font-weight:700; cursor:pointer; }
+
+  .report-filter-panel { background: var(--ops-bg); border: 1px solid var(--ops-border); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  .filter-row { display: flex; align-items: center; border-bottom: 1px solid var(--ops-border); padding: 8px 0; font-size: 13px; }
   .filter-row:last-child { border-bottom: none; }
-  .filter-title { width: 90px; font-weight: bold; color: #444; }
-  .filter-content { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .filter-title { width: 90px; font-weight: bold; color: var(--ops-text); }
+  .filter-content { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--ops-text); }
   .badge-btn { background: #007bff; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: pointer; }
   .badge-btn:hover { background: #0056b3; }
 
-  @media (min-width: 760px) { .today-hero { margin-top:15px; border-radius:22px; } }
+  .duty-timeline { position:relative; margin:4px 0 0; }
+  .duty-stop { position:relative; display:grid; grid-template-columns:24px 1fr auto; gap:10px; align-items:start; padding:9px 0; cursor:pointer; }
+  .duty-stop:not(:last-child)::after { content:''; position:absolute; left:11px; top:31px; bottom:-7px; width:2px; background:var(--ops-border); }
+  .stop-dot { width:22px; height:22px; border-radius:50%; display:grid; place-items:center; background:var(--ops-bg); border:2px solid var(--ops-border); color:var(--ops-muted); font-size:11px; z-index:1; }
+  .duty-stop.active .stop-dot { border-color:var(--ops-orange); color:#fff; background:var(--ops-orange); box-shadow:0 0 0 4px var(--ops-orange-soft); }
+  .duty-stop.ready .stop-dot { border-color:var(--ops-info); color:var(--ops-info); }
+  .stop-name { font-weight:800; font-size:14px; }
+  .stop-meta { color:var(--ops-muted); font-size:11px; margin-top:3px; }
+  .stop-action { color:var(--ops-orange); font-size:12px; font-weight:800; padding-top:2px; }
+  
+  .ops-progress { margin:12px 0 2px; }
+  .ops-progress-head { display:flex; justify-content:space-between; font-size:12px; color:var(--ops-muted); margin-bottom:6px; }
+  .ops-progress-track { height:7px; border-radius:99px; overflow:hidden; background:var(--ops-border); }
+  .ops-progress-fill { height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--ops-orange),#ff8b70); transition:width .3s; }
+  
+  .store-task-card { border-left:4px solid var(--ops-orange) !important; background:var(--ops-surface) !important; }
+  .settings-grid button, .badge-btn, .sub-tab-btn { border-radius:9px; }
+  
+  .theme-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; border:1px solid var(--ops-border); border-radius:12px; background:var(--ops-bg); }
+  .theme-toggle { border:0; background:var(--ops-navy); color:white; border-radius:99px; padding:9px 14px; font-weight:800; cursor:pointer; }
+  
+  .site-footer { padding-bottom:22px; background:var(--ops-surface); color:var(--ops-muted); border-color:var(--ops-border); }
+  .storage-btn-group .btn-clear-data { background:var(--ops-danger); }
+
+  @media (min-width: 760px) { 
+    .today-hero { margin-top:15px; border-radius:22px; } 
+  }
+
+  @media(max-width:600px) {
+    .tab-content { padding:10px; }
+    .today-hero { margin:0 -10px; padding:18px 14px; border-radius:0 0 18px 18px; }
+    .live-clock-box { padding:9px 11px; border-radius:12px; }
+    .live-clock-time { font-size:22px; }
+    .storage-btn-group { display:grid; grid-template-columns:1fr 1fr; }
+    .storage-btn-group button { min-width:0; }
+  }
 </style>
 </head>
 <body>
@@ -416,16 +522,16 @@
 <div id="toast-container"></div>
 
 <div class="main-header">
-  <div style="padding: 12px 0 6px 0; text-align: center;">
+  <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店勤務助手 v5.2.2
+      📦 蝦皮智取店勤務助手 v5.3.4
     </h1>
   </div>
   <div class="main-nav">
-    <button class="nav-btn active" onclick="switchMainTab('today-tab', this)">今日</button>
-    <button class="nav-btn" onclick="switchMainTab('report-tab', this)">回報</button>
-    <button class="nav-btn" onclick="switchMainTab('schedule-tab', this)">班表</button>
-    <button class="nav-btn" onclick="switchMainTab('settings-tab', this)">設定</button>
+    <button class="nav-btn active" onclick="switchMainTab('today-tab', this)"><span class="nav-icon">⌂</span><span>今日</span></button>
+    <button class="nav-btn" onclick="switchMainTab('report-tab', this)"><span class="nav-icon">▣</span><span>回報</span></button>
+    <button class="nav-btn" onclick="switchMainTab('schedule-tab', this)"><span class="nav-icon">▦</span><span>班表</span></button>
+    <button class="nav-btn" onclick="switchMainTab('settings-tab', this)"><span class="nav-icon">⚙</span><span>更多</span></button>
   </div>
 </div>
 
@@ -459,8 +565,8 @@
     </div>
   </section>
   <section class="card">
-    <h3>今日提醒</h3>
-    <div id="today-reminders" style="font-size:13px;line-height:1.8;color:#475467;">完成排班後，系統會在這裡整理今日門市與勤務提醒。</div>
+    <h3>今日勤務路線</h3>
+    <div id="today-reminders" style="font-size:13px;line-height:1.8;color:var(--ops-muted);">完成排班後，系統會在這裡整理今日門市與勤務提醒。</div>
   </section>
 </div>
 
@@ -513,12 +619,12 @@
       <datalist id="shopList"></datalist>
     </div>
 
-    <div id="storeDetailCard" style="margin-top: 12px; padding: 10px; background: #ffffff; border-radius: 8px; border: 1px dashed #ffab91; display: none;">
+    <div id="storeDetailCard" style="margin-top: 12px; padding: 10px; background: var(--ops-surface); border-radius: 8px; border: 1px dashed #ffab91; display: none;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
         <span style="font-size: 13px; font-weight: bold; color: #d84315;">📍 門市地址</span>
         <button onclick="copyAddress()" style="background: #e65100; color: white; border: none; border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer; font-weight: bold;">📋 複製地址</button>
       </div>
-      <div id="storeAddressText" style="font-size: 13px; color: #444; margin-bottom: 8px; font-weight: 500;"></div>
+      <div id="storeAddressText" style="font-size: 13px; color: var(--ops-text); margin-bottom: 8px; font-weight: 500;"></div>
       
       <div style="font-size: 12px; font-weight: bold; color: #d84315; margin-bottom: 4px;">🏷️ 本店任務標籤</div>
       <div id="storeTagList" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;"></div>
@@ -576,20 +682,20 @@
       </div>
     </div>
 
-    <div id="c5_multi_box" style="display: none; background: #e3f2fd; padding: 10px; border-radius: 8px; margin-top: 8px;">
-      <span style="font-size: 12px; font-weight: bold; color: #1565c0;">🚚 分次明細 (系統自動加總與用 / 隔開)</span>
+    <div id="c5_multi_box" style="display: none; background: rgba(33,150,243,0.1); padding: 10px; border-radius: 8px; margin-top: 8px;">
+      <span style="font-size: 12px; font-weight: bold; color: var(--ops-info);">🚚 分次明細 (系統自動加總與用 / 隔開)</span>
       <table class="batch-table">
         <thead><tr><th>上貨類型</th><th>數量</th><th>第一顆時間</th><th>完成時間</th></tr></thead>
         <tbody>
-          <tr><td align="center" style="font-weight:bold; color:#1565c0;">WH</td><td><input type="text" id="c5_b1_count" placeholder="81" oninput="calcAvgTime(); autoSave();"></td><td><input type="text" id="c5_b1_start" placeholder="19:08:44" oninput="calcAvgTime(); autoSave();"></td><td><input type="text" id="c5_b1_end" placeholder="19:25:41" oninput="calcAvgTime(); autoSave();"></td></tr>
-          <tr><td align="center" style="font-weight:bold; color:#1565c0;">NDD</td><td><input type="text" id="c5_b2_count" placeholder="63" oninput="calcAvgTime(); autoSave();"></td><td><input type="text" id="c5_b2_start" placeholder="20:23:51" oninput="calcAvgTime(); autoSave();"></td><td><input type="text" id="c5_b2_end" placeholder="20:36:47" oninput="calcAvgTime(); autoSave();"></td></tr>
-          <tr><td align="center" style="font-weight:bold; color:#1565c0;">正物流</td><td><input type="text" id="c5_b3_count" placeholder="135" oninput="calcAvgTime(); autoSave();"></td><td><input type="text" id="c5_b3_start" placeholder="21:01:49" oninput="calcAvgTime(); autoSave();"></td><td><input type="text" id="c5_b3_end" placeholder="21:32:55" oninput="calcAvgTime(); autoSave();"></td></tr>
+          <tr><td align="center" style="font-weight:bold; color:var(--ops-info);">WH</td><td><input type="text" id="c5_b1_count" placeholder="81" oninput="calcAvgTime(); autoSave();"></td><td><input type="text" id="c5_b1_start" placeholder="19:08:44" oninput="calcAvgTime(); autoSave();"></td><td><input type="text" id="c5_b1_end" placeholder="19:25:41" oninput="calcAvgTime(); autoSave();"></td></tr>
+          <tr><td align="center" style="font-weight:bold; color:var(--ops-info);">NDD</td><td><input type="text" id="c5_b2_count" placeholder="63" oninput="calcAvgTime(); autoSave();"></td><td><input type="text" id="c5_b2_start" placeholder="20:23:51" oninput="calcAvgTime(); autoSave();"></td><td><input type="text" id="c5_b2_end" placeholder="20:36:47" oninput="calcAvgTime(); autoSave();"></td></tr>
+          <tr><td align="center" style="font-weight:bold; color:var(--ops-info);">正物流</td><td><input type="text" id="c5_b3_count" placeholder="135" oninput="calcAvgTime(); autoSave();"></td><td><input type="text" id="c5_b3_start" placeholder="21:01:49" oninput="calcAvgTime(); autoSave();"></td><td><input type="text" id="c5_b3_end" placeholder="21:32:55" oninput="calcAvgTime(); autoSave();"></td></tr>
         </tbody>
       </table>
     </div>
 
     <label>平均驗收時間 (自動計算)</label>
-    <input type="text" id="c5_avg" placeholder="自動計算秒數" readonly style="background:#eee;">
+    <input type="text" id="c5_avg" placeholder="自動計算秒數" readonly style="opacity: 0.8;">
     <div class="row">
       <div><label>NDD完成驗收時間</label><input type="text" id="c5_ndd_time" placeholder="例: 20:36 或 留空" oninput="autoSave()"></div>
       <div><label>WH NDD完成時間</label><input type="text" id="c5_whndd_time" placeholder="例: 19:25 或 留空" oninput="autoSave()"></div>
@@ -663,7 +769,7 @@
     <input type="text" id="c9_pack" value="0" oninput="calcC9Total(); autoSave();">
     <div class="row">
       <div><label>昨晚打包</label><input type="text" id="c9_last_night" value="0" oninput="calcC9Total(); autoSave();"></div>
-      <div><label>合計 (自動計算)</label><input type="text" id="c9_total" value="0" readonly style="background:#eee;"></div>
+      <div><label>合計 (自動計算)</label><input type="text" id="c9_total" value="0" readonly style="opacity: 0.8;"></div>
     </div>
     <button class="copy-btn" id="btn_c9" onclick="copyC9()">📋 複製【科目9】</button>
   </div>
@@ -706,7 +812,7 @@
     <button class="copy-btn" id="btn_c15" onclick="copyC15()">📋 複製【科目15】</button>
   </div>
 
-  <div class="card" style="background: #fff;">
+  <div class="card" style="background: var(--ops-surface);">
     <button class="copy-btn" style="background: #2196f3; margin-top: 0;" onclick="copySupportReport()">
       ⚡ 複製【支援群簡報】(跨區簡明格式)
     </button>
@@ -759,7 +865,7 @@
   <div id="week-view-container" class="card">
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <h3 style="color: #ee4d2d; border-bottom-color: #ffe0b2; margin: 0;">本週勤務</h3>
-      <span style="font-size: 12px; color: #888;">💡 點擊卡片即可編輯排班</span>
+      <span style="font-size: 12px; color: var(--ops-muted);">💡 點擊卡片即可編輯排班</span>
     </div>
     
     <div class="schedule-grid">
@@ -779,13 +885,13 @@
 
   <!-- 日檢視模式 -->
   <div id="day-view-container" class="card" style="display:none;">
-    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #bbdefb; padding-bottom: 5px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--ops-border); padding-bottom: 5px;">
       <h3 style="color: #2196f3; border-bottom: none; margin: 0;">本日勤務</h3>
       <div style="display: flex; align-items: center; gap: 10px;">
-        <span style="font-size: 12px; color: #888;">💡 點擊卡片即可編輯排班</span>
+        <span style="font-size: 12px; color: var(--ops-muted);">💡 點擊卡片即可編輯排班</span>
         <div style="display: flex; gap: 4px;">
-          <button onclick="changeDayOffset(-1)" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; background: #fff; cursor: pointer;">◀ 前一天</button>
-          <button onclick="changeDayOffset(1)" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ccc; background: #fff; cursor: pointer;">後一天 ▶</button>
+          <button onclick="changeDayOffset(-1)" style="padding: 4px 8px; border-radius: 4px; border: 1px solid var(--ops-border); background: var(--ops-surface); color: var(--ops-text); cursor: pointer;">◀ 前一天</button>
+          <button onclick="changeDayOffset(1)" style="padding: 4px 8px; border-radius: 4px; border: 1px solid var(--ops-border); background: var(--ops-surface); color: var(--ops-text); cursor: pointer;">後一天 ▶</button>
         </div>
       </div>
     </div>
@@ -803,7 +909,7 @@
   <div id="month-view-container" class="card" style="display:none;">
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <h3 style="color: #6a1b9a; border-bottom-color: #e1bee7; margin: 0;">本月勤務</h3>
-      <span style="font-size: 12px; color: #888;">💡 點擊日期格即可編輯排班</span>
+      <span style="font-size: 12px; color: var(--ops-muted);">💡 點擊日期格即可編輯排班</span>
     </div>
     <div class="schedule-grid">
       <div class="schedule-grid-head">一</div><div class="schedule-grid-head">二</div><div class="schedule-grid-head">三</div><div class="schedule-grid-head">四</div><div class="schedule-grid-head">五</div><div class="schedule-grid-head">六</div><div class="schedule-grid-head">日</div>
@@ -820,7 +926,7 @@
   <div class="card">
     <h3>☁️ 雲端與備份管理</h3>
     <div class="settings-grid">
-      <button onclick="handleAuthClick()">連接 Google 雲端</button>
+      <button id="gdrive-login-btn" onclick="handleAuthClick()">連接 Google 雲端</button>
       <button onclick="syncScheduleToDrive()">寫入並同步至雲端</button>
       <button onclick="exportBackupData()">下載本機備份檔</button>
       <button onclick="importBackupData()">還原 JSON 備份檔</button>
@@ -829,8 +935,8 @@
   </div>
 
   <!-- 📍 工作日報表生成中心 -->
-  <div class="card" style="border: 1px solid #a5d6a7;">
-    <h3 style="color: #2e7d32; border-bottom-color: #c8e6c9;">📊 工作日報表生成與篩選中心</h3>
+  <div class="card" style="border: 1px solid var(--ops-success);">
+    <h3 style="color: var(--ops-success); border-bottom-color: rgba(18,161,80,0.3);">📊 工作日報表生成與篩選中心</h3>
     
     <div class="report-filter-panel">
       <div class="filter-row">
@@ -852,20 +958,26 @@
           <label style="display:inline-flex; align-items:center; gap:4px; font-weight:normal; cursor:pointer;"><input type="radio" name="reportScope" value="all" checked onchange="toggleScopeInput(false)"> 全部門市</label>
           <label style="display:inline-flex; align-items:center; gap:4px; font-weight:normal; cursor:pointer; margin-left:12px;"><input type="radio" name="reportScope" value="specific" onchange="toggleScopeInput(true)"> 指定門市</label>
           
-          <!-- 📍 自由輸入與選單並存的輸入框 -->
           <input type="text" id="report-specific-store" list="reportStoreList" placeholder="選擇或輸入店名" style="display:none; width: 180px; padding: 4px; font-size: 12px; margin-left: 8px;">
           <datalist id="reportStoreList"></datalist>
         </div>
       </div>
     </div>
 
-    <button class="primary-action" style="background: #2e7d32; margin-top: 5px;" onclick="generateAdvancedTextReport()">📋 產出並複製自訂工作日報表</button>
+    <!-- 📍 調整後適中的報表生成按鈕 -->
+    <div style="text-align: center; margin-top: 10px;">
+      <button class="btn-generate-report" onclick="generateAdvancedTextReport()">📋 產出並複製自訂工作日報表</button>
+    </div>
   </div>
 
   <!-- 進階解鎖開關 -->
   <div class="card">
     <h3 style="color: #d84315;">🛠️ 進階偏好設定</h3>
-    <div style="display: flex; align-items: center; gap: 10px; background: #fff8f6; padding: 10px; border-radius: 8px; border: 1px solid #ffccbc;">
+    <div class="theme-row" style="margin-bottom:10px;">
+      <div><b>顯示模式</b><div style="font-size:12px;color:var(--ops-muted);margin-top:3px;">夜間巡店可切換深色介面</div></div>
+      <button class="theme-toggle" id="theme-toggle-btn" onclick="toggleTheme()">切換深色</button>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px; background: var(--ops-bg); padding: 10px; border-radius: 8px; border: 1px solid var(--ops-border);">
       <input type="checkbox" id="unlockOverride" onchange="applyShiftLock();" style="width: auto; margin: 0;">
       <label for="unlockOverride" style="margin: 0; color: #d84315; cursor: pointer; font-size: 13px;">🔓 解鎖所有表單欄位 (允許跨班別臨時修改)</label>
     </div>
@@ -877,7 +989,7 @@
 <footer class="site-footer">
   <div class="brand-info">
     <span>📦 蝦皮智取店回報與排班系統</span>
-    <span>v5.2.2</span>
+    <span>v5.3.4 Shopee Ops UI/UX Refine</span>
   </div>
   <span class="divider">•</span>
   <span>© 2026 Developed by <b>willy huang (WSOFT)</b></span>
@@ -896,11 +1008,11 @@
     <h3 id="modal-date-title" style="margin-top:0; color:#ee4d2d; font-size:16px;">編輯排班</h3>
     <input type="hidden" id="modal-date-key">
     
-    <label>📍 預定門市 / 地點 <span style="font-weight:normal; font-size:11px; color:#777;">(橘字顯示，多門市用 / 隔開，填 X 表示休假)</span></label>
+    <label>📍 預定門市 / 地點 <span style="font-weight:normal; font-size:11px; color:var(--ops-muted);">(橘字顯示，多門市用 / 隔開，填 X 表示休假)</span></label>
     <input type="text" id="modal-loc-input" placeholder="例: 新生南/師大 或 X">
 
-    <label style="color:#1565c0;">🔹 支援追加門市 <span style="font-weight:normal; font-size:11px; color:#1565c0;">(亮藍字顯示，多門市用 / 隔開)</span></label>
-    <input type="text" id="modal-support-input" placeholder="例: 台大 / 萬福" style="border-color:#90caf9; background:#f4f9ff;">
+    <label style="color:var(--ops-info);">🔹 支援追加門市 <span style="font-weight:normal; font-size:11px; color:var(--ops-info);">(亮藍字顯示，多門市用 / 隔開)</span></label>
+    <input type="text" id="modal-support-input" placeholder="例: 台大 / 萬福" style="border-color:#90caf9; background:rgba(33,150,243,0.08);">
 
     <label>⏰ 班次時間 (可留空)</label>
     <input type="text" id="modal-time-input" placeholder="例: 18:30-22:30">
@@ -917,7 +1029,7 @@
 <div id="import-sync-modal" class="modal-overlay">
   <div class="modal-card" style="text-align: center;">
     <h3 style="margin-top:0; color:#2e7d32; font-size:17px;">📊 Excel 班表匯入完成！</h3>
-    <p style="font-size: 14px; color: #444; line-height: 1.5; margin: 12px 0;" id="import-sync-msg">
+    <p style="font-size: 14px; color: var(--ops-text); line-height: 1.5; margin: 12px 0;" id="import-sync-msg">
       是否要順便將當天（今日）班表門市自動拆分並帶入巡店回報中？
     </p>
     <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;">
@@ -1000,9 +1112,6 @@ function navButtonFor(tabId) {
   );
 }
 
-/**
- * 📍 即時動態時鐘更新機制
- */
 function initLiveClock() {
   function updateClock() {
     const now = new Date();
@@ -1042,6 +1151,43 @@ function toggleClockFormat() {
   showToast(`⏰ 已切換為 ${is12HourFormat ? '12 小時制' : '24 小時制'}`);
 }
 
+function applyTheme(theme) {
+  const resolved = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', resolved);
+  const btn = document.getElementById('theme-toggle-btn');
+  if (btn) btn.textContent = resolved === 'dark' ? '切換淺色' : '切換深色';
+}
+
+function toggleTheme() {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('shopee_ui_theme', next);
+  applyTheme(next);
+  showToast(next === 'dark' ? '🌙 已切換深色模式' : '☀️ 已切換淺色模式');
+}
+
+/**
+ * 📍 修復進度判定 Bug：數值為空白或 "0" 時一律視為未填寫
+ */
+function getDraftCompletion(index) {
+  try {
+    const draft = JSON.parse(localStorage.getItem(`shopee_report_draft_${index + 1}`) || '{}');
+    const important = ['shopName','c4_boxes','c5_count','c6_wrong','c8_abnormal'];
+    const filled = important.filter(key => {
+      const val = String(draft[key] ?? '').trim();
+      return val !== '' && val !== '0';
+    }).length;
+    return { exists:Boolean(draft.shopName), percent:Math.round(filled / important.length * 100) };
+  } catch(e) { return { exists:false, percent:0 }; }
+}
+
+function openDutyStop(index) {
+  currentDraftKey = `shopee_report_draft_${index + 1}`;
+  switchMainTab('report-tab', navButtonFor('report-tab'));
+  loadData(false);
+  updateDraftLabels();
+  updateReportProgress();
+}
+
 function renderTodayDashboard() {
   const now = new Date();
   const todayKey = formatDateISO(now);
@@ -1076,7 +1222,7 @@ function renderTodayDashboard() {
     if (locLabel) locLabel.textContent = '今日尚未排班';
     if (shiftLabel) shiftLabel.textContent = '尚未設定班別';
     if (progressLabel) progressLabel.textContent = '可以先新增今日勤務，再開始巡店回報。';
-    if (reminderBox) reminderBox.textContent = '完成排班後，系統會在這裡整理今日門市與勤務提醒。';
+    if (reminderBox) reminderBox.innerHTML = '<div style="color:var(--ops-muted);">完成排班後，系統會在這裡整理今日門市與勤務提醒。</div>';
     if (startBtn) {
       startBtn.textContent = '建立今日班表';
       startBtn.onclick = openTodaySchedule;
@@ -1088,7 +1234,7 @@ function renderTodayDashboard() {
     if (locLabel) locLabel.textContent = '今天休假';
     if (shiftLabel) shiftLabel.textContent = '無勤務安排';
     if (progressLabel) progressLabel.textContent = '好好休息，明天再繼續。';
-    if (reminderBox) reminderBox.textContent = '今日沒有巡店任務。';
+    if (reminderBox) reminderBox.innerHTML = '<div style="color:var(--ops-muted);">今日沒有巡店任務。</div>';
     if (startBtn) {
       startBtn.textContent = '查看班表';
       startBtn.onclick = openTodaySchedule;
@@ -1103,8 +1249,14 @@ function renderTodayDashboard() {
   }).length;
   if (locLabel) locLabel.textContent = locations.join(' → ');
   if (shiftLabel) shiftLabel.textContent = dayData.t1 ? `勤務時間／班別：${dayData.t1}` : '勤務時間尚未設定';
-  if (progressLabel) progressLabel.textContent = `共 ${locations.length} 家門市・已建立 ${draftCount} 份巡店草稿`;
-  if (reminderBox) reminderBox.innerHTML = locations.map((loc, i) => `${i+1}. ${loc}`).join('<br>');
+  if (progressLabel) progressLabel.innerHTML = `共 ${locations.length} 家門市・已建立 ${draftCount} 份巡店草稿<div class="ops-progress"><div class="ops-progress-head"><span>今日準備進度</span><b>${draftCount}/${locations.length}</b></div><div class="ops-progress-track"><div class="ops-progress-fill" style="width:${locations.length ? draftCount/locations.length*100 : 0}%"></div></div></div>`;
+  if (reminderBox) reminderBox.innerHTML = `<div class="duty-timeline">${locations.map((loc, i) => {
+    const draft = getDraftCompletion(i);
+    const active = currentDraftKey === `shopee_report_draft_${i+1}`;
+    const stateClass = active ? 'active' : (draft.exists ? 'ready' : '');
+    const meta = active ? '目前使用中的巡店草稿' : (draft.exists ? `草稿完成度 ${draft.percent}%` : '尚未建立草稿');
+    return `<div class="duty-stop ${stateClass}" onclick="openDutyStop(${i})"><span class="stop-dot">${active ? '●' : (draft.exists ? '✓' : i+1)}</span><div><div class="stop-name">${loc}</div><div class="stop-meta">${meta}</div></div><span class="stop-action">填寫 ›</span></div>`;
+  }).join('')}</div>`;
   if (startBtn) {
     startBtn.textContent = draftCount ? '繼續今日巡店' : '開始今日巡店';
     startBtn.onclick = startTodayReport;
@@ -1128,9 +1280,6 @@ function startTodayReport() {
   }
 }
 
-/**
- * 📍 動態填充指定門市 Datalist (支援自由手動輸入與自動選單)
- */
 function populateReportStoreDatalist() {
   const datalist = document.getElementById('reportStoreList');
   if (!datalist) return;
@@ -1188,9 +1337,6 @@ function toggleScopeInput(isSpecific) {
   }
 }
 
-/**
- * 📍 進階自訂報表生成 (支援完整年份與自由輸入指定門市)
- */
 function generateAdvancedTextReport() {
   const startStr = document.getElementById('report-start-date').value;
   const endStr = document.getElementById('report-end-date').value;
@@ -1291,18 +1437,37 @@ function toggleReportGroup(button) {
   button.closest('.report-group').classList.toggle('open');
 }
 
+function isReportFieldApplicable(el) {
+  if (el.disabled) return false;
+  const conditional = el.closest('#c5_multi_box, #c5_single_box, #lock_count_box');
+  return !conditional || conditional.style.display !== 'none';
+}
+
 function updateReportProgress() {
   const cards = Array.from(document.querySelectorAll('#report-tab .card[data-shift]')).filter(card => !card.classList.contains('disabled-card'));
   const complete = cards.filter(card => {
-    const fields = Array.from(card.querySelectorAll('input:not([type="checkbox"]):not([readonly]), select')).filter(el => !el.disabled && el.offsetParent !== null);
-    return fields.length && fields.every(el => String(el.value).trim() !== '');
+    const fields = Array.from(card.querySelectorAll('input:not([type="checkbox"]):not([readonly]), select')).filter(isReportFieldApplicable);
+    return fields.length && fields.every(el => {
+      const val = String(el.value).trim();
+      return val !== '' && val !== '0';
+    });
   }).length;
   const label = document.getElementById('report-progress-label');
   if (label) label.textContent = `完成 ${complete}/${cards.length}`;
   document.querySelectorAll('.report-group').forEach(group => {
     const groupCards = Array.from(group.querySelectorAll('.card[data-shift]')).filter(card => !card.classList.contains('disabled-card'));
+    const groupComplete = groupCards.filter(card => {
+      const fields = Array.from(card.querySelectorAll('input:not([type="checkbox"]):not([readonly]), select')).filter(isReportFieldApplicable);
+      return fields.length && fields.every(el => {
+        const val = String(el.value).trim();
+        return val !== '' && val !== '0';
+      });
+    }).length;
     const meta = group.querySelector('.report-group-meta');
-    if (meta) meta.textContent = groupCards.length ? `${groupCards.length} 個適用科目` : '本班別無適用科目';
+    if (meta) {
+      const percent = groupCards.length ? Math.round(groupComplete/groupCards.length*100) : 0;
+      meta.innerHTML = groupCards.length ? `${groupComplete}/${groupCards.length} 完成<div class="group-progress"><i style="width:${percent}%"></i></div>` : '本班別無適用科目';
+    }
   });
 }
 
@@ -1554,7 +1719,7 @@ function renderDayView() {
       `;
     }
   } else {
-    container.innerHTML = `<p style="color:#888; margin:0;">日期：${currentSelectedDayKey}<br>尚無輸入的班表資訊。<br><span style="font-size:12px; color:#2196f3;">(點擊此處即可新增排班)</span></p>`;
+    container.innerHTML = `<p style="color:var(--ops-muted); margin:0;">日期：${currentSelectedDayKey}<br>尚無輸入的班表資訊。<br><span style="font-size:12px; color:#2196f3;">(點擊此處即可新增排班)</span></p>`;
   }
 
   const historyKey = 'shopee_report_history_' + currentSelectedDayKey;
@@ -1921,6 +2086,7 @@ function getTodayString() {
 
 window.onload = function() {
   try {
+    applyTheme(localStorage.getItem('shopee_ui_theme') || 'light');
     populateShopOptions();
     loadData(false);
     updateDraftLabels();
@@ -1935,6 +2101,8 @@ window.onload = function() {
     }
     
     updateStoreInfo();
+    const detail = document.getElementById('storeDetailCard');
+    if (detail) detail.classList.add('store-task-card');
     applyShiftLock();
     document.querySelectorAll('#report-tab input').forEach(input => {
       if (/count|boxes|stay|ndd|whndd|wrong|damaged|wet|soc|pack|success|bags|sys|real|empty|seats|overdue|scs|fbs/i.test(input.id)) {
@@ -2089,9 +2257,11 @@ function clearData() {
 }
 
 function toggleBatchMode() {
-  const isMulti = document.getElementById('c5_multi_mode').checked;
-  document.getElementById('c5_single_box').style.display = isMulti ? 'none' : 'block';
-  document.getElementById('c5_multi_box').style.display = isMulti ? 'block' : 'none';
+  const isMulti = document.getElementById('c5_multi_mode')?.checked;
+  const sBox = document.getElementById('c5_single_box');
+  const mBox = document.getElementById('c5_multi_box');
+  if (sBox) sBox.style.display = isMulti ? 'none' : 'block';
+  if (mBox) mBox.style.display = isMulti ? 'block' : 'none';
   calcAvgTime();
 }
 
@@ -2159,7 +2329,7 @@ function updateStoreInfo() {
         tagListDiv.appendChild(span);
       });
     } else {
-      tagListDiv.innerHTML = '<span style="font-size:12px; color:#888;">無特殊打包標籤</span>';
+      tagListDiv.innerHTML = '<span style="font-size:12px; color:var(--ops-muted);">無特殊打包標籤</span>';
     }
 
     const notesBox = document.getElementById('storeNotesBox');
@@ -2444,7 +2614,7 @@ function copySupportReport() {
   const c5_to_in = document.getElementById('c5_to_in')?.value || '';
   const c5_to_out = document.getElementById('c5_to_out')?.value || '';
 
-  reportLines.push(`【科目5 驗收回報】\n驗收包裹數量：${countStr}\n第一顆上架時間：${startStr}\n完成驗收時間：${endStr}\n平均驗收時間：${c5_avg}\nNDD完成驗收時間：${c5_ndd}\nWH NDD完成驗收時間：${c5_whndd}\n滯留：${c5_stay} | 剩餘櫃位：${c5_seats}\n到店TO單：${c5_to_in} | 離店TO單：${c5_to_out}`);
+  reportLines.push(`【科目5 驗收回報】\n驗收包裹數量：${countStr}\n第一顆上架時間：${startStr}\n完成驗收時間：${endStr}\n平均驗收時間：${c5_avg}\nNDD完成驗收時間：${nddVal}\nWH NDD完成驗收時間：${c5_whndd}\n滯留：${c5_stay} | 剩餘櫃位：${c5_seats}\n到店TO單：${c5_to_in} | 離店TO單：${c5_to_out}`);
 
   const c6_wrong = document.getElementById('c6_wrong')?.value || '0';
   const c6_damaged = document.getElementById('c6_damaged')?.value || '0';
@@ -2483,7 +2653,7 @@ function copySupportReport() {
   }
 
   const c12_bags = document.getElementById('c12_bags')?.value || '0';
-  reportLines.push(`【科目12 速配倉進貨】\n進貨袋數:${c12_bags}`);
+  reportLines.push(`【科目12 中正速配倉進貨】\n進貨袋數:${c12_bags}`);
 
   if (shift === '晚') {
     const c14_sys = document.getElementById('c14_sys')?.value || '0';
