@@ -879,6 +879,7 @@
         🔄 將班表同步至巡店回報
       </button>
     </div>
+    <div id="schedule-sync-status" role="status" aria-live="polite" style="display:none; margin:-4px 0 12px; padding:8px 10px; border-radius:8px; text-align:center; font-size:12px; font-weight:bold;"></div>
 
     <div id="week-control-box">
       <div class="row">
@@ -1346,6 +1347,16 @@ function openDutyStop(index) {
   updateReportProgress();
 }
 
+function splitStoreLocationText(value) {
+  return String(value || '').split(/(?:\/|\n|→|➡|、|，|,)+/).map(s => s.trim()).filter(Boolean);
+}
+
+function getShortStoreName(value) {
+  let name = String(value || '').trim().replace(/-?智取店$/u, '');
+  name = name.replace(/^(文山|大安|中正|信義)/u, '');
+  return name || String(value || '').trim();
+}
+
 function getParsedLocations(dayData) {
   if (!dayData) return [];
   if (Array.isArray(dayData.routeOrder) && dayData.routeOrder.length) {
@@ -1353,10 +1364,10 @@ function getParsedLocations(dayData) {
   }
   let locs = [];
   if (dayData.loc && dayData.loc.trim().toUpperCase() !== 'X' && !dayData.isOff) {
-    locs = locs.concat(dayData.loc.split(/[\/\n]/).map(s => s.trim()).filter(Boolean));
+    locs = locs.concat(splitStoreLocationText(dayData.loc));
   }
   if (dayData.supportLocs && dayData.supportLocs.length > 0) {
-    locs = locs.concat(dayData.supportLocs.map(s => s.trim()).filter(Boolean));
+    dayData.supportLocs.forEach(value => { locs = locs.concat(splitStoreLocationText(value)); });
   }
   return locs;
 }
@@ -1415,7 +1426,7 @@ function renderTodayDashboard() {
     catch(e) { return false; }
   }).length;
 
-  if (locLabel) locLabel.textContent = locations.join(' → ');
+  if (locLabel) locLabel.textContent = locations.map(getShortStoreName).join(' → ');
   if (shiftLabel) shiftLabel.textContent = dayData.t1 ? `勤務時間／班別：${dayData.t1}` : '勤務時間尚未設定';
   
   if (progressLabel) {
@@ -1428,7 +1439,7 @@ function renderTodayDashboard() {
       const active = currentDraftKey === `shopee_report_draft_${i+1}`;
       const stateClass = active ? 'active' : (draft.exists ? 'ready' : '');
       const meta = active ? '目前使用中的巡店資料' : (draft.exists ? `完成度 ${draft.confirmed}/${draft.total} 項` : '尚未建立資料');
-      return `<div class="duty-stop ${stateClass}" onclick="openDutyStop(${i})"><span class="stop-dot">${i+1}</span><div><div class="stop-name">${loc}</div><div class="stop-meta">${meta}</div></div><span class="stop-action">填寫 ›</span></div>`;
+      return `<div class="duty-stop ${stateClass}" onclick="openDutyStop(${i})"><span class="stop-dot">${i+1}</span><div><div class="stop-name">${escapeStoreHTML(getShortStoreName(loc))}</div><div class="stop-meta">${meta}</div></div><span class="stop-action">填寫 ›</span></div>`;
     }).join('')}</div>`;
   }
 
@@ -1439,7 +1450,7 @@ function renderTodayDashboard() {
       chipsContainer.innerHTML = locations.map((loc, i) => {
         const comp = getDraftCompletion(i);
         const isDone = comp.exists && comp.confirmed === comp.total;
-        return `<div class="home-overview-chip ${isDone ? 'confirmed' : ''}" onclick="openDutyStop(${i})"><span>${i+1}.${loc.replace(/-智取店$|智取店$/g, '')}</span><span>${isDone ? '✓完成' : (comp.exists ? `${comp.confirmed}/${comp.total}` : '未填')}</span></div>`;
+        return `<div class="home-overview-chip ${isDone ? 'confirmed' : ''}" onclick="openDutyStop(${i})"><span>${i+1}.${escapeStoreHTML(getShortStoreName(loc))}</span><span>${isDone ? '✓完成' : (comp.exists ? `${comp.confirmed}/${comp.total}` : '未填')}</span></div>`;
       }).join('');
     }
   }
@@ -2271,60 +2282,131 @@ function renderDayView() {
   }
 }
 
-function syncCurrentDayScheduleToReportDraft() {
-  const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
-  const dayData = savedSchedule[currentSelectedDayKey];
-
-  if (!dayData || (!dayData.loc && (!dayData.supportLocs || dayData.supportLocs.length === 0)) || dayData.isOff || (dayData.loc && dayData.loc.toUpperCase() === 'X')) {
-    showToast('⚠️ 本日無班表或為休假，無法同步至巡店回報！');
-    return;
-  }
-
-  let allStores = getParsedLocations(dayData);
-
-  if (allStores.length === 0) {
-    showToast('⚠️ 無法解析有效的門市名稱！');
-    return;
-  }
-
-  let dateStr = getTodayString();
-  const parts = currentSelectedDayKey.split('-');
-  if (parts.length === 3) {
-    dateStr = `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
-  }
-
-  const shiftVal = determineShiftFromTime(dayData.t1);
-
-  let matchedCount = 0;
-  allStores.forEach((token, index) => {
-    if (index >= 5) return;
-
-    const draftKey = `shopee_report_draft_${index + 1}`;
-    const matchedShopName = matchStoreName(token);
-
-    let draftData = {};
-    try {
-      draftData = JSON.parse(localStorage.getItem(draftKey) || '{}');
-    } catch(e) {}
-
-    if (draftData.shopName && draftData.shopName !== matchedShopName) {
-      draftData._confirmedSubjects = {};
-      draftData._confirmedAt = {};
-    }
-    draftData.date = dateStr;
-    draftData.shopName = matchedShopName;
-    draftData.shift = shiftVal;
-
-    localStorage.setItem(draftKey, JSON.stringify(draftData));
-    matchedCount++;
+function matchStoreName(inputName) {
+  const raw = String(inputName || '').trim();
+  if (!raw) return '';
+  const normalize = value => String(value || '').replace(/\s+/g, '').replace(/-?智取店$/u, '');
+  const target = normalize(raw);
+  const exact = storesData.find(store => normalize(store.name) === target);
+  if (exact) return exact.name;
+  const suffixMatches = storesData.filter(store => {
+    const name = normalize(store.name);
+    return name.endsWith(target) || target.endsWith(name);
   });
+  return suffixMatches.length === 1 ? suffixMatches[0].name : raw;
+}
 
-  switchMainTab('report-tab', navButtonFor('report-tab'));
-  currentDraftKey = 'shopee_report_draft_1';
-  loadData(false);
-  updateDraftLabels();
+function determineShiftFromTime(timeText) {
+  const text = String(timeText || '').trim();
+  if (text.includes('晚')) return '晚';
+  if (text.includes('早')) return '早';
+  const match = text.match(/(?:^|\s)(\d{1,2})(?::|：)\d{2}/);
+  if (!match) return '早';
+  const startHour = parseInt(match[1], 10);
+  return startHour >= 15 || startHour < 5 ? '晚' : '早';
+}
 
-  showToast(`🔄 已成功將 ${currentSelectedDayKey} 的 ${matchedCount} 家門市帶入巡店回報！`);
+function setScheduleSyncStatus(message, type = 'success') {
+  const status = document.getElementById('schedule-sync-status');
+  if (!status) return;
+  status.style.display = 'block';
+  status.style.color = type === 'success' ? '#08783e' : '#b42318';
+  status.style.background = type === 'success' ? '#e8f7ee' : '#fff0ee';
+  status.style.border = `1px solid ${type === 'success' ? '#91d5ad' : '#f4aaa1'}`;
+  status.textContent = message;
+}
+
+function syncCurrentDayScheduleToReportDraft() {
+  try {
+    const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+    const dayData = savedSchedule[currentSelectedDayKey];
+
+    if (!dayData || (!dayData.loc && (!dayData.supportLocs || dayData.supportLocs.length === 0)) || dayData.isOff || (dayData.loc && dayData.loc.toUpperCase() === 'X')) {
+      const message = `⚠️ ${currentSelectedDayKey} 無班表或為休假，無法同步至巡店回報！`;
+      setScheduleSyncStatus(message, 'error');
+      showToast(message, 3500);
+      return false;
+    }
+
+    // 班表同步必須以 loc/supportLocs 為唯一來源；routeOrder 可能是舊版留下的過期排序。
+    // 若此處讀 routeOrder，就會出現班表只有 2 家、回報區卻仍保留 5 家，直到拖曳才刷新。
+    let allStores = getScheduleLocationsWithoutRouteOrder(dayData);
+
+    if (allStores.length === 0) {
+      const message = '⚠️ 無法解析有效的門市名稱！';
+      setScheduleSyncStatus(message, 'error');
+      showToast(message, 3500);
+      return false;
+    }
+
+    let dateStr = getTodayString();
+    const parts = currentSelectedDayKey.split('-');
+    if (parts.length === 3) dateStr = `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
+
+    const shiftVal = determineShiftFromTime(dayData.t1);
+
+    let matchedCount = 0;
+    const matchedStores = [];
+    allStores.forEach((token, index) => {
+      if (index >= 5) return;
+
+      const draftKey = `shopee_report_draft_${index + 1}`;
+      const matchedShopName = matchStoreName(token);
+
+      let draftData = {};
+      try { draftData = JSON.parse(localStorage.getItem(draftKey) || '{}'); } catch(e) {}
+
+      if (draftData.shopName && draftData.shopName !== matchedShopName) {
+        draftData._confirmedSubjects = {};
+        draftData._confirmedAt = {};
+      }
+      draftData.date = dateStr;
+      draftData.shopName = matchedShopName;
+      draftData.shift = shiftVal;
+
+      localStorage.setItem(draftKey, JSON.stringify(draftData));
+      matchedStores.push(matchedShopName);
+      matchedCount++;
+    });
+
+    // 今日路線不足 5 家時，清除後方殘留的舊草稿，避免回報區仍顯示前次門市。
+    for (let index = matchedCount; index < 5; index++) {
+      localStorage.removeItem(`shopee_report_draft_${index + 1}`);
+    }
+
+    // 回報草稿使用完整門市名稱；班表仍保留使用者輸入的短店名及原本的主店／支援店分類。
+    dayData.routeOrder = allStores.slice(0, 5);
+    savedSchedule[currentSelectedDayKey] = dayData;
+    localStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
+
+    currentDraftKey = 'shopee_report_draft_1';
+    switchMainTab('report-tab', navButtonFor('report-tab'));
+    loadData(false);
+    updateDraftLabels();
+    renderTodayDashboard();
+    loadWeekSchedule();
+    renderMonthView();
+    renderDayView();
+
+    // 等草稿與頁籤 DOM 都完成更新後再重繪一次，首頁不再需要靠拖曳才刷新。
+    requestAnimationFrame(() => {
+      updateDraftLabels();
+      renderTodayDashboard();
+      requestAnimationFrame(renderTodayDashboard);
+    });
+
+    const message = `✅ ${currentSelectedDayKey} 已同步 ${matchedCount} 家門市至巡店回報：${allStores.slice(0, 5).join(' → ')}`;
+    setScheduleSyncStatus(message, 'success');
+    showToast(message, 4500);
+    syncScheduleToDrive();
+    return true;
+  } catch (error) {
+    console.error('班表同步至巡店回報失敗：', error);
+    const message = '❌ 班表同步失敗，請重新整理後再試一次！';
+    setScheduleSyncStatus(message, 'error');
+    showToast(message, 4000);
+    return false;
+  }
 }
 
 function addCurrentStoreToScheduleSupport() {
@@ -2569,9 +2651,9 @@ function updateDraftLabels() {
 
     const isCurrent = key === currentKeyShort;
     const activeClass = isCurrent ? 'draft-badge active' : 'draft-badge';
-    const statusText = `${index + 1}.${storeName}`;
+    const statusText = `${index + 1}.${getShortStoreName(storeName)}`;
     
-    badgeHTML += `<div class="${activeClass}" draggable="true" data-index="${index}" data-key="${key}" onclick="handleDraftBadgeClick('${key}')">${statusText}</div>`;
+    badgeHTML += `<div class="${activeClass}" draggable="true" data-index="${index}" data-key="${key}" onclick="handleDraftBadgeClick('${key}')">${escapeStoreHTML(statusText)}</div>`;
   });
 
   statusBar.innerHTML = badgeHTML;
@@ -2591,10 +2673,40 @@ function initDraftDragAndDrop() {
   const badges = container.querySelectorAll('.draft-badge');
 
   let draggedItem = null;
+  let dragSourceIndex = -1;
+
+  const commitDrop = targetIndex => {
+    if (dragSourceIndex < 0 || targetIndex < 0 || dragSourceIndex === targetIndex) return;
+    const fromIndex = dragSourceIndex;
+    dragSourceIndex = -1;
+    moveDraftData(fromIndex, targetIndex);
+  };
+
+  // 即使放在標籤間的空隙，也會交給最近一個店名處理，不必再點其他項目才刷新。
+  container.addEventListener('dragover', e => e.preventDefault());
+  container.addEventListener('drop', e => {
+    e.preventDefault();
+    const targetBadge = e.target.closest('.draft-badge');
+    if (targetBadge) {
+      commitDrop(parseInt(targetBadge.getAttribute('data-index'), 10));
+      return;
+    }
+    const allBadges = Array.from(container.querySelectorAll('.draft-badge'));
+    if (!allBadges.length) return;
+    const nearest = allBadges.reduce((best, badge) => {
+      const rect = badge.getBoundingClientRect();
+      const distance = Math.abs(e.clientX - (rect.left + rect.width / 2));
+      return !best || distance < best.distance ? { badge, distance } : best;
+    }, null);
+    if (nearest) commitDrop(parseInt(nearest.badge.getAttribute('data-index'), 10));
+  });
 
   badges.forEach(badge => {
     badge.addEventListener('dragstart', function(e) {
       draggedItem = this;
+      dragSourceIndex = parseInt(this.getAttribute('data-index'), 10);
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(dragSourceIndex));
       setTimeout(() => this.classList.add('dragging'), 0);
     });
 
@@ -2609,11 +2721,8 @@ function initDraftDragAndDrop() {
 
     badge.addEventListener('drop', function(e) {
       e.preventDefault();
-      if (draggedItem && draggedItem !== this) {
-        const fromIdx = parseInt(draggedItem.getAttribute('data-index'));
-        const toIdx = parseInt(this.getAttribute('data-index'));
-        moveDraftData(fromIdx, toIdx);
-      }
+      e.stopPropagation();
+      if (draggedItem && draggedItem !== this) commitDrop(parseInt(this.getAttribute('data-index'), 10));
     });
 
     let touchSrcEl = null;
@@ -2636,6 +2745,8 @@ function initDraftDragAndDrop() {
 
 function moveDraftData(fromIdx, toIdx) {
   if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0 || fromIdx > 4 || toIdx > 4) return;
+  // 拖曳前先把畫面上尚未失焦的輸入內容寫入目前草稿，避免讀到舊店名。
+  saveDataOnly(false);
   const keys = ['draft_1', 'draft_2', 'draft_3', 'draft_4', 'draft_5'];
   const currentIndex = keys.findIndex(key => currentDraftKey === 'shopee_report_' + key);
   const items = keys.map((key, originalIndex) => ({
@@ -2666,10 +2777,10 @@ function getScheduleLocationsWithoutRouteOrder(dayData) {
   if (!dayData) return [];
   const result = [];
   if (dayData.loc && String(dayData.loc).trim().toUpperCase() !== 'X' && !dayData.isOff) {
-    result.push(...String(dayData.loc).split(/[\/\n]/).map(s => s.trim()).filter(Boolean));
+    result.push(...splitStoreLocationText(dayData.loc));
   }
   (dayData.supportLocs || []).forEach(value => {
-    result.push(...String(value).split(/[\/\n]/).map(s => s.trim()).filter(Boolean));
+    result.push(...splitStoreLocationText(value));
   });
   return result;
 }
@@ -2686,8 +2797,12 @@ function syncTodayRouteOrderFromDrafts() {
   }).map(name => name.trim()).filter(Boolean);
   const originalNames = getScheduleLocationsWithoutRouteOrder(dayData);
   const normalize = name => matchStoreName(name).replace(/-智取店$|智取店$/g, '').trim();
+  const orderedDraftNames = draftNames.map(draftName => {
+    // 排序時沿用班表原本的顯示文字，例如「新生南」，不強迫改成「大安新生南-智取店」。
+    return originalNames.find(originalName => normalize(originalName) === normalize(draftName)) || draftName;
+  });
   const ordered = [];
-  [...draftNames, ...originalNames].forEach(name => {
+  [...orderedDraftNames, ...originalNames].forEach(name => {
     if (!ordered.some(existing => normalize(existing) === normalize(name))) ordered.push(name);
   });
   dayData.routeOrder = ordered;
@@ -3420,14 +3535,16 @@ function openImportSyncModal() {
   if (modalEl) modalEl.classList.add('active');
 }
 
-function closeImportSyncModal() {
+function closeImportSyncModal(showImportedToast = true) {
   const modalEl = document.getElementById('import-sync-modal');
   if (modalEl) modalEl.classList.remove('active');
-  showToast('📊 Excel 班表已成功匯入！');
+  if (showImportedToast) showToast('📊 Excel 班表已成功匯入！', 3000);
 }
 
 function confirmImportSync() {
-  closeImportSyncModal();
+  closeImportSyncModal(false);
+  // 匯入完成視窗詢問的是「今日」，不可沿用使用者先前停留的其他日期。
+  currentSelectedDayKey = formatDateISO(new Date());
   syncCurrentDayScheduleToReportDraft();
 }
 
