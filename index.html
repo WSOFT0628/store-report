@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店勤務助手 v6.0.4</title>
+<title>蝦皮智取店勤務助手 v6.1.0</title>
 
 <!-- 引入 SheetJS 解析 Excel -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  
@@ -195,6 +195,7 @@
                 localStorage.setItem(key, remoteData[key]);
               }
             }
+            reloadStoresDataFromStorage();
             updateHistoryDropdown();
             loadWeekSchedule();
             renderMonthView();
@@ -550,7 +551,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店勤務助手 v6.0.4
+      📦 蝦皮智取店勤務助手 v6.1.0
     </h1>
   </div>
   <div class="main-nav">
@@ -590,7 +591,7 @@
     </div>
 
     <div id="home-overview-panel" class="home-overview-panel" style="display:none;">
-      <h4><span>📍 今日門市回報總覽 (即時同步)</span><button class="badge-btn" style="padding:2px 8px;font-size:11px;" onclick="openReportOverview()">展開詳情</button></h4>
+      <h4><span>📍 今日門市回報總覽 (即時同步)</span><button class="badge-btn" style="padding:2px 8px;font-size:11px;" onclick="openReportOverview()">查看目前門市</button></h4>
       <div id="home-overview-chips" class="home-overview-grid"></div>
     </div>
   </section>
@@ -1025,7 +1026,7 @@
   <div class="card">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v6.0.4 Shopee Ops Pro</div>
+      <div><b>目前版本：</b> v6.1.0 Shopee Ops Pro</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -1192,6 +1193,42 @@ let storesData = JSON.parse(localStorage.getItem('shopee_custom_stores_data') ||
   {"name": "信義逸仙-智取店", "address": "台北市信義區逸仙路42巷12之1號1樓", "tags": ["純取店"], "notes": ""},
   {"name": "信義松信-智取店", "address": "台北市信義區松信路101號1樓", "tags": ["⭐重點店", "SCS HD打包", "HD上架"], "notes": ""}
 ];
+
+function normalizeStoresData(data) {
+  if (!Array.isArray(data)) return [];
+  return data.filter(store => store && typeof store === 'object' && String(store.name || '').trim()).map(store => {
+    const notes = String(store.notes || '').trim();
+    const tags = Array.isArray(store.tags)
+      ? [...new Set(store.tags.map(tag => String(tag || '').trim()).filter(Boolean))]
+      : [];
+    // 相容舊版：過去「中正速配倉」可能只寫在備註，6.1.0 將其補回任務標籤。
+    if (notes.includes('中正速配倉') && !tags.includes('中正速配倉')) tags.push('中正速配倉');
+    return {
+      name: String(store.name).trim(),
+      address: String(store.address || '').trim(),
+      tags,
+      notes
+    };
+  });
+}
+
+function reloadStoresDataFromStorage() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('shopee_custom_stores_data') || 'null');
+    if (Array.isArray(saved)) storesData = normalizeStoresData(saved);
+  } catch (error) {
+    console.warn('門市資料格式異常，沿用目前資料：', error);
+  }
+  populateShopOptions();
+  populateReportStoreDatalist();
+  renderStoreManageList();
+  updateStoreInfo();
+  applyShiftLock();
+  renderTodayDashboard();
+}
+
+storesData = normalizeStoresData(storesData);
+localStorage.setItem('shopee_custom_stores_data', JSON.stringify(storesData));
 
 function switchMainTab(tabId, btn) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -1801,13 +1838,61 @@ function finishReport() {
 /**
  * 📍 門市與任務標籤動態管理中心邏輯
  */
+function escapeStoreHTML(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  })[char]);
+}
+
+function getStoreNameIdentity(name) {
+  return String(name || '').trim().replace(/-?智取店$/u, '').toLocaleLowerCase('zh-TW');
+}
+
+function migrateStoreNameReferences(oldName, newName) {
+  const oldIdentity = getStoreNameIdentity(oldName);
+  if (!oldIdentity || oldName === newName) return;
+
+  const renameValue = value => {
+    if (typeof value !== 'string') return value;
+    return value.split(/([\/\n])/).map(part => {
+      if (part === '/' || part === '\n') return part;
+      return getStoreNameIdentity(part) === oldIdentity ? newName : part;
+    }).join('');
+  };
+
+  const migrateObject = value => {
+    if (Array.isArray(value)) return value.map(migrateObject);
+    if (!value || typeof value !== 'object') return value;
+    Object.keys(value).forEach(key => {
+      if (['loc', 'supportLocs', 'routeOrder', 'shopName'].includes(key)) {
+        value[key] = Array.isArray(value[key]) ? value[key].map(renameValue) : renameValue(value[key]);
+      } else if (value[key] && typeof value[key] === 'object') {
+        migrateObject(value[key]);
+      }
+    });
+    return value;
+  };
+
+  Object.keys(localStorage).filter(key => key.startsWith('shopee_')).forEach(key => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key));
+      localStorage.setItem(key, JSON.stringify(migrateObject(parsed)));
+    } catch (_) {
+      // 非 JSON 的設定值保持原狀。
+    }
+  });
+
+  const currentInput = document.getElementById('shopName');
+  if (currentInput && getStoreNameIdentity(currentInput.value) === oldIdentity) currentInput.value = newName;
+}
+
 function renderStoreManageList() {
   const container = document.getElementById('settings-store-list-container');
   const searchInput = document.getElementById('settings-store-search');
   if (!container) return;
 
   const keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
-  const filtered = storesData.filter(s => s.name.toLowerCase().includes(keyword) || s.address.toLowerCase().includes(keyword));
+  const filtered = storesData.filter(s => String(s.name || '').toLowerCase().includes(keyword) || String(s.address || '').toLowerCase().includes(keyword));
 
   if (filtered.length === 0) {
     container.innerHTML = '<div style="text-align:center; padding:15px; color:var(--ops-muted); font-size:13px;">找不到符合的門市</div>';
@@ -1815,11 +1900,14 @@ function renderStoreManageList() {
   }
 
   container.innerHTML = filtered.map((store) => {
-    const originalIndex = storesData.findIndex(s => s.name === store.name);
+    const originalIndex = storesData.indexOf(store);
+    const safeName = escapeStoreHTML(store.name);
+    const safeAddress = escapeStoreHTML(store.address || '無地址');
+    const safeTags = escapeStoreHTML((store.tags || []).join(', ') || '無');
     return `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid var(--ops-border); background:var(--ops-surface); border-radius:6px; margin-bottom:4px;">
       <div>
-        <div style="font-weight:bold; font-size:13px; color:var(--ops-text);">${store.name}</div>
-        <div style="font-size:11px; color:var(--ops-muted);">${store.address || '無地址'} | 標籤: ${(store.tags || []).join(', ') || '無'}</div>
+        <div style="font-weight:bold; font-size:13px; color:var(--ops-text);">${safeName}</div>
+        <div style="font-size:11px; color:var(--ops-muted);">${safeAddress} | 標籤: ${safeTags}</div>
       </div>
       <div style="display:flex; gap:4px;">
         <button class="badge-btn" style="padding:4px 8px; font-size:11px; background:var(--ops-info);" onclick="openStoreEditModal(${originalIndex})">編輯</button>
@@ -1875,6 +1963,14 @@ function saveStoreModalData() {
     return;
   }
 
+  const duplicateIndex = storesData.findIndex((store, storeIndex) =>
+    storeIndex !== index && getStoreNameIdentity(store.name) === getStoreNameIdentity(name)
+  );
+  if (duplicateIndex >= 0) {
+    showToast(`⚠️ 門市名稱重複：${storesData[duplicateIndex].name}`);
+    return;
+  }
+
   const tags = [];
   document.querySelectorAll('.store-tag-cb').forEach(cb => {
     if (cb.checked) tags.push(cb.value);
@@ -1883,6 +1979,8 @@ function saveStoreModalData() {
   const storeObj = { name, address, tags, notes };
 
   if (index >= 0) {
+    const oldName = storesData[index]?.name || '';
+    if (oldName && oldName !== name) migrateStoreNameReferences(oldName, name);
     storesData[index] = storeObj;
     showToast(`💾 已成功更新門市：${name}`);
   } else {
@@ -1897,20 +1995,36 @@ function saveStoreModalData() {
   populateReportStoreDatalist();
   updateStoreInfo();
   applyShiftLock();
+  renderTodayDashboard();
   syncScheduleToDrive();
 }
 
+let pendingStoreDeleteIndex = -1;
+let pendingStoreDeleteTimer = null;
+
 function deleteStoreItem(index) {
-  if (index >= 0 && index < storesData.length) {
-    const storeName = storesData[index].name;
-    storesData.splice(index, 1);
-    localStorage.setItem('shopee_custom_stores_data', JSON.stringify(storesData));
-    showToast(`🗑️ 已刪除門市：${storeName}`);
-    renderStoreManageList();
-    populateShopOptions();
-    populateReportStoreDatalist();
-    syncScheduleToDrive();
+  if (index < 0 || index >= storesData.length) return;
+  const storeName = storesData[index].name;
+
+  if (pendingStoreDeleteIndex !== index) {
+    pendingStoreDeleteIndex = index;
+    clearTimeout(pendingStoreDeleteTimer);
+    pendingStoreDeleteTimer = setTimeout(() => { pendingStoreDeleteIndex = -1; }, 4000);
+    showToast(`⚠️ 確定刪除「${storeName}」？請在 4 秒內再按一次刪除`);
+    return;
   }
+
+  clearTimeout(pendingStoreDeleteTimer);
+  pendingStoreDeleteIndex = -1;
+  storesData.splice(index, 1);
+  localStorage.setItem('shopee_custom_stores_data', JSON.stringify(storesData));
+  showToast(`🗑️ 已刪除門市：${storeName}`);
+  renderStoreManageList();
+  populateShopOptions();
+  populateReportStoreDatalist();
+  updateStoreInfo();
+  renderTodayDashboard();
+  syncScheduleToDrive();
 }
 
 function switchScheduleView(view) {
