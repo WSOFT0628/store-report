@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店科目回報與排班系統v4.2.3</title>
+<title>蝦皮智取店勤務助手 v5.2.2</title>
 
 <!-- 引入 SheetJS 解析 Excel -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  
@@ -14,9 +14,6 @@
 
 <!-- ☁️ Google Drive AppData 自動同步與靜默認證腳本 -->
 <script>
-  /* ==========================================================================
-     【Google Drive AppData 自動同步與自動還原連線邏輯】
-     ========================================================================== */
   const CLIENT_ID = '879549181954-r1eai9agafnkp69o0cgbfcttegh39vju.apps.googleusercontent.com';
   const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
   const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
@@ -26,7 +23,7 @@
   let gsisInited = false;
 
   function gapiLoaded() {
-      gapi.load('client', initializeGapiClient);
+      try { gapi.load('client', initializeGapiClient); } catch(e) {}
   }
 
   async function initializeGapiClient() {
@@ -79,17 +76,21 @@
 
   function maybeEnableSyncUI() {
       if (gapiInited && gsisInited) {
-          console.log("[v4.2.3] Google Drive API SDK 初始化成功！");
           const loginBtn = document.getElementById('gdrive-login-btn');
           if (loginBtn) loginBtn.style.opacity = '1';
 
-          if (!sessionStorage.getItem('gdrive_access_token')) {
-              tokenClient.requestAccessToken({ prompt: '' });
+          if (!sessionStorage.getItem('gdrive_access_token') && tokenClient) {
+              try { tokenClient.requestAccessToken({ prompt: '' }); } catch(e) {}
           }
       }
   }
 
   function handleAuthClick() {
+      if (window.location.protocol === 'file:') {
+          showToast("⚠️ 本地檔案 (file://) 開啟無法使用 Google 雲端登入！\n請將網頁託管於 GitHub Pages 或使用 Live Server 開啟。");
+          return;
+      }
+
       if (!gsisInited || !tokenClient) {
           showToast("⏳ Google 服務加載中，請稍後再試...");
           return;
@@ -102,12 +103,8 @@
       }
   }
 
-  /* ==========================================================================
-     【Google Drive 全系統資料備份上傳與下載】
-     ========================================================================== */
-
   async function syncScheduleToDrive() {
-    if (!gapiInited || !gapi.client.getToken()) return;
+    if (!gapiInited || !gapi.client || !gapi.client.getToken()) return;
 
     try {
       showToast("☁️ 正在同步資料至 Google 雲端...");
@@ -175,7 +172,7 @@
   }
 
   async function pullScheduleFromDrive() {
-    if (!gapiInited || !gapi.client.getToken()) return;
+    if (!gapiInited || !gapi.client || !gapi.client.getToken()) return;
 
     try {
       const response = await gapi.client.drive.files.list({
@@ -220,7 +217,6 @@
 </script>
 
 <style>
-  /* 全域基礎樣式 */
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f5f7; margin: 0; padding: 0; color: #333; }
   
   .main-header { background-color: #2c3e50; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
@@ -266,7 +262,6 @@
   .btn-sync-header:hover { background: #1b5e20; }
   .btn-sync-header:active { transform: scale(0.97); }
 
-  /* 📍 支援門市追加按鈕 */
   .btn-add-support {
     background: #1565c0;
     color: #ffffff;
@@ -284,7 +279,6 @@
   .btn-add-support:hover { background: #0d47a1; }
   .btn-add-support:active { transform: scale(0.98); }
 
-  /* 可點擊式進度標籤 (Draft Pills) */
   .draft-badge {
     display: inline-block;
     background: #e3f2fd;
@@ -336,25 +330,9 @@
   .week-card.is-off { background: #f2f3f5; border-color: #e0e0e0; }
   .week-card.is-off .loc-lbl { color: #7f8c8d; }
 
-  /* 日檢視點擊卡片與 hover 效果 */
-  .day-card-clickable {
-    background: #fdfdfd;
-    border: 2px dashed #64b5f6;
-    border-radius: 10px;
-    padding: 16px;
-    margin: 15px 0;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    position: relative;
-  }
-  .day-card-clickable:hover {
-    background: #e3f2fd;
-    border-color: #2196f3;
-    box-shadow: 0 3px 10px rgba(33, 150, 243, 0.2);
-    transform: translateY(-2px);
-  }
+  .day-card-clickable { background: #fdfdfd; border: 2px dashed #64b5f6; border-radius: 10px; padding: 16px; margin: 15px 0; cursor: pointer; transition: all 0.2s ease; position: relative; }
+  .day-card-clickable:hover { background: #e3f2fd; border-color: #2196f3; box-shadow: 0 3px 10px rgba(33, 150, 243, 0.2); transform: translateY(-2px); }
 
-  /* 支援門市亮藍色文字樣式 */
   .support-store-text { color: #1976d2 !important; font-weight: bold; }
 
   .calendar-cell { min-height: 60px; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px 2px; background: #fff; font-size: 11px; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; overflow: hidden; transition: all 0.15s ease; }
@@ -369,51 +347,127 @@
   .modal-overlay.active { display: flex; }
   .modal-card { background: white; width: 88%; max-width: 380px; border-radius: 12px; padding: 18px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
 
-  .site-footer { margin-top: 30px; padding: 20px 15px; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid #e1e4e8; background-color: #ffffff; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 18px; font-size: 12px; color: #57606a; }
+  .site-footer { margin-top: 30px; padding: 16px 15px; padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid #e1e4e8; background-color: #ffffff; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 16px; font-size: 12px; color: #57606a; }
   .site-footer .brand-info { display: flex; align-items: center; gap: 6px; font-weight: 600; color: #24292f; }
-  .site-footer a { color: #0969da; text-decoration: none; transition: color 0.2s; }
+  .site-footer .divider { color: #d0d7de; }
 
-  @media (max-width: 600px) {
-    .tab-content { padding: 8px; }
-    .card { padding: 10px; }
-    .schedule-grid { gap: 2px; }
-    .schedule-grid-head { font-size: 10px; padding: 4px 0; }
-    .week-card { min-height: 65px; padding: 2px; }
-    .week-card .loc-lbl { font-size: 10px; }
-    .week-card .time-lbl { font-size: 9px; }
-    .calendar-cell { min-height: 52px; padding: 2px; }
-    .calendar-cell .day-num { font-size: 10px; }
-    .calendar-cell .day-loc { font-size: 9px; -webkit-line-clamp: 2; }
-    .site-footer { gap: 8px 12px; font-size: 11px; }
-    .storage-btn-group button { min-width: 45%; }
-  }
-
-  #toast-container { position: fixed; bottom: calc(25px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 9999; pointer-events: none; }
+  #toast-container { position: fixed; bottom: calc(75px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 9999; pointer-events: none; }
   .toast { background: rgba(33, 33, 33, 0.9); color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.15); margin-top: 8px; opacity: 0; transform: translateY(10px); transition: all 0.3s ease; text-align: center; white-space: pre-line; }
   .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* 工作台 UI 風格 */
+  .workspace { max-width: 920px; margin: 0 auto; }
+  .today-hero { color: #fff; background: linear-gradient(135deg,#ee4d2d,#ff784e); padding: 20px; border-radius: 0 0 22px 22px; box-shadow: 0 8px 24px rgba(238,77,45,.22); display: flex; justify-content: space-between; align-items: center; }
+  .today-date { margin: 0 0 6px; font-size: 13px; opacity: .9; }
+  .today-title { margin: 0; font-size: 23px; }
+  
+  .live-clock-box { text-align: right; background: rgba(255,255,255,0.22); padding: 12px 18px; border-radius: 16px; backdrop-filter: blur(6px); cursor: pointer; transition: all 0.2s; user-select: none; border: 1px solid rgba(255,255,255,0.3); }
+  .live-clock-box:hover { background: rgba(255,255,255,0.32); transform: scale(1.02); }
+  .live-clock-time { font-size: 28px; font-weight: 900; letter-spacing: 1px; line-height: 1.1; }
+  .live-clock-meta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 3px; font-size: 12px; font-weight: 700; opacity: 0.95; }
+  .clock-mode-badge { background: rgba(0,0,0,0.25); padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+
+  .status-badge { display:inline-flex; align-items:center; gap:6px; margin-top:12px; padding:5px 12px; border-radius:99px; background:rgba(255,255,255,.2); font-size:12px; font-weight:bold; backdrop-filter: blur(4px); }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .status-dot.online { background-color: #00e676; box-shadow: 0 0 8px #00e676; animation: pulse-green 2s infinite; }
+  .status-dot.offline { background-color: #ff3d00; box-shadow: 0 0 8px #ff3d00; }
+
+  @keyframes pulse-green {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(0, 230, 118, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); }
+  }
+
+  .today-card { margin-top: 14px; }
+  .today-loc { font-size:20px; font-weight:800; color:#d84315; margin:8px 0; }
+  .today-meta { color:#667085; font-size:13px; }
+  .primary-action { width:100%; border:0; border-radius:10px; padding:13px 16px; background:#ee4d2d; color:#fff; font-weight:800; font-size:15px; cursor:pointer; }
+  .secondary-action { width:100%; border:1px solid #ee4d2d; border-radius:10px; padding:11px 14px; background:#fff; color:#d84315; font-weight:800; cursor:pointer; }
+  .report-group { margin-bottom:12px; border:1px solid #e4e7ec; border-radius:12px; background:#fff; overflow:hidden; }
+  .report-group-toggle { width:100%; display:flex; align-items:center; justify-content:space-between; border:0; background:#fff; padding:14px 15px; text-align:left; cursor:pointer; }
+  .report-group-title { font-size:15px; font-weight:800; color:#344054; }
+  .report-group-meta { color:#667085; font-size:12px; }
+  .report-group-body { display:none; padding:0 10px 2px; }
+  .report-group.open .report-group-body { display:block; }
+  .report-group.open .report-group-chevron { transform:rotate(180deg); }
+  .report-group .card { box-shadow:none; border:1px solid #f0f1f3; }
+  .report-group-chevron { transition:.2s; }
+  .bottom-action-bar { position:sticky; bottom:0; z-index:900; display:flex; align-items:center; gap:8px; padding:10px max(10px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left)); background:rgba(255,255,255,.96); border-top:1px solid #e4e7ec; box-shadow:0 -5px 18px rgba(0,0,0,.08); }
+  .bottom-action-bar .progress-label { min-width:72px; color:#475467; font-size:12px; font-weight:700; }
+  .bottom-action-bar button { flex:1; border:0; border-radius:9px; padding:11px 8px; font-weight:800; cursor:pointer; }
+  .btn-preview { background:#fff3ef; color:#d84315; }
+  .btn-finish { background:#ee4d2d; color:#fff; }
+  .settings-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+  .settings-grid button { padding:14px 8px; border:1px solid #e4e7ec; background:#fff; border-radius:10px; font-weight:700; cursor:pointer; }
+
+  .report-filter-panel { background: #f8f9fa; border: 1px solid #e1e4e8; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  .filter-row { display: flex; align-items: center; border-bottom: 1px solid #eee; padding: 8px 0; font-size: 13px; }
+  .filter-row:last-child { border-bottom: none; }
+  .filter-title { width: 90px; font-weight: bold; color: #444; }
+  .filter-content { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .badge-btn { background: #007bff; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: pointer; }
+  .badge-btn:hover { background: #0056b3; }
+
+  @media (min-width: 760px) { .today-hero { margin-top:15px; border-radius:22px; } }
 </style>
 </head>
 <body>
 
 <div id="toast-container"></div>
 
-<!-- 全域頂部標題與導覽列 -->
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: center;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店科目回報與排班系統 v4.2.3
+      📦 蝦皮智取店勤務助手 v5.2.2
     </h1>
   </div>
   <div class="main-nav">
-    <button class="nav-btn active" onclick="switchMainTab('report-tab', this)">📋 巡店回報</button>
-    <button class="nav-btn" onclick="switchMainTab('schedule-tab', this)">📅 班表管理</button>
+    <button class="nav-btn active" onclick="switchMainTab('today-tab', this)">今日</button>
+    <button class="nav-btn" onclick="switchMainTab('report-tab', this)">回報</button>
+    <button class="nav-btn" onclick="switchMainTab('schedule-tab', this)">班表</button>
+    <button class="nav-btn" onclick="switchMainTab('settings-tab', this)">設定</button>
   </div>
+</div>
+
+<main class="workspace">
+<div id="today-tab" class="tab-content active" style="padding-top:0;">
+  <section class="today-hero">
+    <div>
+      <p class="today-date" id="today-date-label">今天</p>
+      <h2 class="today-title">今日勤務</h2>
+      <div class="status-badge" id="today-sync-badge">
+        <span class="status-dot online" id="today-status-dot"></span>
+        <span id="today-sync-text">檢查中...</span>
+      </div>
+    </div>
+    <div class="live-clock-box" onclick="toggleClockFormat()" title="點擊切換 12H / 24H 制">
+      <div class="live-clock-time" id="live-clock-time">--:--:--</div>
+      <div class="live-clock-meta">
+        <span id="live-clock-ampm">上午</span>
+        <span class="clock-mode-badge" id="live-clock-mode">24H</span>
+      </div>
+    </div>
+  </section>
+  
+  <section class="card today-card">
+    <div class="today-meta" id="today-shift-label">尚未設定班別</div>
+    <div class="today-loc" id="today-location-label">今日尚未排班</div>
+    <div class="today-meta" id="today-progress-label">可以前往班表新增今日勤務</div>
+    <div style="display:grid;gap:8px;margin-top:16px;">
+      <button class="primary-action" id="today-start-btn" onclick="startTodayReport()">開始今日巡店</button>
+      <button class="secondary-action" onclick="openTodaySchedule()">查看／編輯今日班表</button>
+    </div>
+  </section>
+  <section class="card">
+    <h3>今日提醒</h3>
+    <div id="today-reminders" style="font-size:13px;line-height:1.8;color:#475467;">完成排班後，系統會在這裡整理今日門市與勤務提醒。</div>
+  </section>
 </div>
 
 <!-- ==========================================================================
      【頁籤一：巡店回報系統 】
      ========================================================================== -->
-<div id="report-tab" class="tab-content active">
+<div id="report-tab" class="tab-content">
 
   <h2 style="color: #ee4d2d; font-size: 16px; text-align: center; margin: 5px 0 15px 0;">📋 巡店門市填表與回報區</h2>
 
@@ -436,7 +490,6 @@
   <div class="card" style="background: #fff8f6; border: 1px solid #ffccbc;">
     <h3 style="color: #e65100; border-bottom-color: #ffab91;">基本資訊</h3>
     
-    <!-- 📍 佈局優化：將日期與班別獨立一行，門市與追加按鈕獨立一行，解決手機擠壓與選單無法彈出問題 -->
     <div class="row">
       <div>
         <label>月/日 (自動帶入當天)</label>
@@ -458,11 +511,6 @@
         <button class="btn-add-support" onclick="addCurrentStoreToScheduleSupport()">+ 追加至今日班表</button>
       </div>
       <datalist id="shopList"></datalist>
-    </div>
-
-    <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #ffe0b2;">
-      <input type="checkbox" id="unlockOverride" onchange="applyShiftLock(); autoSave();" style="width: auto; margin: 0;">
-      <label for="unlockOverride" style="margin: 0; color: #d84315; cursor: pointer; font-size: 13px;">🔓 解鎖所有欄位 (允許跨班別臨時修改)</label>
     </div>
 
     <div id="storeDetailCard" style="margin-top: 12px; padding: 10px; background: #ffffff; border-radius: 8px; border: 1px dashed #ffab91; display: none;">
@@ -729,7 +777,7 @@
     </div>
   </div>
 
-  <!-- 日檢視模式 (已移除下方巨大編輯按鈕，改為點擊整張卡片編輯) -->
+  <!-- 日檢視模式 -->
   <div id="day-view-container" class="card" style="display:none;">
     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #bbdefb; padding-bottom: 5px;">
       <h3 style="color: #2196f3; border-bottom: none; margin: 0;">本日勤務</h3>
@@ -765,11 +813,71 @@
 
 </div>
 
+<!-- 📍 設定頁面：專業報表生成與自由輸入指定門市篩選 -->
+<div id="settings-tab" class="tab-content">
+  <h2 style="color:#ee4d2d;font-size:18px;margin:6px 0 15px;">設定與資料</h2>
+  
+  <div class="card">
+    <h3>☁️ 雲端與備份管理</h3>
+    <div class="settings-grid">
+      <button onclick="handleAuthClick()">連接 Google 雲端</button>
+      <button onclick="syncScheduleToDrive()">寫入並同步至雲端</button>
+      <button onclick="exportBackupData()">下載本機備份檔</button>
+      <button onclick="importBackupData()">還原 JSON 備份檔</button>
+      <button onclick="document.getElementById('excel-file-input').click()" style="grid-column: span 2;">📊 匯入 Excel 班表 (.xlsx)</button>
+    </div>
+  </div>
+
+  <!-- 📍 工作日報表生成中心 -->
+  <div class="card" style="border: 1px solid #a5d6a7;">
+    <h3 style="color: #2e7d32; border-bottom-color: #c8e6c9;">📊 工作日報表生成與篩選中心</h3>
+    
+    <div class="report-filter-panel">
+      <div class="filter-row">
+        <div class="filter-title">統計區間</div>
+        <div class="filter-content">
+          <button class="badge-btn" onclick="setReportRange('today')">今天</button>
+          <button class="badge-btn" onclick="setReportRange('week')">本週</button>
+          <button class="badge-btn" onclick="setReportRange('lastWeek')">上週</button>
+          <button class="badge-btn" onclick="setReportRange('month')">本月</button>
+          <input type="date" id="report-start-date" style="width: 140px; padding: 4px; font-size: 12px;">
+          <span>至</span>
+          <input type="date" id="report-end-date" style="width: 140px; padding: 4px; font-size: 12px;">
+        </div>
+      </div>
+
+      <div class="filter-row">
+        <div class="filter-title">統計範圍</div>
+        <div class="filter-content">
+          <label style="display:inline-flex; align-items:center; gap:4px; font-weight:normal; cursor:pointer;"><input type="radio" name="reportScope" value="all" checked onchange="toggleScopeInput(false)"> 全部門市</label>
+          <label style="display:inline-flex; align-items:center; gap:4px; font-weight:normal; cursor:pointer; margin-left:12px;"><input type="radio" name="reportScope" value="specific" onchange="toggleScopeInput(true)"> 指定門市</label>
+          
+          <!-- 📍 自由輸入與選單並存的輸入框 -->
+          <input type="text" id="report-specific-store" list="reportStoreList" placeholder="選擇或輸入店名" style="display:none; width: 180px; padding: 4px; font-size: 12px; margin-left: 8px;">
+          <datalist id="reportStoreList"></datalist>
+        </div>
+      </div>
+    </div>
+
+    <button class="primary-action" style="background: #2e7d32; margin-top: 5px;" onclick="generateAdvancedTextReport()">📋 產出並複製自訂工作日報表</button>
+  </div>
+
+  <!-- 進階解鎖開關 -->
+  <div class="card">
+    <h3 style="color: #d84315;">🛠️ 進階偏好設定</h3>
+    <div style="display: flex; align-items: center; gap: 10px; background: #fff8f6; padding: 10px; border-radius: 8px; border: 1px solid #ffccbc;">
+      <input type="checkbox" id="unlockOverride" onchange="applyShiftLock();" style="width: auto; margin: 0;">
+      <label for="unlockOverride" style="margin: 0; color: #d84315; cursor: pointer; font-size: 13px;">🔓 解鎖所有表單欄位 (允許跨班別臨時修改)</label>
+    </div>
+  </div>
+</div>
+</main>
+
 <!-- 全域頁尾 Footer -->
 <footer class="site-footer">
   <div class="brand-info">
     <span>📦 蝦皮智取店回報與排班系統</span>
-    <span>v4.2.3 (Mobile Layout & UX)</span>
+    <span>v5.2.2</span>
   </div>
   <span class="divider">•</span>
   <span>© 2026 Developed by <b>willy huang (WSOFT)</b></span>
@@ -777,21 +885,12 @@
   <span id="system-status-text">系統狀態：<span style="color:#2ea44f; font-weight:bold;">● 檢測中...</span></span>
   <span class="divider">•</span>
   <span id="storage-usage-text" style="color:#666;">容量：計算中...</span>
-  <span class="divider">•</span>
-  <span id="google-sync-box">
-    <button id="gdrive-login-btn" onclick="handleAuthClick()" style="background:#4285f4; color:white; border:none; padding:4px 10px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold;">☁️ 登入 Google 雲端</button>
-  </span>
-  <span class="divider">•</span>
-  <a href="javascript:void(0)" onclick="document.getElementById('excel-file-input').click()" style="color:#2e7d32; font-weight:bold;">📊 匯入 Excel 班表</a>
+  
   <input type="file" id="excel-file-input" style="display:none;" onchange="handleExcelImport(event)" accept=".xlsx, .xls">
-  <span class="divider">•</span>
-  <a href="javascript:void(0)" onclick="exportBackupData()">💾 本機備份</a>
-  <span class="divider">•</span>
-  <a href="javascript:void(0)" onclick="importBackupData()">📂 本機還原</a>
   <input type="file" id="backup-file-input" style="display:none;" onchange="handleFileImport(event)" accept=".json">
 </footer>
 
-<!-- 編輯 Modal 彈窗 (📍 拆分預定門市與支援追加門市) -->
+<!-- 編輯 Modal 彈窗 -->
 <div id="edit-day-modal" class="modal-overlay">
   <div class="modal-card">
     <h3 id="modal-date-title" style="margin-top:0; color:#ee4d2d; font-size:16px;">編輯排班</h3>
@@ -835,6 +934,7 @@
 
 let currentDraftKey = 'shopee_report_draft_1';
 let currentSelectedDayKey = new Date().toISOString().split('T')[0];
+let is12HourFormat = localStorage.getItem('clock_format_12h') === 'true';
 
 const storesData = [
   {"name": "中正台大店", "address": "台北市中正區羅斯福路三段304號", "tags": ["👤有人店", "NDD打包", "FBS打包"], "notes": "中正速配倉"},
@@ -889,7 +989,338 @@ function switchMainTab(tabId, btn) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
   document.getElementById(tabId).classList.add('active');
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (tabId === 'today-tab') renderTodayDashboard();
+  if (tabId === 'settings-tab') populateReportStoreDatalist();
+}
+
+function navButtonFor(tabId) {
+  return Array.from(document.querySelectorAll('.nav-btn')).find(btn =>
+    btn.getAttribute('onclick')?.includes(`'${tabId}'`)
+  );
+}
+
+/**
+ * 📍 即時動態時鐘更新機制
+ */
+function initLiveClock() {
+  function updateClock() {
+    const now = new Date();
+    let hours = now.getHours();
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    
+    let timeStr = "";
+    let periodStr = "";
+    
+    if (is12HourFormat) {
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      periodStr = hours >= 12 ? '下午' : '上午';
+      let h12 = hours % 12;
+      h12 = h12 ? h12 : 12;
+      timeStr = `${String(h12).padStart(2, '0')}:${minutes}:${seconds} ${ampm}`;
+    } else {
+      periodStr = (hours >= 6 && hours < 18) ? '日間' : '夜間';
+      timeStr = `${String(hours).padStart(2, '0')}:${minutes}:${seconds}`;
+    }
+
+    const timeEl = document.getElementById('live-clock-time');
+    const ampmEl = document.getElementById('live-clock-ampm');
+    const modeEl = document.getElementById('live-clock-mode');
+    
+    if (timeEl) timeEl.textContent = timeStr;
+    if (ampmEl) ampmEl.textContent = periodStr;
+    if (modeEl) modeEl.textContent = is12HourFormat ? '12H' : '24H';
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+}
+
+function toggleClockFormat() {
+  is12HourFormat = !is12HourFormat;
+  localStorage.setItem('clock_format_12h', is12HourFormat);
+  showToast(`⏰ 已切換為 ${is12HourFormat ? '12 小時制' : '24 小時制'}`);
+}
+
+function renderTodayDashboard() {
+  const now = new Date();
+  const todayKey = formatDateISO(now);
+  const weekNames = ['日','一','二','三','四','五','六'];
+  const schedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const dayData = schedule[todayKey];
+  const dateLabel = document.getElementById('today-date-label');
+  const locLabel = document.getElementById('today-location-label');
+  const shiftLabel = document.getElementById('today-shift-label');
+  const progressLabel = document.getElementById('today-progress-label');
+  const reminderBox = document.getElementById('today-reminders');
+  const startBtn = document.getElementById('today-start-btn');
+  
+  const statusDot = document.getElementById('today-status-dot');
+  const syncText = document.getElementById('today-sync-text');
+
+  if (dateLabel) {
+    dateLabel.textContent = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日・星期${weekNames[now.getDay()]}`;
+  }
+  
+  if (statusDot && syncText) {
+    if (navigator.onLine) {
+      statusDot.className = 'status-dot online';
+      syncText.textContent = '連線正常・雲端與本機同步';
+    } else {
+      statusDot.className = 'status-dot offline';
+      syncText.textContent = '離線模式・資料暫存於本機';
+    }
+  }
+
+  if (!dayData || (!dayData.loc && !(dayData.supportLocs || []).length)) {
+    if (locLabel) locLabel.textContent = '今日尚未排班';
+    if (shiftLabel) shiftLabel.textContent = '尚未設定班別';
+    if (progressLabel) progressLabel.textContent = '可以先新增今日勤務，再開始巡店回報。';
+    if (reminderBox) reminderBox.textContent = '完成排班後，系統會在這裡整理今日門市與勤務提醒。';
+    if (startBtn) {
+      startBtn.textContent = '建立今日班表';
+      startBtn.onclick = openTodaySchedule;
+    }
+    return;
+  }
+
+  if (dayData.isOff || String(dayData.loc || '').toUpperCase() === 'X') {
+    if (locLabel) locLabel.textContent = '今天休假';
+    if (shiftLabel) shiftLabel.textContent = '無勤務安排';
+    if (progressLabel) progressLabel.textContent = '好好休息，明天再繼續。';
+    if (reminderBox) reminderBox.textContent = '今日沒有巡店任務。';
+    if (startBtn) {
+      startBtn.textContent = '查看班表';
+      startBtn.onclick = openTodaySchedule;
+    }
+    return;
+  }
+
+  const locations = [dayData.loc, ...(dayData.supportLocs || [])].filter(Boolean);
+  const draftCount = locations.slice(0,5).filter((_, i) => {
+    try { return Boolean(JSON.parse(localStorage.getItem(`shopee_report_draft_${i+1}`) || '{}').shopName); }
+    catch(e) { return false; }
+  }).length;
+  if (locLabel) locLabel.textContent = locations.join(' → ');
+  if (shiftLabel) shiftLabel.textContent = dayData.t1 ? `勤務時間／班別：${dayData.t1}` : '勤務時間尚未設定';
+  if (progressLabel) progressLabel.textContent = `共 ${locations.length} 家門市・已建立 ${draftCount} 份巡店草稿`;
+  if (reminderBox) reminderBox.innerHTML = locations.map((loc, i) => `${i+1}. ${loc}`).join('<br>');
+  if (startBtn) {
+    startBtn.textContent = draftCount ? '繼續今日巡店' : '開始今日巡店';
+    startBtn.onclick = startTodayReport;
+  }
+}
+
+function openTodaySchedule() {
+  currentSelectedDayKey = formatDateISO(new Date());
+  switchMainTab('schedule-tab', navButtonFor('schedule-tab'));
+  switchScheduleView('day');
+}
+
+function startTodayReport() {
+  currentSelectedDayKey = formatDateISO(new Date());
+  const schedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const dayData = schedule[currentSelectedDayKey];
+  if (dayData && (dayData.loc || (dayData.supportLocs || []).length)) {
+    syncCurrentDayScheduleToReportDraft();
+  } else {
+    switchMainTab('report-tab', navButtonFor('report-tab'));
+  }
+}
+
+/**
+ * 📍 動態填充指定門市 Datalist (支援自由手動輸入與自動選單)
+ */
+function populateReportStoreDatalist() {
+  const datalist = document.getElementById('reportStoreList');
+  if (!datalist) return;
+  
+  const existingValues = new Set();
+  storesData.forEach(s => existingValues.add(s.name));
+
+  const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  Object.values(savedSchedule).forEach(day => {
+    if (day.loc) day.loc.split(/[\/\n]/).forEach(l => existingValues.add(l.trim()));
+    if (day.supportLocs) day.supportLocs.forEach(s => existingValues.add(s.trim()));
+  });
+
+  datalist.innerHTML = '';
+  Array.from(existingValues).sort().forEach(storeName => {
+    const opt = document.createElement('option');
+    opt.value = storeName;
+    datalist.appendChild(opt);
+  });
+}
+
+function setReportRange(type) {
+  const startInput = document.getElementById('report-start-date');
+  const endInput = document.getElementById('report-end-date');
+  if (!startInput || !endInput) return;
+
+  const today = new Date();
+  let start = new Date();
+  let end = new Date();
+
+  if (type === 'today') {
+    // 保持今天
+  } else if (type === 'week') {
+    start = getMonday(today);
+  } else if (type === 'lastWeek') {
+    let mon = getMonday(today);
+    mon.setDate(mon.getDate() - 7);
+    start = mon;
+    end = new Date(mon);
+    end.setDate(end.getDate() + 6);
+  } else if (type === 'month') {
+    start = new Date(today.getFullYear(), today.getMonth(), 1);
+  }
+
+  startInput.value = formatDateISO(start);
+  endInput.value = formatDateISO(end);
+}
+
+function toggleScopeInput(isSpecific) {
+  const inputEl = document.getElementById('report-specific-store');
+  if (!inputEl) return;
+  inputEl.style.display = isSpecific ? 'inline-block' : 'none';
+  if (isSpecific) {
+    populateReportStoreDatalist();
+  }
+}
+
+/**
+ * 📍 進階自訂報表生成 (支援完整年份與自由輸入指定門市)
+ */
+function generateAdvancedTextReport() {
+  const startStr = document.getElementById('report-start-date').value;
+  const endStr = document.getElementById('report-end-date').value;
+  const scopeRadio = document.querySelector('input[name="reportScope"]:checked');
+  const scopeType = scopeRadio ? scopeRadio.value : 'all';
+  const specificStore = document.getElementById('report-specific-store') ? document.getElementById('report-specific-store').value.trim() : '';
+
+  if (!startStr || !endStr) {
+    showToast('⚠️ 請完整選擇統計區間的起訖日期！');
+    return;
+  }
+
+  if (scopeType === 'specific' && !specificStore) {
+    showToast('⚠️ 請輸入或選擇要篩選的指定門市！');
+    return;
+  }
+
+  const startDate = new Date(startStr);
+  const endDate = new Date(endStr);
+  const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+
+  let reportLines = [`📦 蝦皮智取店 - 工作日報表 (${startStr} 至 ${endStr})\n`];
+  let recordCount = 0;
+
+  let cur = new Date(startDate);
+  while (cur <= endDate) {
+    let dateKey = formatDateISO(cur);
+    let dayData = savedSchedule[dateKey];
+
+    if (dayData) {
+      let isOff = dayData.isOff || (dayData.loc && dayData.loc.toUpperCase() === 'X');
+      let stores = [];
+      if (dayData.loc && !isOff) stores.push(dayData.loc);
+      if (dayData.supportLocs) stores = stores.concat(dayData.supportLocs);
+
+      if (scopeType === 'specific') {
+        const match = stores.some(s => s.includes(specificStore) || specificStore.includes(s));
+        if (!match) {
+          cur.setDate(cur.getDate() + 1);
+          continue;
+        }
+      }
+
+      let storeStr = isOff ? "休假" : (stores.join(' / ') + (dayData.t1 ? ` [${dayData.t1}]` : ''));
+      reportLines.push(`📅 ${dateKey}: ${storeStr}`);
+      recordCount++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  if (recordCount === 0) {
+    showToast('⚠️ 在此條件區間內找不到任何排班或支援紀錄！');
+    return;
+  }
+
+  const fullText = reportLines.join('\n');
+  copyText(fullText, '自訂工作日報表');
+}
+
+function buildReportGroups() {
+  if (document.querySelector('.report-group')) return;
+  const report = document.getElementById('report-tab');
+  if (!report) return;
+
+  const definitions = [
+    { title:'配送與上架', ids:['card_c4','card_c5','card_c10','card_c11','card_c14'] },
+    { title:'異常與滯留', ids:['card_c3','card_c6'] },
+    { title:'離店與空箱', ids:['card_c8'] },
+    { title:'其他勤務', ids:['card_c9','card_c12','card_c15'] }
+  ];
+  const firstCard = document.getElementById('card_c3');
+  if (!firstCard) return;
+
+  const anchor = document.createElement('div');
+  anchor.id = 'report-groups-anchor';
+  report.insertBefore(anchor, firstCard);
+  
+  definitions.forEach((group, index) => {
+    const wrapper = document.createElement('section');
+    wrapper.className = `report-group${index === 0 ? ' open' : ''}`;
+    wrapper.innerHTML = `<button type="button" class="report-group-toggle" onclick="toggleReportGroup(this)"><span><span class="report-group-title">${group.title}</span><br><span class="report-group-meta">點擊展開需要填寫的科目</span></span><span class="report-group-chevron">⌄</span></button><div class="report-group-body"></div>`;
+    anchor.before(wrapper);
+    const body = wrapper.querySelector('.report-group-body');
+    group.ids.forEach(id => { const card = document.getElementById(id); if (card) body.appendChild(card); });
+  });
+  anchor.remove();
+
+  const bar = document.createElement('div');
+  bar.className = 'bottom-action-bar';
+  bar.innerHTML = `<span class="progress-label" id="report-progress-label">檢查中</span><button class="btn-preview" onclick="previewReport()">預覽</button><button class="btn-finish" onclick="finishReport()">完成並複製</button>`;
+  report.appendChild(bar);
+  report.addEventListener('input', updateReportProgress);
+  report.addEventListener('change', updateReportProgress);
+  updateReportProgress();
+}
+
+function toggleReportGroup(button) {
+  button.closest('.report-group').classList.toggle('open');
+}
+
+function updateReportProgress() {
+  const cards = Array.from(document.querySelectorAll('#report-tab .card[data-shift]')).filter(card => !card.classList.contains('disabled-card'));
+  const complete = cards.filter(card => {
+    const fields = Array.from(card.querySelectorAll('input:not([type="checkbox"]):not([readonly]), select')).filter(el => !el.disabled && el.offsetParent !== null);
+    return fields.length && fields.every(el => String(el.value).trim() !== '');
+  }).length;
+  const label = document.getElementById('report-progress-label');
+  if (label) label.textContent = `完成 ${complete}/${cards.length}`;
+  document.querySelectorAll('.report-group').forEach(group => {
+    const groupCards = Array.from(group.querySelectorAll('.card[data-shift]')).filter(card => !card.classList.contains('disabled-card'));
+    const meta = group.querySelector('.report-group-meta');
+    if (meta) meta.textContent = groupCards.length ? `${groupCards.length} 個適用科目` : '本班別無適用科目';
+  });
+}
+
+function previewReport() {
+  const shop = getCleanShopName() || '尚未選擇門市';
+  const shift = document.getElementById('shift')?.value || '—';
+  const progress = document.getElementById('report-progress-label')?.textContent || '';
+  showToast(`📋 回報預覽\n${shop}・${shift}班\n${progress}`, 3500);
+}
+
+function finishReport() {
+  if (!document.getElementById('shopName').value.trim()) {
+    showToast('⚠️ 請先選擇巡店門市');
+    return;
+  }
+  saveDataAndSyncToSchedule(false);
+  copySupportReport();
+  renderTodayDashboard();
 }
 
 function switchScheduleView(view) {
@@ -898,12 +1329,17 @@ function switchScheduleView(view) {
     el.classList.toggle('active', idx === btnMap[view]);
   });
 
-  document.getElementById('day-view-container').style.display = view === 'day' ? 'block' : 'none';
-  document.getElementById('week-view-container').style.display = view === 'week' ? 'block' : 'none';
-  document.getElementById('month-view-container').style.display = view === 'month' ? 'block' : 'none';
+  const dayC = document.getElementById('day-view-container');
+  const weekC = document.getElementById('week-view-container');
+  const monthC = document.getElementById('month-view-container');
+  if (dayC) dayC.style.display = view === 'day' ? 'block' : 'none';
+  if (weekC) weekC.style.display = view === 'week' ? 'block' : 'none';
+  if (monthC) monthC.style.display = view === 'month' ? 'block' : 'none';
   
-  document.getElementById('week-control-box').style.display = view === 'month' ? 'none' : 'block';
-  document.getElementById('month-control-box').style.display = view === 'month' ? 'block' : 'none';
+  const wBox = document.getElementById('week-control-box');
+  const mBox = document.getElementById('month-control-box');
+  if (wBox) wBox.style.display = view === 'month' ? 'none' : 'block';
+  if (mBox) mBox.style.display = view === 'month' ? 'block' : 'none';
 
   if (view === 'day') renderDayView();
   if (view === 'week') loadWeekSchedule();
@@ -917,15 +1353,16 @@ function getMonday(d) {
 }
 
 function initWeekPicker() {
-  const monday = getMonday(new Date());
-  document.getElementById('week-picker').value = formatDateISO(monday);
+  const wp = document.getElementById('week-picker');
+  if (wp) wp.value = formatDateISO(getMonday(new Date()));
   
   const today = new Date();
-  const mStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
-  document.getElementById('month-picker').value = mStr;
+  const mp = document.getElementById('month-picker');
+  if (mp) mp.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
 
   updateHistoryDropdown();
   loadWeekSchedule();
+  setReportRange('week');
 }
 
 function onWeekPickerChange(selectedVal) {
@@ -938,6 +1375,7 @@ function onWeekPickerChange(selectedVal) {
 function updateHistoryDropdown() {
   const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
   const historyPicker = document.getElementById('history-picker');
+  if (!historyPicker) return;
   historyPicker.innerHTML = '<option value="">-- 選擇歷史週次 --</option>';
 
   const mondaySet = new Set();
@@ -957,7 +1395,8 @@ function updateHistoryDropdown() {
 
 function loadHistoryWeek(mondayStr) {
   if (!mondayStr) return;
-  document.getElementById('week-picker').value = mondayStr;
+  const wp = document.getElementById('week-picker');
+  if (wp) wp.value = mondayStr;
   currentSelectedDayKey = mondayStr;
   loadWeekSchedule();
   renderDayView();
@@ -997,13 +1436,15 @@ function renderStoreLocationHtml(dayData) {
 }
 
 function loadWeekSchedule() {
-  const mondayStr = document.getElementById('week-picker').value;
-  if (!mondayStr) return;
+  const wp = document.getElementById('week-picker');
+  if (!wp || !wp.value) return;
+  const mondayStr = wp.value;
 
   const parts = mondayStr.split('-').map(Number);
   const monday = new Date(parts[0], parts[1] - 1, parts[2]);
 
   const container = document.getElementById('week-cards-container');
+  if (!container) return;
   container.innerHTML = '';
 
   const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
@@ -1036,7 +1477,8 @@ function loadWeekSchedule() {
 
 let deleteWeekConfirmTimer = null;
 function deleteCurrentWeekSchedule() {
-  const mondayStr = document.getElementById('week-picker').value;
+  const wp = document.getElementById('week-picker');
+  const mondayStr = wp ? wp.value : '';
   if (!mondayStr) { showToast('⚠️ 請先選擇要刪除的週次！'); return; }
 
   if (deleteWeekConfirmTimer) {
@@ -1098,6 +1540,7 @@ function renderDayView() {
 
   const container = document.getElementById('day-schedule-info');
   const restoreBtn = document.getElementById('btn-load-report-data');
+  if (!container) return;
 
   if (todayData && (todayData.loc || (todayData.supportLocs && todayData.supportLocs.length > 0))) {
     if (todayData.isOff || (todayData.loc && todayData.loc.toUpperCase() === 'X')) {
@@ -1115,10 +1558,12 @@ function renderDayView() {
   }
 
   const historyKey = 'shopee_report_history_' + currentSelectedDayKey;
-  if (localStorage.getItem(historyKey)) {
-    restoreBtn.style.display = 'block';
-  } else {
-    restoreBtn.style.display = 'none';
+  if (restoreBtn) {
+    if (localStorage.getItem(historyKey)) {
+      restoreBtn.style.display = 'block';
+    } else {
+      restoreBtn.style.display = 'none';
+    }
   }
 }
 
@@ -1211,7 +1656,7 @@ function syncCurrentDayScheduleToReportDraft() {
     matchedCount++;
   });
 
-  switchMainTab('report-tab', document.querySelectorAll('.nav-btn')[0]);
+  switchMainTab('report-tab', navButtonFor('report-tab'));
   currentDraftKey = 'shopee_report_draft_1';
   loadData(false);
   updateDraftLabels();
@@ -1220,8 +1665,8 @@ function syncCurrentDayScheduleToReportDraft() {
 }
 
 function addCurrentStoreToScheduleSupport() {
-  const shopNameInput = document.getElementById('shopName').value.trim();
-  if (!shopNameInput) {
+  const shopNameInput = document.getElementById('shopName');
+  if (!shopNameInput || !shopNameInput.value.trim()) {
     showToast('⚠️ 請先選擇或輸入要追加的門市名稱！');
     return;
   }
@@ -1265,18 +1710,20 @@ function restoreReportDataToForm() {
     return;
   }
 
-  switchMainTab('report-tab', document.querySelectorAll('.nav-btn')[0]);
+  switchMainTab('report-tab', navButtonFor('report-tab'));
   localStorage.setItem(currentDraftKey, rawData);
   loadData(false);
   showToast(`📦 已成功帶入並還原 ${currentSelectedDayKey} 的巡店填表內容！`);
 }
 
 function renderMonthView() {
-  const monthVal = document.getElementById('month-picker').value;
-  if (!monthVal) return;
+  const mp = document.getElementById('month-picker');
+  if (!mp || !mp.value) return;
+  const monthVal = mp.value;
 
   const [year, month] = monthVal.split('-').map(Number);
   const container = document.getElementById('calendar-days-container');
+  if (!container) return;
   container.innerHTML = '';
 
   const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
@@ -1346,30 +1793,40 @@ function openModal(dateKey) {
     else fullLocStr = dayData.supportLocs.join('/');
   }
 
-  document.getElementById('modal-date-key').value = dateKey;
-  document.getElementById('modal-date-title').innerText = `📅 編輯 ${dateKey} 排班`;
-  document.getElementById('modal-loc-input').value = fullLocStr;
-  
-  const supportStr = (dayData.supportLocs && dayData.supportLocs.length > 0) ? dayData.supportLocs.join('/') : '';
-  document.getElementById('modal-support-input').value = supportStr;
-  
-  document.getElementById('modal-time-input').value = dayData.t1 || '';
+  const mKey = document.getElementById('modal-date-key');
+  const mTitle = document.getElementById('modal-date-title');
+  const mLoc = document.getElementById('modal-loc-input');
+  const mSup = document.getElementById('modal-support-input');
+  const mTime = document.getElementById('modal-time-input');
 
-  document.getElementById('edit-day-modal').classList.add('active');
+  if (mKey) mKey.value = dateKey;
+  if (mTitle) mTitle.innerText = `📅 編輯 ${dateKey} 排班`;
+  if (mLoc) mLoc.value = fullLocStr;
+  if (mSup) mSup.value = (dayData.supportLocs && dayData.supportLocs.length > 0) ? dayData.supportLocs.join('/') : '';
+  if (mTime) mTime.value = dayData.t1 || '';
+
+  const modalEl = document.getElementById('edit-day-modal');
+  if (modalEl) modalEl.classList.add('active');
 }
 
 function closeModal() {
-  document.getElementById('edit-day-modal').classList.remove('active');
+  const modalEl = document.getElementById('edit-day-modal');
+  if (modalEl) modalEl.classList.remove('active');
 }
 
 function saveModalDay() {
-  const dateKey = document.getElementById('modal-date-key').value;
-  const locVal = document.getElementById('modal-loc-input').value.trim();
-  const supportVal = document.getElementById('modal-support-input').value.trim();
-  const timeVal = document.getElementById('modal-time-input').value.trim();
+  const mKey = document.getElementById('modal-date-key');
+  const mLoc = document.getElementById('modal-loc-input');
+  const mSup = document.getElementById('modal-support-input');
+  const mTime = document.getElementById('modal-time-input');
+  
+  if (!mKey) return;
+  const dateKey = mKey.value;
+  const locVal = mLoc ? mLoc.value.trim() : '';
+  const supportVal = mSup ? mSup.value.trim() : '';
+  const timeVal = mTime ? mTime.value.trim() : '';
 
   const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
-
   const supportArr = supportVal ? supportVal.split(/[\/\n]/).map(s => s.trim()).filter(Boolean) : [];
 
   if (locVal || supportArr.length > 0 || timeVal) {
@@ -1395,7 +1852,9 @@ function saveModalDay() {
 }
 
 function deleteModalDay() {
-  const dateKey = document.getElementById('modal-date-key').value;
+  const mKey = document.getElementById('modal-date-key');
+  if (!mKey) return;
+  const dateKey = mKey.value;
   const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
 
   if (savedSchedule[dateKey]) {
@@ -1435,14 +1894,12 @@ function updateDraftLabels() {
   ['draft_1', 'draft_2', 'draft_3', 'draft_4', 'draft_5'].forEach((key, index) => {
     const rawData = localStorage.getItem('shopee_report_' + key);
     let storeName = '未填';
-    let isSaved = false;
 
     if (rawData) {
       try {
         const parsed = JSON.parse(rawData);
         if (parsed.shopName && parsed.shopName.trim() !== '') {
           storeName = parsed.shopName;
-          isSaved = true;
         }
       } catch (e) {}
     }
@@ -1463,18 +1920,33 @@ function getTodayString() {
 }
 
 window.onload = function() {
-  populateShopOptions();
-  loadData(false);
-  updateDraftLabels();
-  initWeekPicker();
-  
-  const dateInput = document.getElementById('date');
-  if (!dateInput.value || dateInput.value.trim() === '') {
-    dateInput.value = getTodayString();
+  try {
+    populateShopOptions();
+    loadData(false);
+    updateDraftLabels();
+    initWeekPicker();
+    buildReportGroups();
+    initLiveClock();
+    populateReportStoreDatalist();
+    
+    const dateInput = document.getElementById('date');
+    if (dateInput && (!dateInput.value || dateInput.value.trim() === '')) {
+      dateInput.value = getTodayString();
+    }
+    
+    updateStoreInfo();
+    applyShiftLock();
+    document.querySelectorAll('#report-tab input').forEach(input => {
+      if (/count|boxes|stay|ndd|whndd|wrong|damaged|wet|soc|pack|success|bags|sys|real|empty|seats|overdue|scs|fbs/i.test(input.id)) {
+        input.setAttribute('inputmode', 'numeric');
+      }
+    });
+    renderTodayDashboard();
+    updateReportProgress();
+    updateSystemStatus();
+  } catch (err) {
+    console.error("Window load error:", err);
   }
-  
-  updateStoreInfo();
-  applyShiftLock();
 };
 
 function getAllData() {
@@ -1624,8 +2096,10 @@ function toggleBatchMode() {
 }
 
 function applyShiftLock() {
-  const currentShift = document.getElementById('shift').value;
-  const override = document.getElementById('unlockOverride').checked;
+  const shiftEl = document.getElementById('shift');
+  if (!shiftEl) return;
+  const currentShift = shiftEl.value;
+  const override = document.getElementById('unlockOverride') ? document.getElementById('unlockOverride').checked : false;
   
   const cards = document.querySelectorAll('#report-tab .card[data-shift]');
   cards.forEach(card => {
@@ -1649,6 +2123,7 @@ function applyShiftLock() {
 
 function populateShopOptions() {
   const datalist = document.getElementById('shopList');
+  if (!datalist) return;
   datalist.innerHTML = '';
   storesData.forEach(store => {
     const opt = document.createElement('option');
@@ -1658,14 +2133,19 @@ function populateShopOptions() {
 }
 
 function getCleanShopName() {
-  const rawName = document.getElementById('shopName').value.trim();
+  const shopEl = document.getElementById('shopName');
+  if (!shopEl) return '';
+  const rawName = shopEl.value.trim();
   return rawName.replace(/-智取店$/, '').replace(/智取店$/, '');
 }
 
 function updateStoreInfo() {
-  const selectedName = document.getElementById('shopName').value.trim();
+  const shopEl = document.getElementById('shopName');
+  if (!shopEl) return;
+  const selectedName = shopEl.value.trim();
   const store = storesData.find(s => s.name === selectedName || s.name.replace(/-智取店$/, '') === selectedName);
   const detailCard = document.getElementById('storeDetailCard');
+  if (!detailCard) return;
   
   if (store) {
     document.getElementById('storeAddressText').innerText = store.address;
@@ -1705,25 +2185,29 @@ function copyAddress() {
 }
 
 function toggleLockInput() {
-  const type = document.getElementById('c8_lock_type').value;
-  document.getElementById('lock_count_box').style.display = (type === 'has') ? 'block' : 'none';
+  const lockTypeEl = document.getElementById('c8_lock_type');
+  const lockBox = document.getElementById('lock_count_box');
+  if (!lockTypeEl || !lockBox) return;
+  const type = lockTypeEl.value;
+  lockBox.style.display = (type === 'has') ? 'block' : 'none';
 }
 
 function calcC9Total() {
-  const p = parseFloat(document.getElementById('c9_pack').value) || 0;
-  const l = parseFloat(document.getElementById('c9_last_night').value) || 0;
-  document.getElementById('c9_total').value = p + l;
+  const p = parseFloat(document.getElementById('c9_pack')?.value) || 0;
+  const l = parseFloat(document.getElementById('c9_last_night')?.value) || 0;
+  const totalEl = document.getElementById('c9_total');
+  if (totalEl) totalEl.value = p + l;
 }
 
 function calcAvgTime() {
-  const isMulti = document.getElementById('c5_multi_mode').checked;
+  const isMulti = document.getElementById('c5_multi_mode')?.checked;
   let totalCount = 0;
   let totalDiffSec = 0;
 
   if (!isMulti) {
-    const count = parseFloat(document.getElementById('c5_count').value) || 0;
-    const start = document.getElementById('c5_startTime').value.trim();
-    const end = document.getElementById('c5_endTime').value.trim();
+    const count = parseFloat(document.getElementById('c5_count')?.value) || 0;
+    const start = document.getElementById('c5_startTime')?.value.trim();
+    const end = document.getElementById('c5_endTime')?.value.trim();
     
     if (count > 0 && start && end) {
       const diff = getTimeDiff(start, end);
@@ -1731,9 +2215,9 @@ function calcAvgTime() {
     }
   } else {
     for (let i = 1; i <= 3; i++) {
-      const c = parseFloat(document.getElementById(`c5_b${i}_count`).value) || 0;
-      const s = document.getElementById(`c5_b${i}_start`).value.trim();
-      const e = document.getElementById(`c5_b${i}_end`).value.trim();
+      const c = parseFloat(document.getElementById(`c5_b${i}_count`)?.value) || 0;
+      const s = document.getElementById(`c5_b${i}_start`)?.value.trim();
+      const e = document.getElementById(`c5_b${i}_end`)?.value.trim();
       if (c > 0 && s && e) {
         const diff = getTimeDiff(s, e);
         if (diff > 0) { totalCount += c; totalDiffSec += diff; }
@@ -1741,11 +2225,13 @@ function calcAvgTime() {
     }
   }
 
-  if (totalCount > 0 && totalDiffSec > 0) {
-    const avg = (totalDiffSec / totalCount).toFixed(1);
-    document.getElementById('c5_avg').value = avg;
-  } else {
-    document.getElementById('c5_avg').value = "";
+  const avgEl = document.getElementById('c5_avg');
+  if (avgEl) {
+    if (totalCount > 0 && totalDiffSec > 0) {
+      avgEl.value = (totalDiffSec / totalCount).toFixed(1);
+    } else {
+      avgEl.value = "";
+    }
   }
 }
 
@@ -1767,9 +2253,9 @@ function parseStrToSeconds(tStr) {
 }
 
 function getHeader() {
-  const d = document.getElementById('date').value;
+  const d = document.getElementById('date')?.value || '';
   const s = getCleanShopName() || "未填門市";
-  const sh = document.getElementById('shift').value;
+  const sh = document.getElementById('shift')?.value || '早';
   return `${d} ${s}${sh}班`;
 }
 
@@ -1807,43 +2293,43 @@ function fallbackCopyText(text, displayTag) {
 }
 
 function copyC3() {
-  const txt = `⬆️${getHeader()}\n逾期:${document.getElementById('c3_overdue').value}\nSCS:${document.getElementById('c3_scs').value}\nFBS:${document.getElementById('c3_fbs').value}`;
+  const txt = `⬆️${getHeader()}\n逾期:${document.getElementById('c3_overdue')?.value || 0}\nSCS:${document.getElementById('c3_scs')?.value || 0}\nFBS:${document.getElementById('c3_fbs')?.value || 0}`;
   copyText(txt, '科目3 逾期包裹');
 }
 
 function copyC4() {
-  const txt = `${getHeader()}\n⭕️物流是否配送：${document.getElementById('c4_delivery').value}\n⭕️配送箱數：${document.getElementById('c4_boxes').value}\n⭕️前日滯留箱數：${document.getElementById('c4_stay').value}\n⭕️NDD配送箱數：${document.getElementById('c4_ndd').value}\n⭕️WHNDD：${document.getElementById('c4_whndd').value}\n⭕️管制品（需回報AS）：${document.getElementById('c4_as').value}\n⭕️前日未離店箱數：${document.getElementById('c4_not_left').value}`;
+  const txt = `${getHeader()}\n⭕️物流是否配送：${document.getElementById('c4_delivery')?.value || '是'}\n⭕️配送箱數：${document.getElementById('c4_boxes')?.value || 0}\n⭕️前日滯留箱數：${document.getElementById('c4_stay')?.value || 0}\n⭕️NDD配送箱數：${document.getElementById('c4_ndd')?.value || 0}\n⭕️WHNDD：${document.getElementById('c4_whndd')?.value || 0}\n⭕️管制品（需回報AS）：${document.getElementById('c4_as')?.value || 0}\n⭕️前日未離店箱數：${document.getElementById('c4_not_left')?.value || 0}`;
   copyText(txt, '科目4 配送數據');
 }
 
 function copyC5() {
   const shopName = getCleanShopName() || "未填門市";
-  const shift = document.getElementById('shift').value;
-  const isMulti = document.getElementById('c5_multi_mode').checked;
+  const shift = document.getElementById('shift')?.value || '早';
+  const isMulti = document.getElementById('c5_multi_mode')?.checked;
 
   let countStr = "", startStr = "", endStr = "";
   if (!isMulti) {
-    countStr = document.getElementById('c5_count').value;
-    startStr = document.getElementById('c5_startTime').value;
-    endStr = document.getElementById('c5_endTime').value;
+    countStr = document.getElementById('c5_count')?.value || '';
+    startStr = document.getElementById('c5_startTime')?.value || '';
+    endStr = document.getElementById('c5_endTime')?.value || '';
   } else {
     const counts = [], starts = [], ends = [];
     for (let i = 1; i <= 3; i++) {
-      const c = document.getElementById(`c5_b${i}_count`).value.trim();
-      const s = document.getElementById(`c5_b${i}_start`).value.trim();
-      const e = document.getElementById(`c5_b${i}_end`).value.trim();
+      const c = document.getElementById(`c5_b${i}_count`)?.value.trim() || '';
+      const s = document.getElementById(`c5_b${i}_start`)?.value.trim() || '';
+      const e = document.getElementById(`c5_b${i}_end`)?.value.trim() || '';
       if (c || s || e) { counts.push(c); starts.push(s); ends.push(e); }
     }
     countStr = counts.join('/'); startStr = starts.join('/'); endStr = ends.join('/');
   }
 
-  const avgVal = document.getElementById('c5_avg').value;
-  const nddVal = document.getElementById('c5_ndd_time').value;
-  const whnddVal = document.getElementById('c5_whndd_time').value;
-  const stayVal = document.getElementById('c5_stay_box').value;
-  const seatsVal = document.getElementById('c5_seats').value;
-  const toInVal = document.getElementById('c5_to_in').value;
-  const toOutVal = document.getElementById('c5_to_out').value;
+  const avgVal = document.getElementById('c5_avg')?.value || '';
+  const nddVal = document.getElementById('c5_ndd_time')?.value || '';
+  const whnddVal = document.getElementById('c5_whndd_time')?.value || '';
+  const stayVal = document.getElementById('c5_stay_box')?.value || '0';
+  const seatsVal = document.getElementById('c5_seats')?.value || '';
+  const toInVal = document.getElementById('c5_to_in')?.value || '';
+  const toOutVal = document.getElementById('c5_to_out')?.value || '';
 
   const txt = `${shopName} ${shift}班\n驗收完畢回報\n\n驗收包裹數量：${countStr}\n第一顆上架時間：${startStr}\n完成驗收時間：${endStr}\n平均驗收時間：${avgVal}\nNDD完成驗收時間：${nddVal}\nWH NDD完成驗收時間：${whnddVal}\n\n————————————-\n⭕️滯留：${stayVal}\n⭕️剩餘櫃位：${seatsVal}\n‼️產生滯留且有剩餘櫃位時，需通報值班幹部以利立刻進行人員調度\n————————————-\n到店TO單：${toInVal}\n離店TO單：${toOutOutStr(toOutVal)}`;
   copyText(txt, '科目5 驗收回報');
@@ -1852,13 +2338,13 @@ function copyC5() {
 function toOutOutStr(val) { return val ? val : ""; }
 
 function copyC6() {
-  const txt = `⬆️${getHeader()}\n單顆錯店：${document.getElementById('c6_wrong').value}\n破損：${document.getElementById('c6_damaged').value}\n濕損：${document.getElementById('c6_wet').value}\n打X往SOC：${document.getElementById('c6_soc').value}`;
+  const txt = `⬆️${getHeader()}\n單顆錯店：${document.getElementById('c6_wrong')?.value || 0}\n破損：${document.getElementById('c6_damaged')?.value || 0}\n濕損：${document.getElementById('c6_wet')?.value || 0}\n打X往SOC：${document.getElementById('c6_soc')?.value || 0}`;
   copyText(txt, '科目6 異常包裹');
 }
 
 function formatShipText(northId, southId) {
-  const north = document.getElementById(northId).value.trim();
-  const south = document.getElementById(southId).value.trim();
+  const north = document.getElementById(northId)?.value.trim() || '';
+  const south = document.getElementById(southId)?.value.trim() || '';
   let result = "";
   if (north && north !== "0" && north !== "無") result += `${north}北`;
   if (south && south !== "0" && south !== "無") result += `${south}南`;
@@ -1866,46 +2352,46 @@ function formatShipText(northId, southId) {
 }
 
 function copyC8() {
-  const lockType = document.getElementById('c8_lock_type').value;
-  const lockCount = document.getElementById('c8_lock_count').value;
+  const lockType = document.getElementById('c8_lock_type')?.value || 'has';
+  const lockCount = document.getElementById('c8_lock_count')?.value || '4';
   const lockStr = (lockType === 'has') ? `‼️寄件櫃共${lockCount}個鑰匙孔已確認上鎖` : `‼️無寄件櫃`;
 
   const normalShip = formatShipText('c8_normal_north', 'c8_normal_south');
   const nddShip = formatShipText('c8_ndd_north', 'c8_ndd_south');
   const fbsShip = formatShipText('c8_fbs_north', 'c8_fbs_south');
 
-  const txt = `⬆️${getHeader()}\n⭕️NDD警示條消除${document.getElementById('c8_ndd_alert').value}\n⭕️FBS警示條消除${document.getElementById('c8_fbs_alert').value}\n⭕️正物流寄件離店：${normalShip}\n⭕️NDD寄件離店：${nddShip}\n⭕️FBS寄件離店：${fbsShip}\n⭕️逆物流離店：${document.getElementById('c8_reverse').value}\n⭕️單顆錯店：${document.getElementById('c8_wrong').value}\n⭕️異常包裹：${document.getElementById('c8_abnormal').value}\n${lockStr}\n⭕️WH空箱在店數：${document.getElementById('c8_wh_empty').value}\n⭕️橘箱空箱在店數：${document.getElementById('c8_orange_empty').value}\n⭕️空箱收/補：${document.getElementById('c8_empty_as').value}（AS回報）`;
+  const txt = `⬆️${getHeader()}\n⭕️NDD警示條消除${document.getElementById('c8_ndd_alert')?.value || '✅'}\n⭕️FBS警示條消除${document.getElementById('c8_fbs_alert')?.value || '✅'}\n⭕️正物流寄件離店：${normalShip}\n⭕️NDD寄件離店：${nddShip}\n⭕️FBS寄件離店：${fbsShip}\n⭕️逆物流離店：${document.getElementById('c8_reverse')?.value || 0}\n⭕️單顆錯店：${document.getElementById('c8_wrong')?.value || 0}\n⭕️異常包裹：${document.getElementById('c8_abnormal')?.value || 0}\n${lockStr}\n⭕️WH空箱在店數：${document.getElementById('c8_wh_empty')?.value || 0}\n⭕️橘箱空箱在店數：${document.getElementById('c8_orange_empty')?.value || 0}\n⭕️空箱收/補：${document.getElementById('c8_empty_as')?.value || 0}（AS回報）`;
   copyText(txt, '科目8 離店盤點');
 }
 
 function copyC9() {
-  const txt = `⬆️${getHeader()}\n⭕️SCS HD打包：${document.getElementById('c9_pack').value}\n⭕️昨晚打包：${document.getElementById('c9_last_night').value}\n⭕️合計：${document.getElementById('c9_total').value}`;
+  const txt = `⬆️${getHeader()}\n⭕️SCS HD打包：${document.getElementById('c9_pack')?.value || 0}\n⭕️昨晚打包：${document.getElementById('c9_last_night')?.value || 0}\n⭕️合計：${document.getElementById('c9_total')?.value || 0}`;
   copyText(txt, '科目9 早班打包HD');
 }
 
 function copyC10() {
-  const txt = `⬆️${getHeader()}\n⭕️SCS HD成功上架：${document.getElementById('c10_success').value}\n⭕️SCS HD滯留：${document.getElementById('c10_stay').value}`;
+  const txt = `⬆️${getHeader()}\n⭕️SCS HD成功上架：${document.getElementById('c10_success')?.value || 0}\n⭕️SCS HD滯留：${document.getElementById('c10_stay')?.value || 0}`;
   copyText(txt, '科目10 早班上架HD');
 }
 
 function copyC11() {
-  const txt = `${getHeader()}\n⭕️SCS HD 打包：${document.getElementById('c11_pack').value}`;
+  const txt = `${getHeader()}\n⭕️SCS HD 打包：${document.getElementById('c11_pack')?.value || 0}`;
   copyText(txt, '科目11 晚班打包HD');
 }
 
 function copyC12() {
-  const txt = `⬆️${getHeader()}\n中正速配倉進貨${document.getElementById('c12_bags').value}袋已上架`;
+  const txt = `⬆️${getHeader()}\n中正速配倉進貨${document.getElementById('c12_bags')?.value || 0}袋已上架`;
   copyText(txt, '科目12 速配倉進貨');
 }
 
 function copyC14() {
-  const txt = `⬆️${getHeader()}\n⭕️系統需上架數：${document.getElementById('c14_sys').value}\n⭕️實際上架包裹數 ：${document.getElementById('c14_real').value}\n⭕️不需上架包裹數：${document.getElementById('c14_no_need').value}`;
+  const txt = `⬆️${getHeader()}\n⭕️系統需上架數：${document.getElementById('c14_sys')?.value || 0}\n⭕️實際上架包裹數 ：${document.getElementById('c14_real')?.value || 0}\n⭕️不需上架包裹數：${document.getElementById('c14_no_need')?.value || 0}`;
   copyText(txt, '科目14 晚班HD上架');
 }
 
 function copyC15() {
-  const inVal = document.getElementById('c15_in').value;
-  const repairVal = document.getElementById('c15_repair').value;
+  const inVal = document.getElementById('c15_in')?.value || '無';
+  const repairVal = document.getElementById('c15_repair')?.value || '無';
   const txt = `⬆️${getHeader()}\n⭕️入庫：${inVal}\n⭕️維修：${repairVal}`;
   copyText(txt, '科目15 AMS維修');
 }
@@ -1942,9 +2428,9 @@ function copySupportReport() {
   } else {
     const counts = [], starts = [], ends = [];
     for (let i = 1; i <= 3; i++) {
-      const c = document.getElementById(`c5_b${i}_count`)?.value.trim();
-      const s = document.getElementById(`c5_b${i}_start`)?.value.trim();
-      const e = document.getElementById(`c5_b${i}_end`)?.value.trim();
+      const c = document.getElementById(`c5_b${i}_count`)?.value.trim() || '';
+      const s = document.getElementById(`c5_b${i}_start`)?.value.trim() || '';
+      const e = document.getElementById(`c5_b${i}_end`)?.value.trim() || '';
       if (c || s || e) { counts.push(c); starts.push(s); ends.push(e); }
     }
     countStr = counts.join('/'); startStr = starts.join('/'); endStr = ends.join('/');
@@ -2091,7 +2577,8 @@ function handleExcelImport(event) {
       syncScheduleToDrive();
 
       if (firstImportedMonday) {
-        document.getElementById('week-picker').value = firstImportedMonday;
+        const wp = document.getElementById('week-picker');
+        if (wp) wp.value = firstImportedMonday;
       }
       updateHistoryDropdown();
       loadWeekSchedule();
@@ -2101,10 +2588,12 @@ function handleExcelImport(event) {
       const todayKey = formatDateISO(new Date());
       const todaySchedule = scheduleData[todayKey];
       const msgEl = document.getElementById('import-sync-msg');
-      if (todaySchedule && todaySchedule.loc && !todaySchedule.isOff) {
-        msgEl.innerText = `已匯入 ${importedCount} 天班表！檢測到今日 (${todayKey}) 排班門市為：\n「${todaySchedule.loc}」\n\n是否立即自動精準拆分並帶入巡店回報？`;
-      } else {
-        msgEl.innerText = `已成功匯入 ${importedCount} 天班表！\n是否要將今日班表資料同步至巡店回報？`;
+      if (msgEl) {
+        if (todaySchedule && todaySchedule.loc && !todaySchedule.isOff) {
+          msgEl.innerText = `已匯入 ${importedCount} 天班表！檢測到今日 (${todayKey}) 排班門市為：\n「${todaySchedule.loc}」\n\n是否立即自動精準拆分並帶入巡店回報？`;
+        } else {
+          msgEl.innerText = `已成功匯入 ${importedCount} 天班表！\n是否要將今日班表資料同步至巡店回報？`;
+        }
       }
       openImportSyncModal();
 
@@ -2120,11 +2609,13 @@ function handleExcelImport(event) {
 }
 
 function openImportSyncModal() {
-  document.getElementById('import-sync-modal').classList.add('active');
+  const modalEl = document.getElementById('import-sync-modal');
+  if (modalEl) modalEl.classList.add('active');
 }
 
 function closeImportSyncModal() {
-  document.getElementById('import-sync-modal').classList.remove('active');
+  const modalEl = document.getElementById('import-sync-modal');
+  if (modalEl) modalEl.classList.remove('active');
   showToast('📊 Excel 班表已成功匯入！');
 }
 
@@ -2165,28 +2656,29 @@ function parseExcelDateToISO(val) {
 
 function updateSystemStatus() {
   const statusEl = document.getElementById('system-status-text');
-  if (!statusEl) return;
+  if (statusEl) {
+    const isOnline = navigator.onLine;
+    let isStorageOk = true;
 
-  const isOnline = navigator.onLine;
-  let isStorageOk = true;
+    try {
+      const testKey = '__storage_test__';
+      localStorage.setItem(testKey, testKey);
+      localStorage.removeItem(testKey);
+    } catch (e) {
+      isStorageOk = false;
+    }
 
-  try {
-    const testKey = '__storage_test__';
-    localStorage.setItem(testKey, testKey);
-    localStorage.removeItem(testKey);
-  } catch (e) {
-    isStorageOk = false;
-  }
-
-  if (!isStorageOk) {
-    statusEl.innerHTML = '系統狀態：<span style="color:#d32f2f; font-weight:bold;">● 儲存空間已滿/受限</span>';
-  } else if (isOnline) {
-    statusEl.innerHTML = '系統狀態：<span style="color:#2ea44f; font-weight:bold;">● 連線正常</span>';
-  } else {
-    statusEl.innerHTML = '系統狀態：<span style="color:#ff9800; font-weight:bold;">● 離線模式 (本機儲存)</span>';
+    if (!isStorageOk) {
+      statusEl.innerHTML = '系統狀態：<span style="color:#d32f2f; font-weight:bold;">● 儲存空間已滿/受限</span>';
+    } else if (isOnline) {
+      statusEl.innerHTML = '系統狀態：<span style="color:#2ea44f; font-weight:bold;">● 連線正常</span>';
+    } else {
+      statusEl.innerHTML = '系統狀態：<span style="color:#ff9800; font-weight:bold;">● 離線模式 (本機儲存)</span>';
+    }
   }
 
   updateStorageUsage();
+  if (typeof renderTodayDashboard === 'function') renderTodayDashboard();
 }
 
 window.addEventListener('online', updateSystemStatus);
@@ -2235,7 +2727,8 @@ function exportBackupData() {
 }
 
 function importBackupData() {
-  document.getElementById('backup-file-input').click();
+  const bfi = document.getElementById('backup-file-input');
+  if (bfi) bfi.click();
 }
 
 function handleFileImport(event) {
@@ -2261,10 +2754,6 @@ function handleFileImport(event) {
   };
   reader.readAsText(file);
 }
-
-window.addEventListener('load', () => {
-  updateSystemStatus();
-});
 </script>
 </body>
 </html>
