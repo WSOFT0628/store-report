@@ -3,7 +3,46 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店勤務助手 v6.5.1</title>
+<title>蝦皮智取店勤務助手 v6.6.0</title>
+
+<!-- 正式／試用資料空間隔離層：正式空間沿用既有鍵值，試用空間自動加上專屬前綴。 -->
+<script>
+  (() => {
+    const nativeStorage = window.localStorage;
+    const requested = new URLSearchParams(window.location.search).get('profile') || '';
+    const safeProfile = /^[A-Za-z0-9_-]{3,40}$/.test(requested) ? requested : 'main';
+    const isTrial = safeProfile !== 'main';
+    const namespacePrefix = isTrial ? `shopee_profile_${safeProfile}__` : '';
+    const allProfilePrefix = 'shopee_profile_';
+    const visibleKeys = () => {
+      const keys = [];
+      for (let index = 0; index < nativeStorage.length; index++) {
+        const rawKey = nativeStorage.key(index);
+        if (!rawKey) continue;
+        if (isTrial) {
+          if (rawKey.startsWith(namespacePrefix)) keys.push(rawKey.slice(namespacePrefix.length));
+        } else if (!rawKey.startsWith(allProfilePrefix)) {
+          keys.push(rawKey);
+        }
+      }
+      return keys;
+    };
+    const target = {
+      get length() { return visibleKeys().length; },
+      key(index) { return visibleKeys()[index] ?? null; },
+      getItem(key) { return nativeStorage.getItem(namespacePrefix + String(key)); },
+      setItem(key, value) { nativeStorage.setItem(namespacePrefix + String(key), String(value)); },
+      removeItem(key) { nativeStorage.removeItem(namespacePrefix + String(key)); },
+      clear() { visibleKeys().forEach(key => nativeStorage.removeItem(namespacePrefix + key)); }
+    };
+    window.APP_PROFILE = safeProfile;
+    window.IS_TRIAL_PROFILE = isTrial;
+    window.appStorage = new Proxy(target, {
+      ownKeys: visibleKeys,
+      getOwnPropertyDescriptor() { return { enumerable:true, configurable:true }; }
+    });
+  })();
+</script>
 
 <!-- 引入 SheetJS 解析 Excel -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  
@@ -66,6 +105,7 @@
   }
 
   function updateSyncUIConnected() {
+      if (window.IS_TRIAL_PROFILE) return;
       const loginBtn = document.getElementById('gdrive-login-btn');
       if (loginBtn) {
           loginBtn.innerText = "✅ 雲端已連線";
@@ -75,6 +115,11 @@
   }
 
   function maybeEnableSyncUI() {
+      if (window.IS_TRIAL_PROFILE) {
+          const loginBtn = document.getElementById('gdrive-login-btn');
+          if (loginBtn) { loginBtn.textContent = '試用模式不連接雲端'; loginBtn.disabled = true; loginBtn.style.opacity = '.55'; }
+          return;
+      }
       if (gapiInited && gsisInited) {
           const loginBtn = document.getElementById('gdrive-login-btn');
           if (loginBtn) { loginBtn.style.opacity = '1'; loginBtn.disabled = false; }
@@ -82,6 +127,10 @@
   }
 
   function handleAuthClick() {
+      if (window.IS_TRIAL_PROFILE) {
+          showToast('🧪 試用資料空間已停用 Google 雲端同步，不會影響正式資料。', 4000);
+          return;
+      }
       if (window.location.protocol === 'file:') {
           showToast("⚠️ 本地檔案 (file://) 開啟無法使用 Google 雲端登入！\n請將網頁託管於 GitHub Pages 或使用 Live Server 開啟。");
           return;
@@ -97,21 +146,32 @@
   }
 
   function markCloudPending() {
-    localStorage.setItem('shopee_cloud_pending', 'true');
-    localStorage.setItem('shopee_last_local_save', new Date().toISOString());
+    if (window.IS_TRIAL_PROFILE) {
+      appStorage.removeItem('shopee_cloud_pending');
+      appStorage.setItem('shopee_last_local_save', new Date().toISOString());
+      if (typeof updateSystemStatus === 'function') updateSystemStatus();
+      if (typeof updateReportSaveStatus === 'function') updateReportSaveStatus();
+      return;
+    }
+    appStorage.setItem('shopee_cloud_pending', 'true');
+    appStorage.setItem('shopee_last_local_save', new Date().toISOString());
     if (typeof updateSystemStatus === 'function') updateSystemStatus();
     if (typeof updateReportSaveStatus === 'function') updateReportSaveStatus();
   }
 
   function markCloudSynced() {
-    localStorage.removeItem('shopee_cloud_pending');
-    localStorage.setItem('shopee_last_cloud_sync', new Date().toISOString());
+    appStorage.removeItem('shopee_cloud_pending');
+    appStorage.setItem('shopee_last_cloud_sync', new Date().toISOString());
     if (typeof updateSystemStatus === 'function') updateSystemStatus();
     if (typeof updateReportSaveStatus === 'function') updateReportSaveStatus();
   }
 
   async function syncScheduleToDrive(options = {}) {
     const manual = options.manual === true;
+    if (window.IS_TRIAL_PROFILE) {
+      if (manual) showToast('🧪 試用資料只保存於此試用空間，不會寫入 Google 雲端。', 4000);
+      return false;
+    }
     if (!gapiInited || !gapi.client || !gapi.client.getToken()) {
       markCloudPending();
       if (manual) showToast('💾 資料已安全暫存於瀏覽器；連接 Google 後可再同步雲端。', 4000);
@@ -122,10 +182,10 @@
       if (manual) showToast("☁️ 正在準備打包資料並寫入 Google 雲端...");
       
       const allData = {};
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
+      for (let i = 0; i < appStorage.length; i++) {
+        const key = appStorage.key(i);
         if (key.startsWith('shopee_') && key !== 'shopee_cloud_pending') {
-          allData[key] = localStorage.getItem(key);
+          allData[key] = appStorage.getItem(key);
         }
       }
       const fileContent = JSON.stringify(allData);
@@ -190,6 +250,7 @@
   }
 
   async function pullScheduleFromDrive() {
+    if (window.IS_TRIAL_PROFILE) return;
     if (!gapiInited || !gapi.client || !gapi.client.getToken()) return;
 
     try {
@@ -212,7 +273,7 @@
             const remoteData = JSON.parse(fileRes.body);
             for (let key in remoteData) {
               if (key.startsWith('shopee_')) {
-                localStorage.setItem(key, remoteData[key]);
+                appStorage.setItem(key, remoteData[key]);
               }
             }
             handleDailyRollover();
@@ -225,7 +286,7 @@
             updateDraftLabels();
             showToast("☁️ 已自動從雲端拉取最新資料！");
           } catch(e) {
-            localStorage.setItem('shopee_user_schedule', fileRes.body);
+            appStorage.setItem('shopee_user_schedule', fileRes.body);
             loadWeekSchedule();
           }
         }
@@ -243,6 +304,8 @@
   .main-header > div:first-child { padding: 11px 16px !important; text-align: left !important; max-width: 920px; margin: auto; }
   .main-header h1 { font-size: 16px !important; display: flex; align-items: center; justify-content: space-between; color: #fff; margin: 0; }
   .main-header h1::after { content: 'OPS'; font-size: 10px; letter-spacing: 1.2px; color: #ffb6a6; border: 1px solid rgba(255,182,166,.45); border-radius: 6px; padding: 3px 6px; }
+  .trial-profile-banner { position:sticky; top:42px; z-index:995; display:none; align-items:center; justify-content:center; gap:8px; padding:7px 12px; background:#fff3cd; color:#7a4d00; border-bottom:1px solid #f1cf72; font-size:12px; font-weight:900; text-align:center; }
+  .trial-profile-banner.active { display:flex; }
 
   .main-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1100; height: 64px; padding-bottom: env(safe-area-inset-bottom); background: rgba(255,255,255,.96); border-top: 1px solid var(--ops-border); box-shadow: 0 -6px 20px rgba(16,24,40,.08); backdrop-filter: blur(14px); display: flex; }
   [data-theme="dark"] .main-nav { background: rgba(29,41,57,.96); }
@@ -560,6 +623,7 @@
     -webkit-backdrop-filter: blur(8px);
     font-size: 12px;
   }
+  [data-profile-mode="trial"] .quick-input-dock { top:calc(82px + env(safe-area-inset-top, 0px)); }
   .report-jump-controls {
     position: fixed;
     right: max(10px, env(safe-area-inset-right));
@@ -648,7 +712,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店勤務助手 v6.5.1
+      📦 蝦皮智取店勤務助手 v6.6.0
     </h1>
   </div>
   <div class="main-nav">
@@ -658,6 +722,8 @@
     <button class="nav-btn" onclick="switchMainTab('settings-tab', this)"><span class="nav-icon">⚙</span><span>更多</span></button>
   </div>
 </div>
+
+<div id="trial-profile-banner" class="trial-profile-banner" role="status"></div>
 
 <main class="workspace">
 <div id="today-tab" class="tab-content active" style="padding-top:0;">
@@ -1099,10 +1165,13 @@
     <h3>☁️ 雲端與備份管理</h3>
     <div class="settings-grid">
       <button id="gdrive-login-btn" onclick="handleAuthClick()">連接 Google 雲端</button>
-      <button onclick="syncScheduleToDrive({manual:true})">寫入並同步至雲端</button>
+      <button id="gdrive-sync-btn" onclick="syncScheduleToDrive({manual:true})">寫入並同步至雲端</button>
       <button onclick="exportBackupData()">下載本機備份檔</button>
       <button onclick="importBackupData()">還原 JSON 備份檔</button>
       <button onclick="document.getElementById('excel-file-input').click()" style="grid-column: span 2;">📊 匯入 Excel 班表 (.xlsx)</button>
+      <button onclick="createTrialProfileLink()" style="grid-column:span 2;background:#6f42c1;color:#fff;">🧪 建立並複製獨立試用網址</button>
+      <button id="copy-current-profile-btn" onclick="copyCurrentProfileLink()" style="display:none;background:#2878d0;color:#fff;">🔗 複製目前試用網址</button>
+      <button id="exit-trial-profile-btn" onclick="exitTrialProfile()" style="display:none;background:#667085;color:#fff;">↩️ 返回正式空間</button>
       <button id="clear-web-memory-btn" onclick="clearWebsiteMemory()" style="grid-column:span 2;background:#c62828;color:#fff;">🧪 清除本應用網頁記憶（測試重置）</button>
     </div>
     <p style="font-size:11px;color:var(--ops-muted);margin:8px 0 0;">只會清除本勤務助手在此瀏覽器的班表、巡店、設定及同步狀態；不影響其他網站。</p>
@@ -1160,7 +1229,7 @@
   <div class="card">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v6.5.1 Shopee Ops Pro</div>
+      <div><b>目前版本：</b> v6.6.0 Shopee Ops Pro</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -1293,15 +1362,68 @@
 
 let currentDraftKey = 'shopee_report_draft_1';
 let currentSelectedDayKey = formatDateISO(new Date());
-let is12HourFormat = localStorage.getItem('clock_format_12h') === 'true';
+let is12HourFormat = appStorage.getItem('clock_format_12h') === 'true';
 let currentViewingReportDateKey = formatDateISO(new Date());
 let isViewingHistoricalReport = false;
 const REPORT_CHECKPOINTS_KEY = 'shopee_report_checkpoints_v1';
 const REPORT_CHECKPOINT_LIMIT_PER_STORE = 10;
 
+function buildProfileUrl(profileId) {
+  const url = new URL(window.location.href);
+  url.search = '';
+  if (profileId && profileId !== 'main') url.searchParams.set('profile', profileId);
+  return url.toString();
+}
+
+function createTrialProfileLink() {
+  const randomPart = (window.crypto?.getRandomValues)
+    ? Array.from(window.crypto.getRandomValues(new Uint8Array(5)), value => value.toString(36)).join('').slice(0, 9)
+    : Math.random().toString(36).slice(2, 11);
+  const profileId = `trial-${Date.now().toString(36)}-${randomPart}`;
+  copyText(buildProfileUrl(profileId), '獨立試用網址');
+  showToast('🧪 已建立並複製獨立試用網址；對方的資料不會進入你的正式空間。', 5000);
+}
+
+function copyCurrentProfileLink() {
+  if (!window.IS_TRIAL_PROFILE) {
+    createTrialProfileLink();
+    return;
+  }
+  copyText(buildProfileUrl(window.APP_PROFILE), '目前試用網址');
+}
+
+function exitTrialProfile() {
+  window.location.href = buildProfileUrl('main');
+}
+
+function initProfileUI() {
+  if (!window.IS_TRIAL_PROFILE) return;
+  document.documentElement.dataset.profileMode = 'trial';
+  const banner = document.getElementById('trial-profile-banner');
+  if (banner) {
+    banner.classList.add('active');
+    banner.textContent = `🧪 試用資料空間：${window.APP_PROFILE}｜與正式資料隔離・雲端同步已停用`;
+  }
+  ['copy-current-profile-btn','exit-trial-profile-btn'].forEach(id => {
+    const button = document.getElementById(id);
+    if (button) button.style.display = 'block';
+  });
+  const loginBtn = document.getElementById('gdrive-login-btn');
+  const syncBtn = document.getElementById('gdrive-sync-btn');
+  [loginBtn, syncBtn].forEach(button => {
+    if (!button) return;
+    button.disabled = true;
+    button.style.opacity = '.55';
+  });
+  if (loginBtn) loginBtn.textContent = '試用模式不連接雲端';
+  if (syncBtn) syncBtn.textContent = '試用模式不寫入雲端';
+  const clearBtn = document.getElementById('clear-web-memory-btn');
+  if (clearBtn) clearBtn.textContent = '🧹 清除此試用空間資料';
+}
+
 function getReportCheckpoints() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(REPORT_CHECKPOINTS_KEY) || '[]');
+    const parsed = JSON.parse(appStorage.getItem(REPORT_CHECKPOINTS_KEY) || '[]');
     return Array.isArray(parsed) ? parsed : [];
   } catch (_) {
     return [];
@@ -1335,8 +1457,8 @@ function saveReportCheckpoint(data, label = '手動保存') {
     groupCounts[group] = (groupCounts[group] || 0) + 1;
     return groupCounts[group] <= REPORT_CHECKPOINT_LIMIT_PER_STORE;
   }).slice(0, 120);
-  localStorage.setItem(REPORT_CHECKPOINTS_KEY, JSON.stringify(kept));
-  localStorage.setItem('shopee_cloud_pending', 'true');
+  appStorage.setItem(REPORT_CHECKPOINTS_KEY, JSON.stringify(kept));
+  appStorage.setItem('shopee_cloud_pending', 'true');
   return checkpoint;
 }
 
@@ -1357,7 +1479,7 @@ function updateReportSaveStatus() {
   const panel = document.getElementById('report-save-status');
   if (!panel) return;
   let data = {};
-  try { data = JSON.parse(localStorage.getItem(currentDraftKey) || '{}'); } catch (_) {}
+  try { data = JSON.parse(appStorage.getItem(currentDraftKey) || '{}'); } catch (_) {}
   const storeName = String(data.shopName || document.getElementById('shopName')?.value || '').trim();
   if (!storeName) {
     panel.innerHTML = `<div class="report-save-status-main"><div class="report-save-status-title">💾 尚未選擇門市</div><div class="report-save-status-detail">選擇門市並儲存後，這裡會顯示明確的保存位置與時間。</div></div><span class="report-save-status-badge">本機暫存</span>`;
@@ -1368,7 +1490,7 @@ function updateReportSaveStatus() {
   const latest = checkpoints[0];
   const autoSavedAt = data._lastAutoSavedAt || data._lastManualSavedAt;
   const slotName = getDraftName(currentDraftKey.replace('shopee_report_', ''));
-  const cloudState = localStorage.getItem('shopee_cloud_pending') === 'true' ? '雲端待同步' : '雲端已同步';
+  const cloudState = window.IS_TRIAL_PROFILE ? '試用空間・不連接雲端' : (appStorage.getItem('shopee_cloud_pending') === 'true' ? '雲端待同步' : '雲端已同步');
   const detail = latest
     ? `${currentViewingReportDateKey}・${getShortStoreName(storeName)}・${data.shift || '未選班別'}班｜位置：${slotName}｜最後手動保存 ${formatCheckpointTime(latest.savedAt)}｜共 ${checkpoints.length} 個檢查點｜${cloudState}`
     : `${currentViewingReportDateKey}・${getShortStoreName(storeName)}｜位置：${slotName}｜目前只有自動暫存${autoSavedAt ? `（${formatCheckpointTime(autoSavedAt)}）` : ''}｜${cloudState}`;
@@ -1415,7 +1537,7 @@ function rescueMisplacedDrafts(drafts, expectedDateKey) {
   Object.entries(groups).forEach(([actualDate, items]) => {
     let existing = [];
     try {
-      const parsed = JSON.parse(localStorage.getItem(`shopee_report_daily_${actualDate}`) || '[]');
+      const parsed = JSON.parse(appStorage.getItem(`shopee_report_daily_${actualDate}`) || '[]');
       if (Array.isArray(parsed)) existing = parsed;
     } catch (_) {}
     items.forEach(item => {
@@ -1424,7 +1546,7 @@ function rescueMisplacedDrafts(drafts, expectedDateKey) {
       if (index >= 0) existing[index] = item;
       else existing.push(item);
     });
-    localStorage.setItem(`shopee_report_daily_${actualDate}`, JSON.stringify(existing));
+    appStorage.setItem(`shopee_report_daily_${actualDate}`, JSON.stringify(existing));
   });
   return misplaced.length;
 }
@@ -1441,14 +1563,14 @@ function replaceWorkingDrafts(drafts) {
   for (let index = 1; index <= 5; index++) {
     const data = drafts[index - 1];
     const key = `shopee_report_draft_${index}`;
-    if (data?.shopName) localStorage.setItem(key, JSON.stringify(data));
-    else localStorage.removeItem(key);
+    if (data?.shopName) appStorage.setItem(key, JSON.stringify(data));
+    else appStorage.removeItem(key);
   }
 }
 
 function buildDraftsFromScheduleDate(dateKey) {
   let schedule = {};
-  try { schedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}'); } catch (_) {}
+  try { schedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}'); } catch (_) {}
   const dayData = schedule[dateKey];
   if (!dayData || dayData.isOff || String(dayData.loc || '').trim().toUpperCase() === 'X') return [];
   const stores = getScheduleLocationsWithoutRouteOrder(dayData).slice(0, 5);
@@ -1488,7 +1610,7 @@ function loadReportDate(dateKey, options = {}) {
   }
 
   // 用校驗後的正確內容覆蓋被污染的日期快照。
-  localStorage.setItem(`shopee_report_daily_${dateKey}`, JSON.stringify(drafts));
+  appStorage.setItem(`shopee_report_daily_${dateKey}`, JSON.stringify(drafts));
 
   replaceWorkingDrafts(drafts);
   currentViewingReportDateKey = dateKey;
@@ -1527,7 +1649,7 @@ function collectCurrentDrafts() {
   const drafts = [];
   for (let index = 1; index <= 5; index++) {
     try {
-      const data = JSON.parse(localStorage.getItem(`shopee_report_draft_${index}`) || '{}');
+      const data = JSON.parse(appStorage.getItem(`shopee_report_draft_${index}`) || '{}');
       if (data.shopName) drafts.push(data);
     } catch (_) {}
   }
@@ -1546,34 +1668,34 @@ function inferDraftDateKey(drafts, fallbackDateKey) {
 
 function saveDailyDraftSnapshot(dateKey = formatDateISO(new Date()), setActiveDate = true) {
   const drafts = collectCurrentDrafts();
-  localStorage.setItem(`shopee_report_daily_${dateKey}`, JSON.stringify(drafts));
-  if (setActiveDate) localStorage.setItem('shopee_active_report_date', dateKey);
-  localStorage.setItem('shopee_last_local_save', new Date().toISOString());
-  localStorage.setItem('shopee_cloud_pending', 'true');
+  appStorage.setItem(`shopee_report_daily_${dateKey}`, JSON.stringify(drafts));
+  if (setActiveDate) appStorage.setItem('shopee_active_report_date', dateKey);
+  appStorage.setItem('shopee_last_local_save', new Date().toISOString());
+  appStorage.setItem('shopee_cloud_pending', 'true');
 }
 
 function handleDailyRollover() {
   const todayKey = formatDateISO(new Date());
   const drafts = collectCurrentDrafts();
-  let activeDate = localStorage.getItem('shopee_active_report_date');
+  let activeDate = appStorage.getItem('shopee_active_report_date');
   if (!activeDate && drafts.length) activeDate = inferDraftDateKey(drafts, todayKey);
   if (!activeDate) activeDate = todayKey;
 
   if (activeDate !== todayKey) {
-    if (drafts.length) localStorage.setItem(`shopee_report_daily_${activeDate}`, JSON.stringify(drafts));
-    for (let index = 1; index <= 5; index++) localStorage.removeItem(`shopee_report_draft_${index}`);
+    if (drafts.length) appStorage.setItem(`shopee_report_daily_${activeDate}`, JSON.stringify(drafts));
+    for (let index = 1; index <= 5; index++) appStorage.removeItem(`shopee_report_draft_${index}`);
     currentViewingReportDateKey = todayKey;
     isViewingHistoricalReport = false;
     currentDraftKey = 'shopee_report_draft_1';
-    localStorage.setItem('shopee_active_report_date', todayKey);
-    localStorage.setItem('shopee_cloud_pending', 'true');
+    appStorage.setItem('shopee_active_report_date', todayKey);
+    appStorage.setItem('shopee_cloud_pending', 'true');
     return true;
   }
-  localStorage.setItem('shopee_active_report_date', todayKey);
+  appStorage.setItem('shopee_active_report_date', todayKey);
   return false;
 }
 
-let storesData = JSON.parse(localStorage.getItem('shopee_custom_stores_data') || 'null') || [
+let storesData = JSON.parse(appStorage.getItem('shopee_custom_stores_data') || 'null') || [
   {"name": "中正台大店", "address": "台北市中正區羅斯福路三段304號", "tags": ["👤有人店", "NDD打包", "FBS打包", "中正速配倉"], "notes": "中正速配倉"},
   {"name": "大安溫州店", "address": "台北市大安區溫州街8號1樓", "tags": ["👤有人店", "NDD打包", "FBS打包"], "notes": ""},
   {"name": "文山興隆-智取店", "address": "台北市文山區興隆路一段86號", "tags": ["⭐重點店", "SCS HD打包", "HD上架"], "notes": "HD滯留放 隔壁小房間"},
@@ -1642,7 +1764,7 @@ function normalizeStoresData(data) {
 
 function reloadStoresDataFromStorage() {
   try {
-    const saved = JSON.parse(localStorage.getItem('shopee_custom_stores_data') || 'null');
+    const saved = JSON.parse(appStorage.getItem('shopee_custom_stores_data') || 'null');
     if (Array.isArray(saved)) storesData = normalizeStoresData(saved);
   } catch (error) {
     console.warn('門市資料格式異常，沿用目前資料：', error);
@@ -1656,7 +1778,7 @@ function reloadStoresDataFromStorage() {
 }
 
 storesData = normalizeStoresData(storesData);
-localStorage.setItem('shopee_custom_stores_data', JSON.stringify(storesData));
+appStorage.setItem('shopee_custom_stores_data', JSON.stringify(storesData));
 
 function switchMainTab(tabId, btn) {
   if (tabId === 'today-tab' && isViewingHistoricalReport) {
@@ -1714,7 +1836,7 @@ function initLiveClock() {
 
 function toggleClockFormat() {
   is12HourFormat = !is12HourFormat;
-  localStorage.setItem('clock_format_12h', is12HourFormat);
+  appStorage.setItem('clock_format_12h', is12HourFormat);
   showToast(`⏰ 已切換為 ${is12HourFormat ? '12 小時制' : '24 小時制'}`);
 }
 
@@ -1727,7 +1849,7 @@ function applyTheme(theme) {
 
 function toggleTheme() {
   const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-  localStorage.setItem('shopee_ui_theme', next);
+  appStorage.setItem('shopee_ui_theme', next);
   applyTheme(next);
   showToast(next === 'dark' ? '🌙 已切換深色模式' : '☀️ 已切換淺色模式');
 }
@@ -1758,7 +1880,7 @@ function getApplicableSubjects(shopName, shift) {
 
 function getDraftCompletion(index) {
   try {
-    const draft = JSON.parse(localStorage.getItem(`shopee_report_draft_${index + 1}`) || '{}');
+    const draft = JSON.parse(appStorage.getItem(`shopee_report_draft_${index + 1}`) || '{}');
     if (!draft.shopName) return { exists: false, percent: 0, total: 0, confirmed: 0 };
     
     const subjects = getApplicableSubjects(draft.shopName, draft.shift || '早');
@@ -1863,7 +1985,7 @@ function scheduleStoreIdentity(value) {
 
 function repairScheduleStoreNamesAndDuplicates() {
   let schedule;
-  try { schedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}'); }
+  try { schedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}'); }
   catch (_) { return false; }
   let changed = false;
 
@@ -1900,8 +2022,8 @@ function repairScheduleStoreNamesAndDuplicates() {
   });
 
   if (changed) {
-    localStorage.setItem('shopee_user_schedule', JSON.stringify(schedule));
-    localStorage.setItem('shopee_cloud_pending', 'true');
+    appStorage.setItem('shopee_user_schedule', JSON.stringify(schedule));
+    appStorage.setItem('shopee_cloud_pending', 'true');
   }
   return changed;
 }
@@ -1925,7 +2047,7 @@ function renderTodayDashboard() {
   const now = new Date();
   const todayKey = formatDateISO(now);
   const weekNames = ['日','一','二','三','四','五','六'];
-  const schedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const schedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
   const dayData = schedule[todayKey];
   const dateLabel = document.getElementById('today-date-label');
   const locLabel = document.getElementById('today-location-label');
@@ -1942,9 +2064,12 @@ function renderTodayDashboard() {
   }
   
   if (statusDot && syncText) {
-    const cloudPending = localStorage.getItem('shopee_cloud_pending') === 'true';
+    const cloudPending = appStorage.getItem('shopee_cloud_pending') === 'true';
     const hasCloudToken = Boolean(window.gapi?.client?.getToken?.()?.access_token);
-    if (!navigator.onLine) {
+    if (window.IS_TRIAL_PROFILE) {
+      statusDot.className = 'status-dot online';
+      syncText.textContent = '試用空間・資料與正式版隔離';
+    } else if (!navigator.onLine) {
       statusDot.className = 'status-dot offline';
       syncText.textContent = '離線模式・資料已存於本機';
     } else if (cloudPending) {
@@ -1980,7 +2105,7 @@ function renderTodayDashboard() {
   const locations = getParsedLocations(dayData);
   const locationDetails = locations.map(getScheduleStoreDetails);
   const draftCount = locations.slice(0,5).filter((_, i) => {
-    try { return Boolean(JSON.parse(localStorage.getItem(`shopee_report_draft_${i+1}`) || '{}').shopName); }
+    try { return Boolean(JSON.parse(appStorage.getItem(`shopee_report_draft_${i+1}`) || '{}').shopName); }
     catch(e) { return false; }
   }).length;
 
@@ -2028,7 +2153,7 @@ function openTodaySchedule() {
 
 function startTodayReport() {
   currentSelectedDayKey = formatDateISO(new Date());
-  const schedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const schedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
   const dayData = schedule[currentSelectedDayKey];
   if (dayData && (dayData.loc || (dayData.supportLocs || []).length)) {
     syncCurrentDayScheduleToReportDraft();
@@ -2044,7 +2169,7 @@ function populateReportStoreDatalist() {
   const existingValues = new Set();
   storesData.forEach(s => existingValues.add(s.name));
 
-  const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const savedSchedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
   Object.values(savedSchedule).forEach(day => {
     if (day.loc) day.loc.split(/[\/\n]/).forEach(l => existingValues.add(l.trim()));
     if (day.supportLocs) day.supportLocs.forEach(s => existingValues.add(s.trim()));
@@ -2124,11 +2249,11 @@ function formatDailySubject(subjectId, data) {
 function getDailyReportDrafts(dateKey) {
   const candidates = [];
   try {
-    const daily = JSON.parse(localStorage.getItem(`shopee_report_daily_${dateKey}`) || 'null');
+    const daily = JSON.parse(appStorage.getItem(`shopee_report_daily_${dateKey}`) || 'null');
     if (Array.isArray(daily)) candidates.push(...daily.filter(item => item?.shopName));
   } catch (_) {}
   try {
-    const legacy = JSON.parse(localStorage.getItem(`shopee_report_history_${dateKey}`) || 'null');
+    const legacy = JSON.parse(appStorage.getItem(`shopee_report_history_${dateKey}`) || 'null');
     if (legacy?.shopName) candidates.push(legacy);
   } catch (_) {}
   const score = data => {
@@ -2254,7 +2379,7 @@ const subjectConfirmLabels = {
 };
 
 function readCurrentDraftObject() {
-  try { return JSON.parse(localStorage.getItem(currentDraftKey) || '{}'); }
+  try { return JSON.parse(appStorage.getItem(currentDraftKey) || '{}'); }
   catch(e) { return {}; }
 }
 
@@ -2286,7 +2411,7 @@ function toggleSubjectConfirmation(subjectId) {
   data._confirmedAt ||= {};
   if (willConfirm) data._confirmedAt[subjectId] = new Date().toISOString();
   else delete data._confirmedAt[subjectId];
-  localStorage.setItem(currentDraftKey, JSON.stringify(data));
+  appStorage.setItem(currentDraftKey, JSON.stringify(data));
   saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
   updateSubjectConfirmationUI();
   updateReportProgress();
@@ -2300,7 +2425,7 @@ function markSubjectUnconfirmed(subjectId) {
   if (!data._confirmedSubjects?.[subjectId]) return;
   data._confirmedSubjects[subjectId] = false;
   if (data._confirmedAt) delete data._confirmedAt[subjectId];
-  localStorage.setItem(currentDraftKey, JSON.stringify(data));
+  appStorage.setItem(currentDraftKey, JSON.stringify(data));
   saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
   updateSubjectConfirmationUI();
   renderTodayDashboard();
@@ -2532,10 +2657,10 @@ function migrateStoreNameReferences(oldName, newName) {
     return value;
   };
 
-  Object.keys(localStorage).filter(key => key.startsWith('shopee_')).forEach(key => {
+  Object.keys(appStorage).filter(key => key.startsWith('shopee_')).forEach(key => {
     try {
-      const parsed = JSON.parse(localStorage.getItem(key));
-      localStorage.setItem(key, JSON.stringify(migrateObject(parsed)));
+      const parsed = JSON.parse(appStorage.getItem(key));
+      appStorage.setItem(key, JSON.stringify(migrateObject(parsed)));
     } catch (_) {
       // 非 JSON 的設定值保持原狀。
     }
@@ -2647,7 +2772,7 @@ function saveStoreModalData() {
     showToast(`+ 已成功新增門市：${name}`);
   }
 
-  localStorage.setItem('shopee_custom_stores_data', JSON.stringify(storesData));
+  appStorage.setItem('shopee_custom_stores_data', JSON.stringify(storesData));
   closeStoreEditModal();
   renderStoreManageList();
   populateShopOptions();
@@ -2676,7 +2801,7 @@ function deleteStoreItem(index) {
   clearTimeout(pendingStoreDeleteTimer);
   pendingStoreDeleteIndex = -1;
   storesData.splice(index, 1);
-  localStorage.setItem('shopee_custom_stores_data', JSON.stringify(storesData));
+  appStorage.setItem('shopee_custom_stores_data', JSON.stringify(storesData));
   showToast(`🗑️ 已刪除門市：${storeName}`);
   renderStoreManageList();
   populateShopOptions();
@@ -2753,7 +2878,7 @@ function onWeekPickerChange(selectedVal) {
 }
 
 function updateHistoryDropdown() {
-  const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const savedSchedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
   const historyPicker = document.getElementById('history-picker');
   if (!historyPicker) return;
   historyPicker.innerHTML = '<option value="">-- 選擇歷史週次 --</option>';
@@ -2827,7 +2952,7 @@ function loadWeekSchedule() {
   if (!container) return;
   container.innerHTML = '';
 
-  const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const savedSchedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
 
   for (let i = 0; i < 7; i++) {
     let curDate = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
@@ -2865,7 +2990,7 @@ function deleteCurrentWeekSchedule() {
     clearTimeout(deleteWeekConfirmTimer);
     deleteWeekConfirmTimer = null;
 
-    const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+    const savedSchedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
     const parts = mondayStr.split('-').map(Number);
     const monday = new Date(parts[0], parts[1] - 1, parts[2]);
 
@@ -2876,7 +3001,7 @@ function deleteCurrentWeekSchedule() {
       if (savedSchedule[dateKey]) { delete savedSchedule[dateKey]; deletedCount++; }
     }
 
-    localStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
+    appStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
     showToast(`🗑️ 已成功刪除 ${mondayStr} 週次 (${deletedCount} 天) 的班表！`);
 
     updateHistoryDropdown();
@@ -2896,7 +3021,7 @@ function clearAllScheduleData() {
   if (clearScheduleConfirmTimer) {
     clearTimeout(clearScheduleConfirmTimer);
     clearScheduleConfirmTimer = null;
-    localStorage.removeItem('shopee_user_schedule');
+    appStorage.removeItem('shopee_user_schedule');
     showToast('🗑️ 已徹底清空所有班表歷史資料！');
     initWeekPicker();
     syncScheduleToDrive();
@@ -2921,7 +3046,7 @@ function renderDayView() {
   if (dayPicker && dayPicker.value !== currentSelectedDayKey) dayPicker.value = currentSelectedDayKey;
   const feedback = document.getElementById('day-picker-feedback');
   if (feedback) feedback.textContent = currentSelectedDayKey === formatDateISO(new Date()) ? '✅ 正在顯示今天' : `📅 正在查看 ${currentSelectedDayKey}`;
-  const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const savedSchedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
   const todayData = savedSchedule[currentSelectedDayKey];
 
   const container = document.getElementById('day-schedule-info');
@@ -2945,7 +3070,7 @@ function renderDayView() {
 
   const historyKey = 'shopee_report_history_' + currentSelectedDayKey;
   if (restoreBtn) {
-    if (localStorage.getItem(historyKey)) {
+    if (appStorage.getItem(historyKey)) {
       restoreBtn.style.display = 'block';
     } else {
       restoreBtn.style.display = 'none';
@@ -2992,7 +3117,7 @@ function syncCurrentDayScheduleToReportDraft(options = {}) {
   const silent = options.silent === true;
   const stayOnCurrentTab = options.stayOnCurrentTab === true;
   try {
-    const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+    const savedSchedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
     const dayData = savedSchedule[currentSelectedDayKey];
 
     if (!dayData || (!dayData.loc && (!dayData.supportLocs || dayData.supportLocs.length === 0)) || dayData.isOff || (dayData.loc && dayData.loc.toUpperCase() === 'X')) {
@@ -3033,7 +3158,7 @@ function syncCurrentDayScheduleToReportDraft(options = {}) {
       const matchedShopName = parsedStore.canonicalName;
 
       let draftData = {};
-      try { draftData = JSON.parse(localStorage.getItem(draftKey) || '{}'); } catch(e) {}
+      try { draftData = JSON.parse(appStorage.getItem(draftKey) || '{}'); } catch(e) {}
 
       if (draftData.shopName && draftData.shopName !== matchedShopName) {
         draftData._confirmedSubjects = {};
@@ -3047,21 +3172,21 @@ function syncCurrentDayScheduleToReportDraft(options = {}) {
       draftData._scheduleReminders = parsedStore.reminders;
       draftData._schedulePriority = parsedStore.priority;
 
-      localStorage.setItem(draftKey, JSON.stringify(draftData));
+      appStorage.setItem(draftKey, JSON.stringify(draftData));
       matchedStores.push(matchedShopName);
       matchedCount++;
     });
 
     // 今日路線不足 5 家時，清除後方殘留的舊草稿，避免回報區仍顯示前次門市。
     for (let index = matchedCount; index < 5; index++) {
-      localStorage.removeItem(`shopee_report_draft_${index + 1}`);
+      appStorage.removeItem(`shopee_report_draft_${index + 1}`);
     }
     saveDailyDraftSnapshot(currentSelectedDayKey, currentSelectedDayKey === formatDateISO(new Date()));
 
     // 回報草稿使用完整門市名稱；班表仍保留使用者輸入的短店名及原本的主店／支援店分類。
     dayData.routeOrder = allStores.slice(0, 5);
     savedSchedule[currentSelectedDayKey] = dayData;
-    localStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
+    appStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
 
     currentViewingReportDateKey = currentSelectedDayKey;
     isViewingHistoricalReport = currentViewingReportDateKey !== formatDateISO(new Date());
@@ -3113,10 +3238,10 @@ function ensureTodayDraftsFromSchedule() {
   if (workingDrafts.length) {
     rescueMisplacedDrafts(workingDrafts, todayKey);
     replaceWorkingDrafts([]);
-    localStorage.setItem(`shopee_report_daily_${todayKey}`, '[]');
+    appStorage.setItem(`shopee_report_daily_${todayKey}`, '[]');
   }
   let schedule = {};
-  try { schedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}'); } catch (_) {}
+  try { schedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}'); } catch (_) {}
   const dayData = schedule[todayKey];
   if (!dayData || dayData.isOff || String(dayData.loc || '').trim().toUpperCase() === 'X' || (!dayData.loc && !(dayData.supportLocs || []).length)) return false;
   currentSelectedDayKey = todayKey;
@@ -3132,7 +3257,7 @@ function addCurrentStoreToScheduleSupport() {
 
   const cleanShop = getCleanShopName();
   const todayKey = formatDateISO(new Date());
-  const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const savedSchedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
 
   let dayData = savedSchedule[todayKey] || { loc: '', supportLocs: [], t1: '', isOff: false };
 
@@ -3151,7 +3276,7 @@ function addCurrentStoreToScheduleSupport() {
   dayData.isOff = false;
   savedSchedule[todayKey] = dayData;
 
-  localStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
+  appStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
   
   loadWeekSchedule();
   renderMonthView();
@@ -3163,14 +3288,14 @@ function addCurrentStoreToScheduleSupport() {
 
 function restoreReportDataToForm() {
   const historyKey = 'shopee_report_history_' + currentSelectedDayKey;
-  const rawData = localStorage.getItem(historyKey);
+  const rawData = appStorage.getItem(historyKey);
   if (!rawData) {
     showToast('⚠️ 找不到該日期的巡店紀錄！');
     return;
   }
 
   switchMainTab('report-tab', navButtonFor('report-tab'));
-  localStorage.setItem(currentDraftKey, rawData);
+  appStorage.setItem(currentDraftKey, rawData);
   loadData(false);
   showToast(`📦 已成功帶入並還原 ${currentSelectedDayKey} 的巡店填表內容！`);
 }
@@ -3185,7 +3310,7 @@ function renderMonthView() {
   if (!container) return;
   container.innerHTML = '';
 
-  const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const savedSchedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
   const firstDay = new Date(year, month - 1, 1);
   const lastDay = new Date(year, month, 0);
 
@@ -3243,7 +3368,7 @@ function renderMonthView() {
 }
 
 function openModal(dateKey) {
-  const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const savedSchedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
   const dayData = savedSchedule[dateKey] || { loc: '', supportLocs: [], t1: '' };
 
   let fullLocStr = dayData.loc || '';
@@ -3285,7 +3410,7 @@ function saveModalDay() {
   const supportVal = mSup ? mSup.value.trim() : '';
   const timeVal = mTime ? mTime.value.trim() : '';
 
-  const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const savedSchedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
   const supportArr = supportVal ? supportVal.split(/[\/\n]/).map(s => s.trim()).filter(Boolean) : [];
 
   if (locVal || supportArr.length > 0 || timeVal) {
@@ -3299,7 +3424,7 @@ function saveModalDay() {
     delete savedSchedule[dateKey];
   }
 
-  localStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
+  appStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
   showToast(`💾 已成功更新 ${dateKey} 排班！`);
   closeModal();
   
@@ -3314,11 +3439,11 @@ function deleteModalDay() {
   const mKey = document.getElementById('modal-date-key');
   if (!mKey) return;
   const dateKey = mKey.value;
-  const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const savedSchedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
 
   if (savedSchedule[dateKey]) {
     delete savedSchedule[dateKey];
-    localStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
+    appStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
     showToast(`🗑️ 已清空 ${dateKey} 的排班！`);
   }
 
@@ -3352,7 +3477,7 @@ function updateDraftLabels() {
   let badgeHTML = '';
 
   ['draft_1', 'draft_2', 'draft_3', 'draft_4', 'draft_5'].forEach((key, index) => {
-    const rawData = localStorage.getItem('shopee_report_' + key);
+    const rawData = appStorage.getItem('shopee_report_' + key);
     let storeName = '未填';
 
     if (rawData) {
@@ -3466,15 +3591,15 @@ function moveDraftData(fromIdx, toIdx) {
   const currentIndex = keys.findIndex(key => currentDraftKey === 'shopee_report_' + key);
   const items = keys.map((key, originalIndex) => ({
     originalIndex,
-    data: localStorage.getItem('shopee_report_' + key)
+    data: appStorage.getItem('shopee_report_' + key)
   }));
   const [moved] = items.splice(fromIdx, 1);
   items.splice(toIdx, 0, moved);
 
   items.forEach((item, index) => {
     const targetKey = 'shopee_report_' + keys[index];
-    if (item.data !== null) localStorage.setItem(targetKey, item.data);
-    else localStorage.removeItem(targetKey);
+    if (item.data !== null) appStorage.setItem(targetKey, item.data);
+    else appStorage.removeItem(targetKey);
   });
   saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
 
@@ -3503,12 +3628,12 @@ function getScheduleLocationsWithoutRouteOrder(dayData) {
 
 function syncTodayRouteOrderFromDrafts() {
   const todayKey = formatDateISO(new Date());
-  const schedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  const schedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
   const dayData = schedule[todayKey];
   if (!dayData) return;
 
   const draftNames = ['draft_1','draft_2','draft_3','draft_4','draft_5'].map(key => {
-    try { return JSON.parse(localStorage.getItem('shopee_report_' + key) || '{}').shopName || ''; }
+    try { return JSON.parse(appStorage.getItem('shopee_report_' + key) || '{}').shopName || ''; }
     catch(e) { return ''; }
   }).map(name => name.trim()).filter(Boolean);
   const originalNames = getScheduleLocationsWithoutRouteOrder(dayData);
@@ -3523,7 +3648,7 @@ function syncTodayRouteOrderFromDrafts() {
   });
   dayData.routeOrder = ordered;
   schedule[todayKey] = dayData;
-  localStorage.setItem('shopee_user_schedule', JSON.stringify(schedule));
+  appStorage.setItem('shopee_user_schedule', JSON.stringify(schedule));
   renderTodayDashboard();
   loadWeekSchedule();
   renderMonthView();
@@ -3548,9 +3673,10 @@ function getTodayString() {
 
 window.onload = function() {
   try {
+    initProfileUI();
     const scheduleRepaired = repairScheduleStoreNamesAndDuplicates();
     const rolledOver = handleDailyRollover();
-    applyTheme(localStorage.getItem('shopee_ui_theme') || 'light');
+    applyTheme(appStorage.getItem('shopee_ui_theme') || 'light');
     populateShopOptions();
     loadData(false);
     updateDraftLabels();
@@ -3652,7 +3778,7 @@ function autoSave() {
     next._confirmedAt = {};
   }
   next._lastAutoSavedAt = new Date().toISOString();
-  localStorage.setItem(currentDraftKey, JSON.stringify(next));
+  appStorage.setItem(currentDraftKey, JSON.stringify(next));
   saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
   renderTodayDashboard();
   applyShiftLock();
@@ -3670,7 +3796,7 @@ function saveDataOnly(showAlert) {
   data._lastAutoSavedAt = savedAt;
   if (showAlert) data._lastManualSavedAt = savedAt;
   const dataStr = JSON.stringify(data);
-  localStorage.setItem(currentDraftKey, dataStr);
+  appStorage.setItem(currentDraftKey, dataStr);
   saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
   const checkpoint = showAlert ? saveReportCheckpoint(data, '手動保存') : null;
   updateDraftLabels();
@@ -3756,7 +3882,7 @@ function requestDeleteCheckpoint(checkpointId, selectedId = '') {
     return;
   }
   const remaining = getReportCheckpoints().filter(item => item.id !== checkpointId);
-  localStorage.setItem(REPORT_CHECKPOINTS_KEY, JSON.stringify(remaining));
+  appStorage.setItem(REPORT_CHECKPOINTS_KEY, JSON.stringify(remaining));
   resetCheckpointDeleteConfirm();
   updateReportSaveStatus();
   if (remaining.length) openCheckpointRestoreModal(selectedId === checkpointId ? '' : selectedId);
@@ -3785,7 +3911,7 @@ function requestDeleteStoreCheckpoints(checkpointId) {
     return;
   }
   const remaining = getReportCheckpoints().filter(item => `${item.dateKey}|${item.storeIdentity}` !== group);
-  localStorage.setItem(REPORT_CHECKPOINTS_KEY, JSON.stringify(remaining));
+  appStorage.setItem(REPORT_CHECKPOINTS_KEY, JSON.stringify(remaining));
   resetCheckpointDeleteConfirm();
   updateReportSaveStatus();
   if (remaining.length) openCheckpointRestoreModal();
@@ -3797,7 +3923,7 @@ function findDraftSlotForCheckpoint(checkpoint) {
   let firstEmpty = '';
   for (let index = 1; index <= 5; index++) {
     const key = `shopee_report_draft_${index}`;
-    const raw = localStorage.getItem(key);
+    const raw = appStorage.getItem(key);
     if (!raw && !firstEmpty) firstEmpty = key;
     try {
       const data = JSON.parse(raw || '{}');
@@ -3832,7 +3958,7 @@ function applyReportCheckpoint(checkpointId) {
 
   const restored = JSON.parse(JSON.stringify(checkpoint.data));
   restored._lastAutoSavedAt = new Date().toISOString();
-  localStorage.setItem(targetKey, JSON.stringify(restored));
+  appStorage.setItem(targetKey, JSON.stringify(restored));
   currentDraftKey = targetKey;
   saveDailyDraftSnapshot(checkpoint.dateKey, checkpoint.dateKey === formatDateISO(new Date()));
   loadData(false);
@@ -3846,7 +3972,7 @@ function applyReportCheckpoint(checkpointId) {
 function saveDataAndSyncToSchedule(showAlert) {
   if (!isViewingHistoricalReport) handleDailyRollover();
   const dataStr = getAllData();
-  localStorage.setItem(currentDraftKey, dataStr);
+  appStorage.setItem(currentDraftKey, dataStr);
   saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
   updateDraftLabels();
   renderTodayDashboard();
@@ -3855,7 +3981,7 @@ function saveDataAndSyncToSchedule(showAlert) {
     const parsed = JSON.parse(dataStr);
     if (!isViewingHistoricalReport && parsed.shopName && parsed.shopName.trim() !== '') {
       const todayKey = formatDateISO(new Date());
-      const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+      const savedSchedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
       
       const shiftStr = parsed.shift ? `${parsed.shift}班` : '';
       let dayData = savedSchedule[todayKey] || { loc: '', supportLocs: [], t1: '', isOff: false };
@@ -3866,8 +3992,8 @@ function saveDataAndSyncToSchedule(showAlert) {
       dayData.isOff = false;
 
       savedSchedule[todayKey] = dayData;
-      localStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
-      localStorage.setItem('shopee_report_history_' + todayKey, dataStr);
+      appStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
+      appStorage.setItem('shopee_report_history_' + todayKey, dataStr);
 
       loadWeekSchedule();
       renderMonthView();
@@ -3913,13 +4039,13 @@ function resetFormFields() {
 }
 
 function loadData(showAlert) {
-  const saved = localStorage.getItem(currentDraftKey); 
+  const saved = appStorage.getItem(currentDraftKey); 
   resetFormFields();
 
   if (saved) {
     try {
       const data = normalizeDraftStoreMetadata(JSON.parse(saved));
-      localStorage.setItem(currentDraftKey, JSON.stringify(data));
+      appStorage.setItem(currentDraftKey, JSON.stringify(data));
       for (let id in data) {
         const el = document.getElementById(id);
         if (el) {
@@ -3955,7 +4081,7 @@ function clearData() {
   if (clearConfirmTimer) {
     clearTimeout(clearConfirmTimer);
     clearConfirmTimer = null;
-    localStorage.removeItem(currentDraftKey);
+    appStorage.removeItem(currentDraftKey);
     saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
     showToast('🗑️ 已徹底刪除此店巡店資料！');
     setTimeout(() => { resetFormFields(); updateDraftLabels(); updateSubjectConfirmationUI(); updateReportProgress(); renderTodayDashboard(); }, 400);
@@ -4037,7 +4163,7 @@ function updateStoreInfo() {
     const tagListDiv = document.getElementById('storeTagList');
     tagListDiv.innerHTML = '';
     let draftData = {};
-    try { draftData = JSON.parse(localStorage.getItem(currentDraftKey) || '{}'); } catch (_) {}
+    try { draftData = JSON.parse(appStorage.getItem(currentDraftKey) || '{}'); } catch (_) {}
     const mergedTags = [...new Set([...(store.tags || []), ...(draftData._scheduleTags || [])])];
     if (mergedTags.length > 0) {
       mergedTags.forEach(t => {
@@ -4385,7 +4511,7 @@ function handleExcelImport(event) {
         return;
       }
 
-      let scheduleData = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+      let scheduleData = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
       let importedCount = 0;
       let firstImportedMonday = null;
 
@@ -4424,7 +4550,7 @@ function handleExcelImport(event) {
         return;
       }
 
-      localStorage.setItem('shopee_user_schedule', JSON.stringify(scheduleData));
+      appStorage.setItem('shopee_user_schedule', JSON.stringify(scheduleData));
       syncScheduleToDrive();
 
       if (firstImportedMonday) {
@@ -4512,14 +4638,14 @@ function updateSystemStatus() {
   const setStatusEl = document.getElementById('settings-system-status');
 
   const isOnline = navigator.onLine;
-  const cloudPending = localStorage.getItem('shopee_cloud_pending') === 'true';
+  const cloudPending = appStorage.getItem('shopee_cloud_pending') === 'true';
   const hasCloudToken = Boolean(window.gapi?.client?.getToken?.()?.access_token);
   let isStorageOk = true;
 
   try {
     const testKey = '__storage_test__';
-    localStorage.setItem(testKey, testKey);
-    localStorage.removeItem(testKey);
+    appStorage.setItem(testKey, testKey);
+    appStorage.removeItem(testKey);
   } catch (e) {
     isStorageOk = false;
   }
@@ -4527,6 +4653,8 @@ function updateSystemStatus() {
   let statusHtml = '';
   if (!isStorageOk) {
     statusHtml = '系統狀態：<span style="color:#d32f2f; font-weight:bold;">● 儲存空間已滿/受限</span>';
+  } else if (window.IS_TRIAL_PROFILE) {
+    statusHtml = '系統狀態：<span style="color:#6f42c1; font-weight:bold;">● 獨立試用空間・僅保存於本機</span>';
   } else if (!isOnline) {
     statusHtml = '系統狀態：<span style="color:#ff9800; font-weight:bold;">● 離線，本機資料安全</span>';
   } else if (cloudPending) {
@@ -4552,10 +4680,10 @@ function updateStorageUsage() {
   const setStorageEl = document.getElementById('settings-storage-usage');
 
   let totalChar = 0;
-  for (let key in localStorage) {
-    if (localStorage.hasOwnProperty(key)) {
-      totalChar += (localStorage[key].length + key.length);
-    }
+  for (let index = 0; index < appStorage.length; index++) {
+    const key = appStorage.key(index);
+    const value = key ? appStorage.getItem(key) : '';
+    totalChar += String(value || '').length + String(key || '').length;
   }
 
   const usedKB = (totalChar / 1024).toFixed(1);
@@ -4570,11 +4698,11 @@ let clearWebsiteMemoryTimer = null;
 function clearWebsiteMemory() {
   const button = document.getElementById('clear-web-memory-btn');
   if (!clearWebsiteMemoryTimer) {
-    if (button) button.textContent = '⚠️ 5 秒內再按一次，確認清除全部本機資料';
-    showToast('⚠️ 將清除本應用的班表、巡店紀錄、門市設定與同步狀態；請再按一次確認。', 5000);
+    if (button) button.textContent = window.IS_TRIAL_PROFILE ? '⚠️ 再按一次，確認清除此試用空間' : '⚠️ 5 秒內再按一次，確認清除全部本機資料';
+    showToast(window.IS_TRIAL_PROFILE ? '⚠️ 只會清除此試用空間的班表、巡店紀錄與設定；正式資料不受影響。請再按一次確認。' : '⚠️ 將清除本應用的班表、巡店紀錄、門市設定與同步狀態；請再按一次確認。', 5000);
     clearWebsiteMemoryTimer = setTimeout(() => {
       clearWebsiteMemoryTimer = null;
-      if (button) button.textContent = '🧪 清除本應用網頁記憶（測試重置）';
+      if (button) button.textContent = window.IS_TRIAL_PROFILE ? '🧹 清除此試用空間資料' : '🧪 清除本應用網頁記憶（測試重置）';
     }, 5000);
     return;
   }
@@ -4582,23 +4710,23 @@ function clearWebsiteMemory() {
   clearTimeout(clearWebsiteMemoryTimer);
   clearWebsiteMemoryTimer = null;
   const keys = [];
-  for (let index = 0; index < localStorage.length; index++) {
-    const key = localStorage.key(index);
+  for (let index = 0; index < appStorage.length; index++) {
+    const key = appStorage.key(index);
     if (key?.startsWith('shopee_') || key === 'clock_format_12h') keys.push(key);
   }
-  keys.forEach(key => localStorage.removeItem(key));
+  keys.forEach(key => appStorage.removeItem(key));
   try {
     Object.keys(sessionStorage).filter(key => key.startsWith('shopee_')).forEach(key => sessionStorage.removeItem(key));
   } catch (_) {}
-  showToast(`🧹 已清除 ${keys.length} 筆本應用網頁記憶，正在重新載入…`, 1800);
+  showToast(`🧹 已清除 ${keys.length} 筆${window.IS_TRIAL_PROFILE ? '此試用空間' : '本應用'}資料，正在重新載入…`, 1800);
   setTimeout(() => window.location.reload(), 900);
 }
 
 function exportBackupData() {
   const backupData = {};
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key.startsWith('shopee_')) { backupData[key] = localStorage.getItem(key); }
+  for (let i = 0; i < appStorage.length; i++) {
+    const key = appStorage.key(i);
+    if (key.startsWith('shopee_')) { backupData[key] = appStorage.getItem(key); }
   }
 
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
@@ -4630,7 +4758,7 @@ function handleFileImport(event) {
       let count = 0;
       for (let key in importedData) {
         if (key.startsWith('shopee_')) {
-          localStorage.setItem(key, importedData[key]);
+          appStorage.setItem(key, importedData[key]);
           count++;
         }
       }
