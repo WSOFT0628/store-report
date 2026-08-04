@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店勤務助手 v6.1.0</title>
+<title>蝦皮智取店勤務助手 v6.5.1</title>
 
 <!-- 引入 SheetJS 解析 Excel -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  
@@ -96,19 +96,35 @@
       tokenClient.requestAccessToken({ prompt: hasToken ? '' : 'select_account' });
   }
 
-  async function syncScheduleToDrive() {
+  function markCloudPending() {
+    localStorage.setItem('shopee_cloud_pending', 'true');
+    localStorage.setItem('shopee_last_local_save', new Date().toISOString());
+    if (typeof updateSystemStatus === 'function') updateSystemStatus();
+    if (typeof updateReportSaveStatus === 'function') updateReportSaveStatus();
+  }
+
+  function markCloudSynced() {
+    localStorage.removeItem('shopee_cloud_pending');
+    localStorage.setItem('shopee_last_cloud_sync', new Date().toISOString());
+    if (typeof updateSystemStatus === 'function') updateSystemStatus();
+    if (typeof updateReportSaveStatus === 'function') updateReportSaveStatus();
+  }
+
+  async function syncScheduleToDrive(options = {}) {
+    const manual = options.manual === true;
     if (!gapiInited || !gapi.client || !gapi.client.getToken()) {
-      showToast('⚠️ 請先點擊「連接 Google 雲端」完成授權，才能同步至雲端！');
-      return;
+      markCloudPending();
+      if (manual) showToast('💾 資料已安全暫存於瀏覽器；連接 Google 後可再同步雲端。', 4000);
+      return false;
     }
 
     try {
-      showToast("☁️ 正在準備打包資料並寫入 Google 雲端...");
+      if (manual) showToast("☁️ 正在準備打包資料並寫入 Google 雲端...");
       
       const allData = {};
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key.startsWith('shopee_')) {
+        if (key.startsWith('shopee_') && key !== 'shopee_cloud_pending') {
           allData[key] = localStorage.getItem(key);
         }
       }
@@ -161,11 +177,15 @@
         });
       }
 
-      showToast("✅ 雲端同步完成！所有巡店與班表資料已安全備份。");
+      if (manual) showToast("✅ 雲端同步完成！所有巡店與班表資料已安全備份。");
+      markCloudSynced();
       updateSystemStatus();
+      return true;
     } catch (err) {
       console.error("雲端同步失敗:", err);
-      showToast("❌ 雲端同步失敗，請檢查網路連線後重試！");
+      markCloudPending();
+      if (manual) showToast("💾 雲端暫時異常，資料已保留在瀏覽器，可稍後重試。", 4500);
+      return false;
     }
   }
 
@@ -195,6 +215,7 @@
                 localStorage.setItem(key, remoteData[key]);
               }
             }
+            handleDailyRollover();
             reloadStoresDataFromStorage();
             updateHistoryDropdown();
             loadWeekSchedule();
@@ -280,6 +301,28 @@
   .btn-save-sync { background: #4caf50; }
   .btn-clear-form { background: #ff9800; }
   .btn-clear-data { background: var(--ops-danger); }
+
+  .report-save-status { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:-6px 0 12px; padding:10px 12px; border:1px solid var(--ops-border); border-radius:10px; background:var(--ops-surface); box-shadow:0 2px 8px rgba(23,43,77,.06); }
+  .report-save-status-main { min-width:0; }
+  .report-save-status-title { color:var(--ops-text); font-size:12px; font-weight:900; }
+  .report-save-status-detail { margin-top:3px; color:var(--ops-muted); font-size:11px; line-height:1.45; word-break:break-word; }
+  .report-save-status-badge { flex:none; padding:5px 8px; border-radius:99px; background:rgba(18,161,80,.10); color:var(--ops-success); font-size:10px; font-weight:900; white-space:nowrap; }
+
+  .checkpoint-modal-card { width:min(92vw,680px); max-width:680px; max-height:84vh; overflow:auto; }
+  .checkpoint-list { display:grid; gap:8px; margin-top:10px; }
+  .checkpoint-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:11px; border:1px solid var(--ops-border); border-radius:10px; background:var(--ops-bg); }
+  .checkpoint-item.selected { border-color:var(--ops-info); background:rgba(40,120,208,.08); }
+  .checkpoint-name { color:var(--ops-text); font-size:13px; font-weight:900; }
+  .checkpoint-meta { margin-top:4px; color:var(--ops-muted); font-size:11px; line-height:1.45; }
+  .checkpoint-select { border:0; border-radius:8px; padding:8px 10px; background:var(--ops-info); color:#fff; font-weight:800; cursor:pointer; }
+  .checkpoint-actions { display:flex; flex-direction:column; gap:6px; }
+  .checkpoint-delete { border:1px solid var(--ops-danger); border-radius:8px; padding:7px 9px; background:var(--ops-surface); color:var(--ops-danger); font-size:11px; font-weight:900; cursor:pointer; }
+  .checkpoint-delete.confirming { background:var(--ops-danger); color:#fff; }
+  .checkpoint-preview { margin:12px 0; padding:12px; border:1px solid rgba(238,77,45,.35); border-radius:10px; background:var(--ops-orange-soft); }
+  .checkpoint-warning { margin-top:8px; color:var(--ops-danger); font-size:12px; font-weight:900; }
+  .checkpoint-confirm { width:100%; border:0; border-radius:9px; padding:11px; background:var(--ops-orange); color:#fff; font-weight:900; cursor:pointer; }
+  .checkpoint-delete-all { width:100%; margin-top:8px; border:1px solid var(--ops-danger); border-radius:9px; padding:9px; background:var(--ops-surface); color:var(--ops-danger); font-weight:900; cursor:pointer; }
+  .checkpoint-delete-all.confirming { background:var(--ops-danger); color:#fff; }
 
   .btn-sync-header {
     background: #2e7d32;
@@ -498,6 +541,56 @@
   .btn-preview { background:var(--ops-orange-soft); color:var(--ops-orange); }
   .btn-finish { background:var(--ops-orange); color:#fff; }
 
+  .quick-input-dock {
+    position: sticky;
+    top: calc(50px + env(safe-area-inset-top, 0px));
+    z-index: 1020;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 8px 0 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--ops-border);
+    border-radius: 10px;
+    background: var(--ops-surface);
+    background: color-mix(in srgb, var(--ops-surface) 94%, transparent);
+    box-shadow: 0 5px 16px rgba(15, 35, 65, .16);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    font-size: 12px;
+  }
+  .report-jump-controls {
+    position: fixed;
+    right: max(10px, env(safe-area-inset-right));
+    bottom: calc(148px + env(safe-area-inset-bottom));
+    z-index: 890;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .report-jump-controls button {
+    pointer-events: auto;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 2px solid #fff !important;
+    border-radius: 50%;
+    background: #2878d0 !important;
+    color: #fff !important;
+    box-shadow: 0 4px 12px rgba(15, 35, 65, .22);
+    opacity: .88;
+    font-size: 16px;
+    font-weight: 900;
+    line-height: 1;
+    cursor: pointer;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .report-jump-controls button:hover,
+  .report-jump-controls button:focus-visible,
+  .report-jump-controls button:active { opacity: 1; transform: scale(1.06); }
+
   .settings-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
   .settings-grid button { padding:14px 8px; border:1px solid var(--ops-border); background:var(--ops-surface); color:var(--ops-text); border-radius:10px; font-weight:700; cursor:pointer; }
 
@@ -517,6 +610,10 @@
   .duty-stop.ready .stop-dot { border-color:var(--ops-info); color:#fff; background:var(--ops-info); }
   .stop-name { font-weight:800; font-size:14px; }
   .stop-meta { color:var(--ops-muted); font-size:11px; margin-top:2px; }
+  .stop-tags { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+  .stop-tag { padding:2px 6px; border-radius:99px; background:rgba(40,120,208,.10); color:var(--ops-info); font-size:10px; font-weight:800; }
+  .stop-tag.priority { background:rgba(238,77,45,.12); color:var(--ops-orange); }
+  .stop-detail { color:var(--ops-muted); font-size:10px; line-height:1.45; margin-top:4px; }
   .stop-action { color:var(--ops-orange); font-size:12px; font-weight:800; padding:4px 10px; background:var(--ops-orange-soft); border-radius:6px; }
   
   .ops-progress { margin:12px 0 2px; }
@@ -551,7 +648,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店勤務助手 v6.1.0
+      📦 蝦皮智取店勤務助手 v6.5.1
     </h1>
   </div>
   <div class="main-nav">
@@ -624,9 +721,31 @@
 
   <div class="storage-btn-group">
     <button class="btn-save-only" onclick="saveDataOnly(true)">💾 僅儲存巡店紀錄</button>
+    <button class="btn-save-only" onclick="restoreSavedDraft()" style="background:#1677c8;">📂 套回暫存巡店紀錄</button>
     <button class="btn-save-sync" onclick="saveDataAndSyncToSchedule(true)">🔄 儲存並同步至班表</button>
     <button class="btn-clear-form" onclick="clearFormOnly()">🧹 清空畫面</button>
     <button class="btn-clear-data" onclick="clearData()">🗑️ 刪除此店</button>
+  </div>
+
+  <div id="report-save-status" class="report-save-status" role="status" aria-live="polite">
+    <div class="report-save-status-main">
+      <div class="report-save-status-title">💾 尚未建立手動保存檢查點</div>
+      <div class="report-save-status-detail">選擇門市並按「僅儲存巡店紀錄」後，這裡會顯示保存位置與時間。</div>
+    </div>
+    <span class="report-save-status-badge">本機暫存</span>
+  </div>
+
+  <div class="quick-input-dock">
+    <b style="color:var(--ops-muted);">手機快速輸入：</b>
+    <button type="button" class="badge-btn" onclick="insertQuickValue('0')">0</button>
+    <button type="button" class="badge-btn" onclick="insertQuickValue('無')">無</button>
+    <button type="button" class="badge-btn" onclick="insertQuickValue('異常')">異常</button>
+    <button type="button" class="badge-btn" onclick="insertQuickValue('+')">＋</button>
+  </div>
+
+  <div class="report-jump-controls" aria-label="回報頁快速捲動">
+    <button type="button" onclick="scrollReportTo('top')" aria-label="回到回報區頂部" title="回到頂部">▲</button>
+    <button type="button" onclick="scrollReportTo('bottom')" aria-label="前往回報區底部" title="前往底部">▼</button>
   </div>
 
   <div class="card" style="background: var(--ops-surface); border: 1px solid var(--ops-border);">
@@ -634,8 +753,12 @@
     
     <div class="row">
       <div>
-        <label>月/日 (自動帶入當天)</label>
-        <input type="text" id="date" placeholder="例: 3/30" oninput="autoSave()">
+        <label>回報日期（可輸入月／日或使用月曆）</label>
+        <div style="display:grid;grid-template-columns:minmax(90px,1fr) minmax(145px,1.25fr);gap:8px;">
+          <input type="text" id="date" placeholder="例: 8/3" onchange="handleReportDateTextChange(this.value)">
+          <input type="date" id="report-date-picker" aria-label="選擇回報日期" onchange="loadReportDate(this.value)">
+        </div>
+        <div id="report-date-feedback" role="status" aria-live="polite" style="margin-top:6px;font-size:11px;color:var(--ops-muted);">輸入日期後會自動載入該日巡店資料</div>
       </div>
       <div>
         <label>班別</label>
@@ -668,6 +791,8 @@
       
       <div style="font-size: 12px; font-weight: bold; color: var(--ops-orange); margin-bottom: 4px;">🏷️ 本店任務標籤</div>
       <div id="storeTagList" style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;"></div>
+
+      <div id="scheduleReminderBox" style="display:none; margin-bottom:8px; background:var(--ops-orange-soft); border:1px solid rgba(238,77,45,.35); padding:7px 9px; border-radius:6px; font-size:12px; color:var(--ops-orange); font-weight:bold;"></div>
       
       <div id="storeNotesBox" style="display: none; background: var(--ops-surface); border: 1px solid var(--ops-border); padding: 6px 8px; border-radius: 6px; font-size: 12px; color: var(--ops-text); font-weight: bold;"></div>
     </div>
@@ -854,7 +979,7 @@
 
   <div class="card" style="background: var(--ops-surface);">
     <button class="copy-btn" style="background: #2196f3; margin-top: 0;" onclick="copySupportReport()">
-      ⚡ 複製【支援群簡報】(跨區簡明格式)
+      ⚡ 複製【支援群完整回報】(正式格式)
     </button>
   </div>
 
@@ -880,6 +1005,12 @@
       </button>
     </div>
     <div id="schedule-sync-status" role="status" aria-live="polite" style="display:none; margin:-4px 0 12px; padding:8px 10px; border-radius:8px; text-align:center; font-size:12px; font-weight:bold;"></div>
+
+    <div id="day-control-box" style="display:none;">
+      <label for="day-picker"><b>📅 日檢視日期：</b></label>
+      <input type="date" id="day-picker" onchange="onDayPickerChange(this.value)">
+      <div id="day-picker-feedback" role="status" aria-live="polite" style="margin-top:5px;color:var(--ops-success);font-size:11px;font-weight:bold;">預設顯示今天</div>
+    </div>
 
     <div id="week-control-box">
       <div class="row">
@@ -968,11 +1099,13 @@
     <h3>☁️ 雲端與備份管理</h3>
     <div class="settings-grid">
       <button id="gdrive-login-btn" onclick="handleAuthClick()">連接 Google 雲端</button>
-      <button onclick="syncScheduleToDrive()">寫入並同步至雲端</button>
+      <button onclick="syncScheduleToDrive({manual:true})">寫入並同步至雲端</button>
       <button onclick="exportBackupData()">下載本機備份檔</button>
       <button onclick="importBackupData()">還原 JSON 備份檔</button>
       <button onclick="document.getElementById('excel-file-input').click()" style="grid-column: span 2;">📊 匯入 Excel 班表 (.xlsx)</button>
+      <button id="clear-web-memory-btn" onclick="clearWebsiteMemory()" style="grid-column:span 2;background:#c62828;color:#fff;">🧪 清除本應用網頁記憶（測試重置）</button>
     </div>
+    <p style="font-size:11px;color:var(--ops-muted);margin:8px 0 0;">只會清除本勤務助手在此瀏覽器的班表、巡店、設定及同步狀態；不影響其他網站。</p>
   </div>
 
   <!-- 📍 門市與任務標籤動態管理中心 -->
@@ -1027,7 +1160,7 @@
   <div class="card">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v6.1.0 Shopee Ops Pro</div>
+      <div><b>目前版本：</b> v6.5.1 Shopee Ops Pro</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -1123,6 +1256,22 @@
   <div class="modal-card overview-modal-card" id="overview-modal-inner"></div>
 </div>
 
+<!-- 正式回報文字預覽 -->
+<div id="formal-report-preview-modal" class="modal-overlay">
+  <div class="modal-card" style="max-width:680px;max-height:86vh;display:flex;flex-direction:column;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <div><h3 style="margin:0;color:var(--ops-orange);">📋 支援群完整回報預覽</h3><div id="formal-preview-status" style="font-size:12px;color:var(--ops-muted);margin-top:5px;"></div></div>
+      <button type="button" class="overview-close" onclick="closeFormalReportPreview()">×</button>
+    </div>
+    <textarea id="formal-report-preview-text" readonly style="width:100%;min-height:46vh;margin-top:12px;padding:12px;border:1px solid var(--ops-border);border-radius:8px;background:var(--ops-bg);color:var(--ops-text);font:13px/1.65 monospace;resize:vertical;"></textarea>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">
+      <button type="button" style="background:#78909c;color:#fff;border:0;padding:11px;border-radius:8px;font-weight:bold;" onclick="closeFormalReportPreview()">返回修改</button>
+      <button type="button" style="background:var(--ops-info);color:#fff;border:0;padding:11px;border-radius:8px;font-weight:bold;" onclick="copyFormalPreviewText()">複製回報</button>
+      <button type="button" style="grid-column:span 2;background:var(--ops-success);color:#fff;border:0;padding:12px;border-radius:8px;font-weight:bold;" onclick="completeCurrentStoreFromPreview()">✅ 完成本店並封存</button>
+    </div>
+  </div>
+</div>
+
 <!-- Excel 匯入完成詢問同步 Modal 彈窗 -->
 <div id="import-sync-modal" class="modal-overlay">
   <div class="modal-card" style="text-align: center;">
@@ -1143,8 +1292,286 @@
 <script>
 
 let currentDraftKey = 'shopee_report_draft_1';
-let currentSelectedDayKey = new Date().toISOString().split('T')[0];
+let currentSelectedDayKey = formatDateISO(new Date());
 let is12HourFormat = localStorage.getItem('clock_format_12h') === 'true';
+let currentViewingReportDateKey = formatDateISO(new Date());
+let isViewingHistoricalReport = false;
+const REPORT_CHECKPOINTS_KEY = 'shopee_report_checkpoints_v1';
+const REPORT_CHECKPOINT_LIMIT_PER_STORE = 10;
+
+function getReportCheckpoints() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(REPORT_CHECKPOINTS_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function getCheckpointDateKey(data) {
+  return getDraftDateKey(data, currentViewingReportDateKey) || currentViewingReportDateKey;
+}
+
+function saveReportCheckpoint(data, label = '手動保存') {
+  const storeName = String(data?.shopName || '').trim();
+  if (!storeName) return null;
+  const dateKey = getCheckpointDateKey(data);
+  const storeIdentity = getStoreNameIdentity(storeName);
+  const savedAt = new Date().toISOString();
+  const checkpoint = {
+    id: `checkpoint_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    dateKey,
+    storeIdentity,
+    storeName,
+    shift: String(data.shift || ''),
+    savedAt,
+    label,
+    data: JSON.parse(JSON.stringify(data))
+  };
+  const all = [checkpoint, ...getReportCheckpoints()];
+  const groupCounts = {};
+  const kept = all.filter(item => {
+    const group = `${item.dateKey}|${item.storeIdentity}`;
+    groupCounts[group] = (groupCounts[group] || 0) + 1;
+    return groupCounts[group] <= REPORT_CHECKPOINT_LIMIT_PER_STORE;
+  }).slice(0, 120);
+  localStorage.setItem(REPORT_CHECKPOINTS_KEY, JSON.stringify(kept));
+  localStorage.setItem('shopee_cloud_pending', 'true');
+  return checkpoint;
+}
+
+function formatCheckpointTime(iso, includeDate = false) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '時間不明';
+  const time = date.toLocaleTimeString('zh-TW', { hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  return includeDate ? `${date.toLocaleDateString('zh-TW')} ${time}` : time;
+}
+
+function getCheckpointStats(data) {
+  const confirmed = Object.values(data?._confirmedSubjects || {}).filter(Boolean).length;
+  const filled = Object.entries(data || {}).filter(([key, value]) => /^c\d+_/.test(key) && String(value ?? '').trim() !== '').length;
+  return { confirmed, filled };
+}
+
+function updateReportSaveStatus() {
+  const panel = document.getElementById('report-save-status');
+  if (!panel) return;
+  let data = {};
+  try { data = JSON.parse(localStorage.getItem(currentDraftKey) || '{}'); } catch (_) {}
+  const storeName = String(data.shopName || document.getElementById('shopName')?.value || '').trim();
+  if (!storeName) {
+    panel.innerHTML = `<div class="report-save-status-main"><div class="report-save-status-title">💾 尚未選擇門市</div><div class="report-save-status-detail">選擇門市並儲存後，這裡會顯示明確的保存位置與時間。</div></div><span class="report-save-status-badge">本機暫存</span>`;
+    return;
+  }
+  const identity = getStoreNameIdentity(storeName);
+  const checkpoints = getReportCheckpoints().filter(item => item.dateKey === currentViewingReportDateKey && item.storeIdentity === identity);
+  const latest = checkpoints[0];
+  const autoSavedAt = data._lastAutoSavedAt || data._lastManualSavedAt;
+  const slotName = getDraftName(currentDraftKey.replace('shopee_report_', ''));
+  const cloudState = localStorage.getItem('shopee_cloud_pending') === 'true' ? '雲端待同步' : '雲端已同步';
+  const detail = latest
+    ? `${currentViewingReportDateKey}・${getShortStoreName(storeName)}・${data.shift || '未選班別'}班｜位置：${slotName}｜最後手動保存 ${formatCheckpointTime(latest.savedAt)}｜共 ${checkpoints.length} 個檢查點｜${cloudState}`
+    : `${currentViewingReportDateKey}・${getShortStoreName(storeName)}｜位置：${slotName}｜目前只有自動暫存${autoSavedAt ? `（${formatCheckpointTime(autoSavedAt)}）` : ''}｜${cloudState}`;
+  panel.innerHTML = `<div class="report-save-status-main"><div class="report-save-status-title">${latest ? '✅ 手動檢查點已保存' : '🟠 自動暫存中'}</div><div class="report-save-status-detail">${escapeStoreHTML(detail)}</div></div><span class="report-save-status-badge">${latest ? `${checkpoints.length} 筆版本` : '本機暫存'}</span>`;
+}
+
+function reportDateDisplay(dateKey) {
+  const parts = String(dateKey || '').split('-').map(Number);
+  return parts.length === 3 && parts.every(Number.isFinite) ? `${parts[1]}/${parts[2]}` : '';
+}
+
+function parseReportDateText(value) {
+  const text = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const match = text.match(/^(\d{1,2})[\/-](\d{1,2})$/);
+  if (!match) return '';
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const today = new Date();
+  let year = today.getFullYear();
+  if (today.getMonth() === 0 && month === 12) year--;
+  const candidate = new Date(year, month - 1, day, 12);
+  if (candidate.getMonth() !== month - 1 || candidate.getDate() !== day) return '';
+  return formatDateISO(candidate);
+}
+
+function getDraftDateKey(draft, fallbackDateKey = formatDateISO(new Date())) {
+  const value = String(draft?.date || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const match = value.match(/^(\d{1,2})[\/-](\d{1,2})$/);
+  if (!match) return '';
+  const fallbackYear = Number(String(fallbackDateKey).slice(0, 4)) || new Date().getFullYear();
+  return `${fallbackYear}-${String(Number(match[1])).padStart(2, '0')}-${String(Number(match[2])).padStart(2, '0')}`;
+}
+
+function rescueMisplacedDrafts(drafts, expectedDateKey) {
+  const misplaced = drafts.filter(draft => getDraftDateKey(draft, expectedDateKey) !== expectedDateKey);
+  const groups = {};
+  misplaced.forEach(draft => {
+    const actualDate = getDraftDateKey(draft, expectedDateKey);
+    if (!actualDate) return;
+    (groups[actualDate] ||= []).push(draft);
+  });
+  Object.entries(groups).forEach(([actualDate, items]) => {
+    let existing = [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(`shopee_report_daily_${actualDate}`) || '[]');
+      if (Array.isArray(parsed)) existing = parsed;
+    } catch (_) {}
+    items.forEach(item => {
+      const identity = getStoreNameIdentity(item.shopName);
+      const index = existing.findIndex(saved => getStoreNameIdentity(saved.shopName) === identity);
+      if (index >= 0) existing[index] = item;
+      else existing.push(item);
+    });
+    localStorage.setItem(`shopee_report_daily_${actualDate}`, JSON.stringify(existing));
+  });
+  return misplaced.length;
+}
+
+function setReportDateFeedback(message, type = 'info') {
+  const feedback = document.getElementById('report-date-feedback');
+  if (!feedback) return;
+  feedback.textContent = message;
+  feedback.style.color = type === 'success' ? 'var(--ops-success)' : (type === 'error' ? 'var(--ops-danger)' : 'var(--ops-muted)');
+  feedback.style.fontWeight = type === 'info' ? 'normal' : 'bold';
+}
+
+function replaceWorkingDrafts(drafts) {
+  for (let index = 1; index <= 5; index++) {
+    const data = drafts[index - 1];
+    const key = `shopee_report_draft_${index}`;
+    if (data?.shopName) localStorage.setItem(key, JSON.stringify(data));
+    else localStorage.removeItem(key);
+  }
+}
+
+function buildDraftsFromScheduleDate(dateKey) {
+  let schedule = {};
+  try { schedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}'); } catch (_) {}
+  const dayData = schedule[dateKey];
+  if (!dayData || dayData.isOff || String(dayData.loc || '').trim().toUpperCase() === 'X') return [];
+  const stores = getScheduleLocationsWithoutRouteOrder(dayData).slice(0, 5);
+  return stores.map(store => {
+    const parsed = getScheduleStoreDetails(store);
+    return {
+      date: reportDateDisplay(dateKey),
+      shopName: parsed.canonicalName,
+      shift: determineShiftFromTime(dayData.t1),
+      _scheduleOriginal: parsed.original,
+      _scheduleTags: parsed.tags,
+      _scheduleReminders: parsed.reminders,
+      _schedulePriority: parsed.priority,
+      _confirmedSubjects: {},
+      _confirmedAt: {}
+    };
+  });
+}
+
+function loadReportDate(dateKey, options = {}) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ''))) {
+    setReportDateFeedback('⚠️ 日期格式無效，請輸入例如 8/3 或使用月曆。', 'error');
+    return false;
+  }
+
+  // 只有真正切換到不同日期時才封存目前畫面；重選同一天不可把錯置畫面覆寫進該日。
+  if (dateKey !== currentViewingReportDateKey) {
+    saveDailyDraftSnapshot(currentViewingReportDateKey, currentViewingReportDateKey === formatDateISO(new Date()));
+  }
+  const storedDrafts = getDailyReportDrafts(dateKey);
+  rescueMisplacedDrafts(storedDrafts, dateKey);
+  let drafts = storedDrafts.filter(draft => getDraftDateKey(draft, dateKey) === dateKey);
+  let source = drafts.some(hasFilledReportData) ? '已填寫的巡店紀錄' : '班表門市（尚未填寫）';
+  if (!drafts.length) {
+    drafts = buildDraftsFromScheduleDate(dateKey);
+    source = drafts.length ? '班表門市（尚未填寫）' : '無資料';
+  }
+
+  // 用校驗後的正確內容覆蓋被污染的日期快照。
+  localStorage.setItem(`shopee_report_daily_${dateKey}`, JSON.stringify(drafts));
+
+  replaceWorkingDrafts(drafts);
+  currentViewingReportDateKey = dateKey;
+  isViewingHistoricalReport = dateKey !== formatDateISO(new Date());
+  currentDraftKey = 'shopee_report_draft_1';
+
+  loadData(false);
+  // loadData 會重設巡店欄位，日期控制器必須最後寫入，避免舊草稿日期覆蓋使用者選擇。
+  const textInput = document.getElementById('date');
+  const picker = document.getElementById('report-date-picker');
+  if (textInput) textInput.value = reportDateDisplay(dateKey);
+  if (picker) picker.value = dateKey;
+  updateDraftLabels();
+  updateReportProgress();
+  if (!isViewingHistoricalReport) renderTodayDashboard();
+
+  if (drafts.length) {
+    setReportDateFeedback(`✅ 已載入 ${dateKey}：${drafts.map(item => getShortStoreName(item.shopName)).join('、')}（來源：${source}）`, 'success');
+  } else {
+    setReportDateFeedback(`ℹ️ ${dateKey} 沒有巡店紀錄或班表門市。`, 'info');
+  }
+  if (!options.silent) showToast(drafts.length ? `📅 已載入 ${dateKey} 的 ${drafts.length} 家門市` : `📅 ${dateKey} 無可載入資料`, 3200);
+  return drafts.length > 0;
+}
+
+function handleReportDateTextChange(value) {
+  const dateKey = parseReportDateText(value);
+  if (!dateKey) {
+    setReportDateFeedback('⚠️ 請輸入有效日期，例如 8/3。', 'error');
+    return;
+  }
+  loadReportDate(dateKey);
+}
+
+function collectCurrentDrafts() {
+  const drafts = [];
+  for (let index = 1; index <= 5; index++) {
+    try {
+      const data = JSON.parse(localStorage.getItem(`shopee_report_draft_${index}`) || '{}');
+      if (data.shopName) drafts.push(data);
+    } catch (_) {}
+  }
+  return drafts;
+}
+
+function inferDraftDateKey(drafts, fallbackDateKey) {
+  const value = drafts.find(draft => /^\d{1,2}\/\d{1,2}$/.test(String(draft.date || '').trim()))?.date;
+  if (!value) return fallbackDateKey;
+  const [month, day] = value.split('/').map(Number);
+  const fallback = new Date(`${fallbackDateKey}T12:00:00`);
+  let year = fallback.getFullYear();
+  if (fallback.getMonth() === 0 && month === 12) year--;
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function saveDailyDraftSnapshot(dateKey = formatDateISO(new Date()), setActiveDate = true) {
+  const drafts = collectCurrentDrafts();
+  localStorage.setItem(`shopee_report_daily_${dateKey}`, JSON.stringify(drafts));
+  if (setActiveDate) localStorage.setItem('shopee_active_report_date', dateKey);
+  localStorage.setItem('shopee_last_local_save', new Date().toISOString());
+  localStorage.setItem('shopee_cloud_pending', 'true');
+}
+
+function handleDailyRollover() {
+  const todayKey = formatDateISO(new Date());
+  const drafts = collectCurrentDrafts();
+  let activeDate = localStorage.getItem('shopee_active_report_date');
+  if (!activeDate && drafts.length) activeDate = inferDraftDateKey(drafts, todayKey);
+  if (!activeDate) activeDate = todayKey;
+
+  if (activeDate !== todayKey) {
+    if (drafts.length) localStorage.setItem(`shopee_report_daily_${activeDate}`, JSON.stringify(drafts));
+    for (let index = 1; index <= 5; index++) localStorage.removeItem(`shopee_report_draft_${index}`);
+    currentViewingReportDateKey = todayKey;
+    isViewingHistoricalReport = false;
+    currentDraftKey = 'shopee_report_draft_1';
+    localStorage.setItem('shopee_active_report_date', todayKey);
+    localStorage.setItem('shopee_cloud_pending', 'true');
+    return true;
+  }
+  localStorage.setItem('shopee_active_report_date', todayKey);
+  return false;
+}
 
 let storesData = JSON.parse(localStorage.getItem('shopee_custom_stores_data') || 'null') || [
   {"name": "中正台大店", "address": "台北市中正區羅斯福路三段304號", "tags": ["👤有人店", "NDD打包", "FBS打包", "中正速配倉"], "notes": "中正速配倉"},
@@ -1232,6 +1659,9 @@ storesData = normalizeStoresData(storesData);
 localStorage.setItem('shopee_custom_stores_data', JSON.stringify(storesData));
 
 function switchMainTab(tabId, btn) {
+  if (tabId === 'today-tab' && isViewingHistoricalReport) {
+    loadReportDate(formatDateISO(new Date()), { silent:true });
+  }
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
   document.getElementById(tabId).classList.add('active');
@@ -1306,10 +1736,12 @@ function toggleTheme() {
  * 📍 智慧判定本店適用的科目清單 (基於 storesData 的 tags 動態過濾)
  */
 function getApplicableSubjects(shopName, shift) {
-  const store = storesData.find(s => s.name === shopName || s.name.replace(/-智取店$/, '') === shopName);
-  const tags = store ? store.tags : [];
+  // 科目判定與地址查詢共用同一套班表附註解析，避免「公館(含NDD打包)」被視為未知門市。
+  const details = getScheduleStoreDetails(shopName);
+  const tags = details.tags;
   
-  const isHdStore = tags.some(t => t.includes('SCS HD打包') || t.includes('HD上架'));
+  const isScsHdStore = tags.some(t => t.includes('SCS HD打包'));
+  const isHdUploadStore = tags.some(t => t.includes('HD上架'));
   const isWarehouseStore = tags.some(t => t.includes('中正速配倉'));
 
   let base = shift === '晚'
@@ -1317,7 +1749,8 @@ function getApplicableSubjects(shopName, shift) {
     : ['c3','c4','c5','c6','c8','c9','c10','c12','c15'];
 
   return base.filter(id => {
-    if (['c9','c10','c11','c14'].includes(id) && !isHdStore) return false;
+    if (['c9','c10','c11'].includes(id) && !isScsHdStore) return false;
+    if (id === 'c14' && !isHdUploadStore) return false;
     if (id === 'c12' && !isWarehouseStore) return false;
     return true;
   });
@@ -1351,10 +1784,126 @@ function splitStoreLocationText(value) {
   return String(value || '').split(/(?:\/|\n|→|➡|、|，|,)+/).map(s => s.trim()).filter(Boolean);
 }
 
+const scheduleAnnotationRules = [
+  { pattern:/SCS\s*HD\s*打包/iu, tag:'SCS HD打包' },
+  { pattern:/WH\s*NDD/iu, tag:'WH NDD' },
+  { pattern:/NDD\s*打包|\bNDD\b/iu, tag:'NDD打包' },
+  { pattern:/FBS\s*打包|\bFBS\b/iu, tag:'FBS打包' },
+  { pattern:/HD\s*上架/iu, tag:'HD上架' },
+  { pattern:/夜間\s*上架/iu, tag:'夜間上架' },
+  { pattern:/包裹\s*重新分配|重新分配/iu, tag:'包裹重新分配' },
+  { pattern:/中正\s*速配倉|速配倉/iu, tag:'中正速配倉' },
+  { pattern:/純取店|純取/iu, tag:'純取店' },
+  { pattern:/支援/iu, tag:'支援' },
+  { pattern:/優先|先去|先巡/iu, tag:'優先巡店' }
+];
+
+function parseScheduleStoreToken(value) {
+  const original = String(value || '').trim();
+  const tags = [];
+  const reminders = [];
+  let baseName = original.replace(/\s*[（(]([^（）()]*)[）)]\s*/gu, (whole, content) => {
+    const matchedTags = scheduleAnnotationRules.filter(rule => rule.pattern.test(content)).map(rule => rule.tag);
+    if (!matchedTags.length) return whole;
+    matchedTags.forEach(tag => { if (!tags.includes(tag)) tags.push(tag); });
+    reminders.push(String(content).trim());
+    return '';
+  }).trim();
+  if (!baseName) baseName = original;
+  const priority = tags.includes('優先巡店') || tags.includes('NDD打包');
+  return { original, baseName, tags, reminders, priority };
+}
+
+function getStoreRecordByName(value) {
+  const canonicalName = matchStoreName(value);
+  return storesData.find(store => store.name === canonicalName) || null;
+}
+
+function getScheduleStoreDetails(value) {
+  const parsed = parseScheduleStoreToken(value);
+  const canonicalName = matchStoreName(parsed.baseName);
+  const store = storesData.find(item => item.name === canonicalName) || null;
+  const tags = [...new Set([...(store?.tags || []), ...parsed.tags])];
+  return { ...parsed, canonicalName, store, tags };
+}
+
+function normalizeDraftStoreMetadata(data) {
+  if (!data || typeof data !== 'object' || !String(data.shopName || '').trim()) return data;
+  const source = data._scheduleOriginal || data.shopName;
+  const details = getScheduleStoreDetails(source);
+  if (!details.store) return data;
+  if (source !== details.canonicalName && !data._scheduleOriginal) data._scheduleOriginal = source;
+  data.shopName = details.canonicalName;
+  data._scheduleTags = [...new Set([...(data._scheduleTags || []), ...details.tags])];
+  data._scheduleReminders = [...new Set([...(data._scheduleReminders || []), ...details.reminders])];
+  data._schedulePriority = Boolean(data._schedulePriority || details.priority);
+  return data;
+}
+
 function getShortStoreName(value) {
-  let name = String(value || '').trim().replace(/-?智取店$/u, '');
+  let name = parseScheduleStoreToken(value).baseName.replace(/-?智取店$/u, '');
   name = name.replace(/^(文山|大安|中正|信義)/u, '');
   return name || String(value || '').trim();
+}
+
+function simplifyScheduleStoreName(value) {
+  const text = String(value || '').trim();
+  const noteMatch = text.match(/(\([^)]*\)|（[^）]*）)$/u);
+  const note = noteMatch ? noteMatch[0] : '';
+  const base = note ? text.slice(0, -note.length).trim() : text;
+  return `${getShortStoreName(base)}${note}`;
+}
+
+function scheduleStoreIdentity(value) {
+  return simplifyScheduleStoreName(value)
+    .replace(/\([^)]*\)|（[^）]*）/gu, '')
+    .replace(/\s+/g, '')
+    .toLocaleLowerCase('zh-TW');
+}
+
+function repairScheduleStoreNamesAndDuplicates() {
+  let schedule;
+  try { schedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}'); }
+  catch (_) { return false; }
+  let changed = false;
+
+  Object.values(schedule).forEach(dayData => {
+    if (!dayData || dayData.isOff || String(dayData.loc || '').trim().toUpperCase() === 'X') return;
+    const primary = splitStoreLocationText(dayData.loc).map(simplifyScheduleStoreName);
+    const primaryIds = new Set(primary.map(scheduleStoreIdentity));
+    const support = [];
+    const supportValues = Array.isArray(dayData.supportLocs) ? dayData.supportLocs : (dayData.supportLocs ? [dayData.supportLocs] : []);
+    supportValues.forEach(value => {
+      splitStoreLocationText(value).map(simplifyScheduleStoreName).forEach(name => {
+        const identity = scheduleStoreIdentity(name);
+        if (!identity || primaryIds.has(identity) || support.some(item => scheduleStoreIdentity(item) === identity)) return;
+        support.push(name);
+      });
+    });
+
+    const validStores = [...primary, ...support];
+    const route = [];
+    const oldRoute = Array.isArray(dayData.routeOrder) ? dayData.routeOrder : [];
+    oldRoute.map(simplifyScheduleStoreName).forEach(oldName => {
+      const match = validStores.find(name => scheduleStoreIdentity(name) === scheduleStoreIdentity(oldName));
+      if (match && !route.some(name => scheduleStoreIdentity(name) === scheduleStoreIdentity(match))) route.push(match);
+    });
+    validStores.forEach(name => {
+      if (!route.some(item => scheduleStoreIdentity(item) === scheduleStoreIdentity(name))) route.push(name);
+    });
+
+    const nextLoc = primary.join('/');
+    if (dayData.loc !== nextLoc || JSON.stringify(dayData.supportLocs || []) !== JSON.stringify(support) || JSON.stringify(dayData.routeOrder || []) !== JSON.stringify(route)) changed = true;
+    dayData.loc = nextLoc;
+    dayData.supportLocs = support;
+    dayData.routeOrder = route;
+  });
+
+  if (changed) {
+    localStorage.setItem('shopee_user_schedule', JSON.stringify(schedule));
+    localStorage.setItem('shopee_cloud_pending', 'true');
+  }
+  return changed;
 }
 
 function getParsedLocations(dayData) {
@@ -1393,12 +1942,20 @@ function renderTodayDashboard() {
   }
   
   if (statusDot && syncText) {
-    if (navigator.onLine) {
+    const cloudPending = localStorage.getItem('shopee_cloud_pending') === 'true';
+    const hasCloudToken = Boolean(window.gapi?.client?.getToken?.()?.access_token);
+    if (!navigator.onLine) {
+      statusDot.className = 'status-dot offline';
+      syncText.textContent = '離線模式・資料已存於本機';
+    } else if (cloudPending) {
+      statusDot.className = 'status-dot offline';
+      syncText.textContent = '本機已儲存・等待雲端同步';
+    } else if (hasCloudToken) {
       statusDot.className = 'status-dot online';
       syncText.textContent = '連線正常・雲端與本機同步';
     } else {
-      statusDot.className = 'status-dot offline';
-      syncText.textContent = '離線模式・資料暫存於本機';
+      statusDot.className = 'status-dot online';
+      syncText.textContent = '瀏覽器本機保存模式';
     }
   }
 
@@ -1421,6 +1978,7 @@ function renderTodayDashboard() {
   }
 
   const locations = getParsedLocations(dayData);
+  const locationDetails = locations.map(getScheduleStoreDetails);
   const draftCount = locations.slice(0,5).filter((_, i) => {
     try { return Boolean(JSON.parse(localStorage.getItem(`shopee_report_draft_${i+1}`) || '{}').shopName); }
     catch(e) { return false; }
@@ -1430,16 +1988,22 @@ function renderTodayDashboard() {
   if (shiftLabel) shiftLabel.textContent = dayData.t1 ? `勤務時間／班別：${dayData.t1}` : '勤務時間尚未設定';
   
   if (progressLabel) {
-    progressLabel.innerHTML = `共 ${locations.length} 家門市・已建立 ${draftCount} 份巡店資料<div class="ops-progress"><div class="ops-progress-head"><span>今日準備進度</span><b>${draftCount}/${locations.length}</b></div><div class="ops-progress-track"><div class="ops-progress-fill" style="width:${locations.length ? draftCount/locations.length*100 : 0}%"></div></div></div>`;
+    const specialCount = locationDetails.filter(item => item.tags.length || item.reminders.length || item.store?.notes).length;
+    progressLabel.innerHTML = `共 ${locations.length} 家門市・${specialCount} 家有特殊任務／注意事項・巡店資料 ${draftCount}/${locations.length}<div class="ops-progress"><div class="ops-progress-head"><span>今日準備進度</span><b>${draftCount}/${locations.length}</b></div><div class="ops-progress-track"><div class="ops-progress-fill" style="width:${locations.length ? draftCount/locations.length*100 : 0}%"></div></div></div>`;
   }
 
   if (reminderBox) {
     reminderBox.innerHTML = `<div class="duty-timeline">${locations.map((loc, i) => {
+      const details = locationDetails[i];
       const draft = getDraftCompletion(i);
       const active = currentDraftKey === `shopee_report_draft_${i+1}`;
       const stateClass = active ? 'active' : (draft.exists ? 'ready' : '');
       const meta = active ? '目前使用中的巡店資料' : (draft.exists ? `完成度 ${draft.confirmed}/${draft.total} 項` : '尚未建立資料');
-      return `<div class="duty-stop ${stateClass}" onclick="openDutyStop(${i})"><span class="stop-dot">${i+1}</span><div><div class="stop-name">${escapeStoreHTML(getShortStoreName(loc))}</div><div class="stop-meta">${meta}</div></div><span class="stop-action">填寫 ›</span></div>`;
+      const visibleTags = details.tags.filter(tag => !tag.includes('重點店') && !tag.includes('有人店')).slice(0, 6);
+      const tagHtml = visibleTags.length ? `<div class="stop-tags">${visibleTags.map(tag => `<span class="stop-tag ${details.priority || tag === 'NDD打包' ? 'priority' : ''}">${escapeStoreHTML(tag)}</span>`).join('')}</div>` : '';
+      const reminderText = details.reminders.length ? `班表提醒：${details.reminders.join('、')}` : '';
+      const detailParts = [details.store?.address, reminderText, details.store?.notes ? `注意：${details.store.notes}` : ''].filter(Boolean);
+      return `<div class="duty-stop ${stateClass}" onclick="openDutyStop(${i})"><span class="stop-dot">${i+1}</span><div><div class="stop-name">${details.priority ? '⚠️ ' : ''}${escapeStoreHTML(getShortStoreName(details.canonicalName || loc))}</div><div class="stop-meta">${meta}</div>${tagHtml}${detailParts.length ? `<div class="stop-detail">${detailParts.map(escapeStoreHTML).join('<br>')}</div>` : ''}</div><span class="stop-action">填寫 ›</span></div>`;
     }).join('')}</div>`;
   }
 
@@ -1530,6 +2094,63 @@ function toggleScopeInput(isSpecific) {
   }
 }
 
+const dailyReportSubjects = {
+  c3: { title:'科目3 逾期包裹', fields:{c3_overdue:'一般逾期',c3_scs:'SCS逾期',c3_fbs:'FBS逾期'} },
+  c4: { title:'科目4 配送數據', fields:{c4_delivery:'配送數',c4_boxes:'箱數',c4_stay:'滯留',c4_ndd:'NDD',c4_whndd:'WH NDD',c4_as:'AS',c4_not_left:'未離店'} },
+  c5: { title:'科目5 驗收／上架', fields:{c5_count:'驗收件數',c5_startTime:'第一顆上架',c5_endTime:'完成驗收',c5_b1_count:'批次1件數',c5_b1_start:'批次1開始',c5_b1_end:'批次1完成',c5_b2_count:'批次2件數',c5_b2_start:'批次2開始',c5_b2_end:'批次2完成',c5_b3_count:'批次3件數',c5_b3_start:'批次3開始',c5_b3_end:'批次3完成',c5_avg:'平均時間',c5_ndd_time:'NDD完成時間',c5_whndd_time:'WH NDD完成時間',c5_stay_box:'滯留箱數',c5_seats:'剩餘櫃位',c5_to_in:'到店TO單',c5_to_out:'離店TO單'} },
+  c6: { title:'科目6 異常包裹', fields:{c6_wrong:'錯誤包裹',c6_damaged:'破損',c6_wet:'濕損',c6_soc:'SOC異常'} },
+  c8: { title:'科目8 離店／空箱盤點', fields:{c8_ndd_alert:'NDD提醒',c8_fbs_alert:'FBS提醒',c8_normal_north:'一般北區',c8_normal_south:'一般南區',c8_ndd_north:'NDD北區',c8_ndd_south:'NDD南區',c8_fbs_north:'FBS北區',c8_fbs_south:'FBS南區',c8_reverse:'逆物流',c8_wrong:'錯分',c8_abnormal:'異常',c8_lock_type:'鎖櫃類型',c8_lock_count:'鎖櫃數',c8_wh_empty:'WH空箱',c8_orange_empty:'橘袋空箱',c8_empty_as:'AS空箱'} },
+  c9: { title:'科目9 早班打包SCS HD', fields:{c9_pack:'本日打包',c9_last_night:'昨晚留件',c9_total:'合計'} },
+  c10:{ title:'科目10 早班上架SCS HD', fields:{c10_success:'成功上架',c10_stay:'滯留'} },
+  c11:{ title:'科目11 晚班打包SCS HD', fields:{c11_pack:'打包數'} },
+  c12:{ title:'科目12 中正速配倉', fields:{c12_bags:'進貨袋數'} },
+  c14:{ title:'科目14 晚班HD上架', fields:{c14_sys:'系統需上架',c14_real:'實際上架',c14_no_need:'不需上架'} },
+  c15:{ title:'科目15 AMS入庫／維修', fields:{c15_in:'入庫狀況',c15_repair:'維修狀況'} }
+};
+
+function formatDailySubject(subjectId, data) {
+  const config = dailyReportSubjects[subjectId];
+  if (!config) return '';
+  const confirmed = data._confirmedSubjects?.[subjectId] === true ? '✅ 已確認' : '⚠️ 未確認';
+  const values = Object.entries(config.fields).map(([key, label]) => {
+    let value = data[key];
+    if (typeof value === 'boolean') value = value ? '是' : '否';
+    if (value === undefined || value === null || String(value).trim() === '') value = '未填';
+    return `  ・${label}：${value}`;
+  });
+  return [`【${config.title}】${confirmed}`, ...values].join('\n');
+}
+
+function getDailyReportDrafts(dateKey) {
+  const candidates = [];
+  try {
+    const daily = JSON.parse(localStorage.getItem(`shopee_report_daily_${dateKey}`) || 'null');
+    if (Array.isArray(daily)) candidates.push(...daily.filter(item => item?.shopName));
+  } catch (_) {}
+  try {
+    const legacy = JSON.parse(localStorage.getItem(`shopee_report_history_${dateKey}`) || 'null');
+    if (legacy?.shopName) candidates.push(legacy);
+  } catch (_) {}
+  const score = data => {
+    const confirmed = Object.values(data?._confirmedSubjects || {}).filter(Boolean).length * 100;
+    const filled = Object.entries(data || {}).filter(([key, value]) => /^c\d+_/.test(key) && value !== '' && value !== null && value !== undefined).length;
+    return confirmed + filled;
+  };
+  const merged = [];
+  candidates.forEach(item => {
+    const identity = getStoreNameIdentity(item.shopName);
+    const index = merged.findIndex(saved => getStoreNameIdentity(saved.shopName) === identity);
+    if (index < 0) merged.push(item);
+    else if (score(item) > score(merged[index])) merged[index] = item;
+  });
+  return merged;
+}
+
+function hasFilledReportData(data) {
+  if (Object.values(data?._confirmedSubjects || {}).some(Boolean)) return true;
+  return Object.entries(data || {}).some(([key, value]) => /^c\d+_/.test(key) && value !== '' && value !== null && value !== undefined);
+}
+
 function generateAdvancedTextReport() {
   const startStr = document.getElementById('report-start-date').value;
   const endStr = document.getElementById('report-end-date').value;
@@ -1547,41 +2168,37 @@ function generateAdvancedTextReport() {
     return;
   }
 
-  const startDate = new Date(startStr);
-  const endDate = new Date(endStr);
-  const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
+  saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
+  const startDate = new Date(`${startStr}T12:00:00`);
+  const endDate = new Date(`${endStr}T12:00:00`);
 
-  let reportLines = [`📦 蝦皮智取店 - 工作日報表 (${startStr} 至 ${endStr})\n`];
+  let reportLines = [`📦 蝦皮智取店－巡店工作日報表`, `統計期間：${startStr} 至 ${endStr}`];
   let recordCount = 0;
 
   let cur = new Date(startDate);
   while (cur <= endDate) {
     let dateKey = formatDateISO(cur);
-    let dayData = savedSchedule[dateKey];
-
-    if (dayData) {
-      let isOff = dayData.isOff || (dayData.loc && dayData.loc.toUpperCase() === 'X');
-      let stores = [];
-      if (dayData.loc && !isOff) stores.push(dayData.loc);
-      if (dayData.supportLocs) stores = stores.concat(dayData.supportLocs);
-
+    const drafts = getDailyReportDrafts(dateKey);
+    drafts.forEach(data => {
       if (scopeType === 'specific') {
-        const match = stores.some(s => s.includes(specificStore) || specificStore.includes(s));
-        if (!match) {
-          cur.setDate(cur.getDate() + 1);
-          continue;
-        }
+        const a = getStoreNameIdentity(data.shopName);
+        const b = getStoreNameIdentity(specificStore);
+        if (!a.includes(b) && !b.includes(a)) return;
       }
-
-      let storeStr = isOff ? "休假" : (stores.join(' / ') + (dayData.t1 ? ` [${dayData.t1}]` : ''));
-      reportLines.push(`📅 ${dateKey}: ${storeStr}`);
+      const shift = data.shift || '未填';
+      const applicable = getApplicableSubjects(data.shopName, shift);
+      reportLines.push('', `━━━━━━━━━━━━━━━━━━`, `📅 ${dateKey}`, `🏪 ${getShortStoreName(data.shopName)}｜${shift}班`);
+      applicable.forEach(subjectId => {
+        const block = formatDailySubject(subjectId, data);
+        if (block) reportLines.push('', block);
+      });
       recordCount++;
-    }
+    });
     cur.setDate(cur.getDate() + 1);
   }
 
   if (recordCount === 0) {
-    showToast('⚠️ 在此條件區間內找不到任何排班或支援紀錄！');
+    showToast('⚠️ 在此條件區間內找不到任何巡店科目紀錄！');
     return;
   }
 
@@ -1614,7 +2231,7 @@ function buildReportGroups() {
   if (!document.querySelector('.bottom-action-bar')) {
     const bar = document.createElement('div');
     bar.className = 'bottom-action-bar';
-    bar.innerHTML = `<span class="progress-label" id="report-progress-label">檢查中</span><button class="btn-preview" onclick="previewReport()">預覽</button><button class="btn-finish" onclick="finishReport()">完成並複製</button>`;
+    bar.innerHTML = `<span class="progress-label" id="report-progress-label">檢查中</span><button class="btn-preview" onclick="previewReport()">預覽完整回報</button><button class="btn-finish" onclick="finishReport()">完成本店並封存</button>`;
     report.appendChild(bar);
   }
 
@@ -1670,6 +2287,7 @@ function toggleSubjectConfirmation(subjectId) {
   if (willConfirm) data._confirmedAt[subjectId] = new Date().toISOString();
   else delete data._confirmedAt[subjectId];
   localStorage.setItem(currentDraftKey, JSON.stringify(data));
+  saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
   updateSubjectConfirmationUI();
   updateReportProgress();
   updateDraftLabels();
@@ -1683,6 +2301,7 @@ function markSubjectUnconfirmed(subjectId) {
   data._confirmedSubjects[subjectId] = false;
   if (data._confirmedAt) delete data._confirmedAt[subjectId];
   localStorage.setItem(currentDraftKey, JSON.stringify(data));
+  saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
   updateSubjectConfirmationUI();
   renderTodayDashboard();
 }
@@ -1814,16 +2433,43 @@ function updateReportProgress() {
 }
 
 function previewReport() {
-  const shop = getCleanShopName() || '尚未選擇門市';
-  const shift = document.getElementById('shift')?.value || '—';
-  const progress = document.getElementById('report-progress-label')?.textContent || '';
-  showToast(`📋 回報預覽\n${shop}・${shift}班\n${progress}`, 3500);
+  if (!document.getElementById('shopName')?.value.trim()) {
+    showToast('⚠️ 請先選擇巡店門市');
+    return;
+  }
+  autoSave();
+  const text = buildFormalSupportReport();
+  const data = readCurrentDraftObject();
+  const applicable = getApplicableSubjects(data.shopName || getCleanShopName(), data.shift || document.getElementById('shift')?.value || '早');
+  const pending = applicable.filter(id => !isSubjectConfirmed(id, data));
+  const modal = document.getElementById('formal-report-preview-modal');
+  const textarea = document.getElementById('formal-report-preview-text');
+  const status = document.getElementById('formal-preview-status');
+  if (textarea) textarea.value = text;
+  if (status) {
+    status.textContent = pending.length ? `⚠️ 尚有 ${pending.length} 個適用科目未確認，仍可先檢視或複製。` : `✅ ${applicable.length} 個適用科目皆已確認。`;
+    status.style.color = pending.length ? 'var(--ops-orange)' : 'var(--ops-success)';
+  }
+  modal?.classList.add('active');
+}
+
+function closeFormalReportPreview() {
+  document.getElementById('formal-report-preview-modal')?.classList.remove('active');
+}
+
+function copyFormalPreviewText() {
+  const text = document.getElementById('formal-report-preview-text')?.value || buildFormalSupportReport();
+  copyText(text, '支援群完整回報');
+}
+
+function completeCurrentStoreFromPreview() {
+  if (finishReport()) closeFormalReportPreview();
 }
 
 function finishReport() {
   if (!document.getElementById('shopName').value.trim()) {
     showToast('⚠️ 請先選擇巡店門市');
-    return;
+    return false;
   }
   const data = readCurrentDraftObject();
   const currentShop = getCleanShopName();
@@ -1839,11 +2485,13 @@ function finishReport() {
   if (pendingCards.length) {
     pendingCards[0].scrollIntoView({ behavior:'smooth', block:'center' });
     showToast(`⚠️ 尚有 ${pendingCards.length} 個適用科目未確認`);
-    return;
+    return false;
   }
   saveDataAndSyncToSchedule(false);
-  copySupportReport();
+  saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
   renderTodayDashboard();
+  showToast('✅ 本店巡店資料已完成並封存；可由藍色按鈕或預覽視窗複製回報。', 4200);
+  return true;
 }
 
 /**
@@ -2052,11 +2700,18 @@ function switchScheduleView(view) {
   if (monthC) monthC.style.display = view === 'month' ? 'block' : 'none';
   
   const wBox = document.getElementById('week-control-box');
+  const dBox = document.getElementById('day-control-box');
   const mBox = document.getElementById('month-control-box');
-  if (wBox) wBox.style.display = view === 'month' ? 'none' : 'block';
+  if (dBox) dBox.style.display = view === 'day' ? 'block' : 'none';
+  if (wBox) wBox.style.display = view === 'week' ? 'block' : 'none';
   if (mBox) mBox.style.display = view === 'month' ? 'block' : 'none';
 
-  if (view === 'day') renderDayView();
+  if (view === 'day') {
+    currentSelectedDayKey = formatDateISO(new Date());
+    const dayPicker = document.getElementById('day-picker');
+    if (dayPicker) dayPicker.value = currentSelectedDayKey;
+    renderDayView();
+  }
   if (view === 'week') loadWeekSchedule();
   if (view === 'month') renderMonthView();
 }
@@ -2070,6 +2725,8 @@ function getMonday(d) {
 function initWeekPicker() {
   const wp = document.getElementById('week-picker');
   if (wp) wp.value = formatDateISO(getMonday(new Date()));
+  const dp = document.getElementById('day-picker');
+  if (dp) dp.value = formatDateISO(new Date());
   
   const today = new Date();
   const mp = document.getElementById('month-picker');
@@ -2078,6 +2735,14 @@ function initWeekPicker() {
   updateHistoryDropdown();
   loadWeekSchedule();
   setReportRange('week');
+}
+
+function onDayPickerChange(selectedVal) {
+  if (!selectedVal) return;
+  currentSelectedDayKey = selectedVal;
+  renderDayView();
+  const feedback = document.getElementById('day-picker-feedback');
+  if (feedback) feedback.textContent = selectedVal === formatDateISO(new Date()) ? '✅ 正在顯示今天' : `📅 正在查看 ${selectedVal}`;
 }
 
 function onWeekPickerChange(selectedVal) {
@@ -2246,10 +2911,16 @@ function changeDayOffset(offset) {
   const parts = currentSelectedDayKey.split('-').map(Number);
   const cur = new Date(parts[0], parts[1] - 1, parts[2] + offset);
   currentSelectedDayKey = formatDateISO(cur);
+  const dayPicker = document.getElementById('day-picker');
+  if (dayPicker) dayPicker.value = currentSelectedDayKey;
   renderDayView();
 }
 
 function renderDayView() {
+  const dayPicker = document.getElementById('day-picker');
+  if (dayPicker && dayPicker.value !== currentSelectedDayKey) dayPicker.value = currentSelectedDayKey;
+  const feedback = document.getElementById('day-picker-feedback');
+  if (feedback) feedback.textContent = currentSelectedDayKey === formatDateISO(new Date()) ? '✅ 正在顯示今天' : `📅 正在查看 ${currentSelectedDayKey}`;
   const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
   const todayData = savedSchedule[currentSelectedDayKey];
 
@@ -2285,15 +2956,16 @@ function renderDayView() {
 function matchStoreName(inputName) {
   const raw = String(inputName || '').trim();
   if (!raw) return '';
+  const lookupName = parseScheduleStoreToken(raw).baseName;
   const normalize = value => String(value || '').replace(/\s+/g, '').replace(/-?智取店$/u, '');
-  const target = normalize(raw);
+  const target = normalize(lookupName);
   const exact = storesData.find(store => normalize(store.name) === target);
   if (exact) return exact.name;
   const suffixMatches = storesData.filter(store => {
     const name = normalize(store.name);
     return name.endsWith(target) || target.endsWith(name);
   });
-  return suffixMatches.length === 1 ? suffixMatches[0].name : raw;
+  return suffixMatches.length === 1 ? suffixMatches[0].name : lookupName;
 }
 
 function determineShiftFromTime(timeText) {
@@ -2316,15 +2988,19 @@ function setScheduleSyncStatus(message, type = 'success') {
   status.textContent = message;
 }
 
-function syncCurrentDayScheduleToReportDraft() {
+function syncCurrentDayScheduleToReportDraft(options = {}) {
+  const silent = options.silent === true;
+  const stayOnCurrentTab = options.stayOnCurrentTab === true;
   try {
     const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
     const dayData = savedSchedule[currentSelectedDayKey];
 
     if (!dayData || (!dayData.loc && (!dayData.supportLocs || dayData.supportLocs.length === 0)) || dayData.isOff || (dayData.loc && dayData.loc.toUpperCase() === 'X')) {
       const message = `⚠️ ${currentSelectedDayKey} 無班表或為休假，無法同步至巡店回報！`;
-      setScheduleSyncStatus(message, 'error');
-      showToast(message, 3500);
+      if (!silent) {
+        setScheduleSyncStatus(message, 'error');
+        showToast(message, 3500);
+      }
       return false;
     }
 
@@ -2334,8 +3010,10 @@ function syncCurrentDayScheduleToReportDraft() {
 
     if (allStores.length === 0) {
       const message = '⚠️ 無法解析有效的門市名稱！';
-      setScheduleSyncStatus(message, 'error');
-      showToast(message, 3500);
+      if (!silent) {
+        setScheduleSyncStatus(message, 'error');
+        showToast(message, 3500);
+      }
       return false;
     }
 
@@ -2351,7 +3029,8 @@ function syncCurrentDayScheduleToReportDraft() {
       if (index >= 5) return;
 
       const draftKey = `shopee_report_draft_${index + 1}`;
-      const matchedShopName = matchStoreName(token);
+      const parsedStore = getScheduleStoreDetails(token);
+      const matchedShopName = parsedStore.canonicalName;
 
       let draftData = {};
       try { draftData = JSON.parse(localStorage.getItem(draftKey) || '{}'); } catch(e) {}
@@ -2363,6 +3042,10 @@ function syncCurrentDayScheduleToReportDraft() {
       draftData.date = dateStr;
       draftData.shopName = matchedShopName;
       draftData.shift = shiftVal;
+      draftData._scheduleOriginal = parsedStore.original;
+      draftData._scheduleTags = parsedStore.tags;
+      draftData._scheduleReminders = parsedStore.reminders;
+      draftData._schedulePriority = parsedStore.priority;
 
       localStorage.setItem(draftKey, JSON.stringify(draftData));
       matchedStores.push(matchedShopName);
@@ -2373,14 +3056,21 @@ function syncCurrentDayScheduleToReportDraft() {
     for (let index = matchedCount; index < 5; index++) {
       localStorage.removeItem(`shopee_report_draft_${index + 1}`);
     }
+    saveDailyDraftSnapshot(currentSelectedDayKey, currentSelectedDayKey === formatDateISO(new Date()));
 
     // 回報草稿使用完整門市名稱；班表仍保留使用者輸入的短店名及原本的主店／支援店分類。
     dayData.routeOrder = allStores.slice(0, 5);
     savedSchedule[currentSelectedDayKey] = dayData;
     localStorage.setItem('shopee_user_schedule', JSON.stringify(savedSchedule));
 
+    currentViewingReportDateKey = currentSelectedDayKey;
+    isViewingHistoricalReport = currentViewingReportDateKey !== formatDateISO(new Date());
     currentDraftKey = 'shopee_report_draft_1';
-    switchMainTab('report-tab', navButtonFor('report-tab'));
+    const reportDateInput = document.getElementById('date');
+    const reportDatePicker = document.getElementById('report-date-picker');
+    if (reportDateInput) reportDateInput.value = reportDateDisplay(currentViewingReportDateKey);
+    if (reportDatePicker) reportDatePicker.value = currentViewingReportDateKey;
+    if (!stayOnCurrentTab) switchMainTab('report-tab', navButtonFor('report-tab'));
     loadData(false);
     updateDraftLabels();
     renderTodayDashboard();
@@ -2396,17 +3086,41 @@ function syncCurrentDayScheduleToReportDraft() {
     });
 
     const message = `✅ ${currentSelectedDayKey} 已同步 ${matchedCount} 家門市至巡店回報：${allStores.slice(0, 5).join(' → ')}`;
-    setScheduleSyncStatus(message, 'success');
-    showToast(message, 4500);
-    syncScheduleToDrive();
+    if (!silent) {
+      setScheduleSyncStatus(message, 'success');
+      showToast(message, 4500);
+      syncScheduleToDrive();
+    }
     return true;
   } catch (error) {
     console.error('班表同步至巡店回報失敗：', error);
     const message = '❌ 班表同步失敗，請重新整理後再試一次！';
-    setScheduleSyncStatus(message, 'error');
-    showToast(message, 4000);
+    if (!silent) {
+      setScheduleSyncStatus(message, 'error');
+      showToast(message, 4000);
+    }
     return false;
   }
+}
+
+function ensureTodayDraftsFromSchedule() {
+  const todayKey = formatDateISO(new Date());
+  const workingDrafts = collectCurrentDrafts();
+  const validTodayDrafts = workingDrafts.filter(draft => getDraftDateKey(draft, todayKey) === todayKey);
+  if (workingDrafts.length && validTodayDrafts.length === workingDrafts.length) return false;
+
+  // 工作區若殘留昨日資料，先救回正確日期，再以今日班表重建。
+  if (workingDrafts.length) {
+    rescueMisplacedDrafts(workingDrafts, todayKey);
+    replaceWorkingDrafts([]);
+    localStorage.setItem(`shopee_report_daily_${todayKey}`, '[]');
+  }
+  let schedule = {};
+  try { schedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}'); } catch (_) {}
+  const dayData = schedule[todayKey];
+  if (!dayData || dayData.isOff || String(dayData.loc || '').trim().toUpperCase() === 'X' || (!dayData.loc && !(dayData.supportLocs || []).length)) return false;
+  currentSelectedDayKey = todayKey;
+  return syncCurrentDayScheduleToReportDraft({ silent:true, stayOnCurrentTab:true });
 }
 
 function addCurrentStoreToScheduleSupport() {
@@ -2626,6 +3340,7 @@ function switchDraft(newKey) {
   currentDraftKey = 'shopee_report_' + newKey;
   loadData(false);
   updateDraftLabels();
+  updateReportSaveStatus();
   showToast(`📂 已切換至【${getDraftName(newKey)}】`);
 }
 
@@ -2761,12 +3476,13 @@ function moveDraftData(fromIdx, toIdx) {
     if (item.data !== null) localStorage.setItem(targetKey, item.data);
     else localStorage.removeItem(targetKey);
   });
+  saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
 
   const newCurrentIndex = items.findIndex(item => item.originalIndex === currentIndex);
   if (newCurrentIndex >= 0) currentDraftKey = 'shopee_report_' + keys[newCurrentIndex];
 
   suppressDraftClickUntil = Date.now() + 450;
-  syncTodayRouteOrderFromDrafts();
+  if (!isViewingHistoricalReport) syncTodayRouteOrderFromDrafts();
   updateDraftLabels();
   loadData(false);
   renderTodayDashboard();
@@ -2832,6 +3548,8 @@ function getTodayString() {
 
 window.onload = function() {
   try {
+    const scheduleRepaired = repairScheduleStoreNamesAndDuplicates();
+    const rolledOver = handleDailyRollover();
     applyTheme(localStorage.getItem('shopee_ui_theme') || 'light');
     populateShopOptions();
     loadData(false);
@@ -2843,25 +3561,71 @@ window.onload = function() {
     
     const dateInput = document.getElementById('date');
     if (dateInput && (!dateInput.value || dateInput.value.trim() === '')) {
-      dateInput.value = getTodayString();
+      dateInput.value = reportDateDisplay(currentViewingReportDateKey);
     }
+    const reportDatePicker = document.getElementById('report-date-picker');
+    if (reportDatePicker) reportDatePicker.value = currentViewingReportDateKey;
     
     updateStoreInfo();
     const detail = document.getElementById('storeDetailCard');
     if (detail) detail.classList.add('store-task-card');
     applyShiftLock();
-    document.querySelectorAll('#report-tab input').forEach(input => {
-      if (/count|boxes|stay|ndd|whndd|wrong|damaged|wet|soc|pack|success|bags|sys|real|empty|seats|overdue|scs|fbs/i.test(input.id)) {
-        input.setAttribute('inputmode', 'numeric');
-      }
+    document.querySelectorAll('#report-tab input[type="text"]').forEach(input => input.setAttribute('inputmode', 'text'));
+    document.getElementById('report-tab')?.addEventListener('focusin', event => {
+      if (event.target.matches('input[type="text"], textarea')) lastReportTextInput = event.target;
     });
+    const draftsCreated = ensureTodayDraftsFromSchedule();
     renderTodayDashboard();
     updateReportProgress();
     updateSystemStatus();
+    if (rolledOver || draftsCreated || scheduleRepaired) {
+      const messages = [];
+      if (rolledOver) messages.push('昨日巡店資料已封存');
+      if (draftsCreated) messages.push('今日班表門市已建立至回報區');
+      if (scheduleRepaired) messages.push('班表簡稱與重複支援門市已修復');
+      showToast(`✅ ${messages.join('；')}`, 5000);
+    }
+    setInterval(() => {
+      if (!isViewingHistoricalReport && handleDailyRollover()) {
+        ensureTodayDraftsFromSchedule();
+        loadData(false);
+        updateDraftLabels();
+        renderTodayDashboard();
+        showToast('🌙 日期已更新，昨日巡店資料已自動封存。', 4500);
+      }
+    }, 60000);
   } catch (err) {
     console.error("Window load error:", err);
   }
 };
+
+let lastReportTextInput = null;
+function insertQuickValue(value) {
+  const input = lastReportTextInput;
+  if (!input || !document.getElementById('report-tab')?.contains(input) || input.readOnly || input.disabled) {
+    showToast('⚠️ 請先點選要輸入的回報欄位');
+    return;
+  }
+  const start = Number.isFinite(input.selectionStart) ? input.selectionStart : input.value.length;
+  const end = Number.isFinite(input.selectionEnd) ? input.selectionEnd : input.value.length;
+  input.value = input.value.slice(0, start) + value + input.value.slice(end);
+  const nextPos = start + value.length;
+  input.focus();
+  input.setSelectionRange?.(nextPos, nextPos);
+  input.dispatchEvent(new Event('input', { bubbles:true }));
+}
+
+function scrollReportTo(position) {
+  const scroller = document.scrollingElement || document.documentElement;
+  if (position === 'bottom') {
+    scroller.scrollTo({ top:scroller.scrollHeight - scroller.clientHeight, behavior:'smooth' });
+    return;
+  }
+  const report = document.getElementById('report-tab');
+  const headerHeight = document.querySelector('.main-header')?.offsetHeight || 44;
+  const reportTop = (report?.getBoundingClientRect().top || 0) + scroller.scrollTop - headerHeight - 6;
+  scroller.scrollTo({ top:Math.max(0, reportTop), behavior:'smooth' });
+}
 
 function getAllData() {
   const elements = document.querySelectorAll('#report-tab input, #report-tab select');
@@ -2871,7 +3635,7 @@ function getAllData() {
     _confirmedAt: previous._confirmedAt || {}
   };
   elements.forEach(el => {
-    if (el.id) {
+    if (el.id && el.id !== 'report-date-picker') {
       if (el.type === 'checkbox') data[el.id] = el.checked;
       else data[el.id] = el.value;
     }
@@ -2880,45 +3644,224 @@ function getAllData() {
 }
 
 function autoSave() {
+  if (!isViewingHistoricalReport) handleDailyRollover();
   const previous = readCurrentDraftObject();
   const next = JSON.parse(getAllData());
   if (previous.shopName && next.shopName !== previous.shopName) {
     next._confirmedSubjects = {};
     next._confirmedAt = {};
   }
+  next._lastAutoSavedAt = new Date().toISOString();
   localStorage.setItem(currentDraftKey, JSON.stringify(next));
+  saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
   renderTodayDashboard();
   applyShiftLock();
+  updateReportSaveStatus();
 }
 
 function saveDataOnly(showAlert) {
-  const dataStr = getAllData();
+  if (!isViewingHistoricalReport) handleDailyRollover();
+  const data = JSON.parse(getAllData());
+  if (showAlert && !String(data.shopName || '').trim()) {
+    showToast('⚠️ 請先選擇巡店門市，才能建立安全的保存檢查點。', 3500);
+    return false;
+  }
+  const savedAt = new Date().toISOString();
+  data._lastAutoSavedAt = savedAt;
+  if (showAlert) data._lastManualSavedAt = savedAt;
+  const dataStr = JSON.stringify(data);
   localStorage.setItem(currentDraftKey, dataStr);
+  saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
+  const checkpoint = showAlert ? saveReportCheckpoint(data, '手動保存') : null;
   updateDraftLabels();
   renderTodayDashboard();
-  syncScheduleToDrive();
+  updateReportSaveStatus();
 
   if (showAlert) {
-    showToast(`💾 已成功寫入【${getDraftName(currentDraftKey.replace('shopee_report_', ''))}】巡店資料！`);
+    const count = getReportCheckpoints().filter(item => item.dateKey === checkpoint.dateKey && item.storeIdentity === checkpoint.storeIdentity).length;
+    showToast(`✅ 已建立保存檢查點\n${checkpoint.dateKey}・${getShortStoreName(checkpoint.storeName)}・${formatCheckpointTime(checkpoint.savedAt)}（第 ${count} 筆）`, 4200);
   }
+  return true;
+}
+
+function restoreSavedDraft() {
+  const checkpoints = getReportCheckpoints();
+  if (!checkpoints.length) {
+    showToast('⚠️ 目前沒有任何手動保存檢查點！', 3000);
+    return;
+  }
+  openCheckpointRestoreModal();
+}
+
+let pendingCheckpointDeleteId = '';
+let pendingCheckpointDeleteAllGroup = '';
+let checkpointDeleteTimer = null;
+
+function resetCheckpointDeleteConfirm() {
+  pendingCheckpointDeleteId = '';
+  pendingCheckpointDeleteAllGroup = '';
+  if (checkpointDeleteTimer) clearTimeout(checkpointDeleteTimer);
+  checkpointDeleteTimer = null;
+}
+
+function openCheckpointRestoreModal(selectedId = '') {
+  const checkpoints = getReportCheckpoints();
+  let modal = document.getElementById('checkpoint-restore-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'checkpoint-restore-modal';
+    modal.className = 'modal-overlay';
+    document.body.appendChild(modal);
+  }
+  const selected = checkpoints.find(item => item.id === selectedId);
+  let current = {};
+  try { current = JSON.parse(getAllData()); } catch (_) {}
+  const currentIdentity = getStoreNameIdentity(current.shopName);
+  const warning = selected && currentIdentity && currentIdentity !== selected.storeIdentity
+    ? `⚠️ 目前畫面是「${getShortStoreName(current.shopName)}」，你選擇的是「${getShortStoreName(selected.storeName)}」。系統會套回到該門市自己的位置，不會覆蓋目前門市。`
+    : '';
+  const selectedStats = selected ? getCheckpointStats(selected.data) : null;
+  modal.innerHTML = `<div class="modal-card checkpoint-modal-card">
+    <div class="overview-head"><div><h3>📂 選擇要套回的巡店紀錄</h3><div style="font-size:11px;color:var(--ops-muted);margin-top:4px;">依日期、門市與保存時間辨識，不會直接套用最近一筆。</div></div><button class="overview-close" onclick="closeCheckpointRestoreModal()">×</button></div>
+    ${selected ? `<div class="checkpoint-preview"><div class="checkpoint-name">準備套回：${escapeStoreHTML(selected.dateKey)}・${escapeStoreHTML(getShortStoreName(selected.storeName))}・${escapeStoreHTML(selected.shift || '未選')}班</div><div class="checkpoint-meta">保存時間：${escapeStoreHTML(formatCheckpointTime(selected.savedAt, true))}<br>保存類型：${escapeStoreHTML(selected.label || '手動保存')}｜已確認 ${selectedStats.confirmed} 項｜已填欄位 ${selectedStats.filled} 個</div>${warning ? `<div class="checkpoint-warning">${escapeStoreHTML(warning)}</div>` : ''}<button class="checkpoint-confirm" onclick="applyReportCheckpoint('${selected.id}')">確認套回這筆紀錄</button><button class="checkpoint-delete-all ${pendingCheckpointDeleteAllGroup === `${selected.dateKey}|${selected.storeIdentity}` ? 'confirming' : ''}" onclick="requestDeleteStoreCheckpoints('${selected.id}')">${pendingCheckpointDeleteAllGroup === `${selected.dateKey}|${selected.storeIdentity}` ? '⚠️ 再按一次，刪除此門市全部檢查點' : '清除此日期／門市的全部檢查點'}</button></div>` : ''}
+    <div class="checkpoint-list">${checkpoints.map(item => {
+      const stats = getCheckpointStats(item.data);
+      return `<div class="checkpoint-item ${item.id === selectedId ? 'selected' : ''}"><div><div class="checkpoint-name">${escapeStoreHTML(item.dateKey)}・${escapeStoreHTML(getShortStoreName(item.storeName))}・${escapeStoreHTML(item.shift || '未選')}班</div><div class="checkpoint-meta">${escapeStoreHTML(formatCheckpointTime(item.savedAt, true))}｜${escapeStoreHTML(item.label || '手動保存')}｜確認 ${stats.confirmed} 項・填寫 ${stats.filled} 欄</div></div><div class="checkpoint-actions"><button class="checkpoint-select" onclick="openCheckpointRestoreModal('${item.id}')">${item.id === selectedId ? '已選擇' : '預覽'}</button><button class="checkpoint-delete ${pendingCheckpointDeleteId === item.id ? 'confirming' : ''}" onclick="requestDeleteCheckpoint('${item.id}', '${selectedId}')">${pendingCheckpointDeleteId === item.id ? '再按一次刪除' : '刪除'}</button></div></div>`;
+    }).join('')}</div>
+  </div>`;
+  modal.classList.add('active');
+}
+
+function closeCheckpointRestoreModal() {
+  resetCheckpointDeleteConfirm();
+  document.getElementById('checkpoint-restore-modal')?.classList.remove('active');
+}
+
+function requestDeleteCheckpoint(checkpointId, selectedId = '') {
+  const checkpoint = getReportCheckpoints().find(item => item.id === checkpointId);
+  if (!checkpoint) {
+    showToast('⚠️ 這筆檢查點已不存在。');
+    openCheckpointRestoreModal();
+    return;
+  }
+  if (pendingCheckpointDeleteId !== checkpointId) {
+    resetCheckpointDeleteConfirm();
+    pendingCheckpointDeleteId = checkpointId;
+    checkpointDeleteTimer = setTimeout(() => {
+      resetCheckpointDeleteConfirm();
+      if (document.getElementById('checkpoint-restore-modal')?.classList.contains('active')) openCheckpointRestoreModal(selectedId);
+    }, 4500);
+    openCheckpointRestoreModal(selectedId);
+    showToast(`⚠️ 將刪除 ${checkpoint.dateKey}・${getShortStoreName(checkpoint.storeName)}・${formatCheckpointTime(checkpoint.savedAt)}，請再按一次刪除。`, 4200);
+    return;
+  }
+  const remaining = getReportCheckpoints().filter(item => item.id !== checkpointId);
+  localStorage.setItem(REPORT_CHECKPOINTS_KEY, JSON.stringify(remaining));
+  resetCheckpointDeleteConfirm();
+  updateReportSaveStatus();
+  if (remaining.length) openCheckpointRestoreModal(selectedId === checkpointId ? '' : selectedId);
+  else closeCheckpointRestoreModal();
+  showToast(`🗑️ 已刪除 ${checkpoint.dateKey}・${getShortStoreName(checkpoint.storeName)} 的單筆檢查點；目前巡店畫面未受影響。`, 3800);
+}
+
+function requestDeleteStoreCheckpoints(checkpointId) {
+  const checkpoint = getReportCheckpoints().find(item => item.id === checkpointId);
+  if (!checkpoint) {
+    showToast('⚠️ 這組門市檢查點已不存在。');
+    openCheckpointRestoreModal();
+    return;
+  }
+  const group = `${checkpoint.dateKey}|${checkpoint.storeIdentity}`;
+  const count = getReportCheckpoints().filter(item => `${item.dateKey}|${item.storeIdentity}` === group).length;
+  if (pendingCheckpointDeleteAllGroup !== group) {
+    resetCheckpointDeleteConfirm();
+    pendingCheckpointDeleteAllGroup = group;
+    checkpointDeleteTimer = setTimeout(() => {
+      resetCheckpointDeleteConfirm();
+      if (document.getElementById('checkpoint-restore-modal')?.classList.contains('active')) openCheckpointRestoreModal(checkpointId);
+    }, 5000);
+    openCheckpointRestoreModal(checkpointId);
+    showToast(`⚠️ 將刪除 ${checkpoint.dateKey}・${getShortStoreName(checkpoint.storeName)} 的全部 ${count} 筆檢查點，請再按一次確認。`, 4700);
+    return;
+  }
+  const remaining = getReportCheckpoints().filter(item => `${item.dateKey}|${item.storeIdentity}` !== group);
+  localStorage.setItem(REPORT_CHECKPOINTS_KEY, JSON.stringify(remaining));
+  resetCheckpointDeleteConfirm();
+  updateReportSaveStatus();
+  if (remaining.length) openCheckpointRestoreModal();
+  else closeCheckpointRestoreModal();
+  showToast(`🗑️ 已刪除 ${checkpoint.dateKey}・${getShortStoreName(checkpoint.storeName)} 的 ${count} 筆檢查點；目前巡店畫面未受影響。`, 4200);
+}
+
+function findDraftSlotForCheckpoint(checkpoint) {
+  let firstEmpty = '';
+  for (let index = 1; index <= 5; index++) {
+    const key = `shopee_report_draft_${index}`;
+    const raw = localStorage.getItem(key);
+    if (!raw && !firstEmpty) firstEmpty = key;
+    try {
+      const data = JSON.parse(raw || '{}');
+      if (getStoreNameIdentity(data.shopName) === checkpoint.storeIdentity) return key;
+    } catch (_) {}
+  }
+  return firstEmpty;
+}
+
+function applyReportCheckpoint(checkpointId) {
+  const checkpoint = getReportCheckpoints().find(item => item.id === checkpointId);
+  if (!checkpoint) {
+    showToast('⚠️ 找不到這筆保存檢查點，可能已被清除。', 3200);
+    closeCheckpointRestoreModal();
+    return;
+  }
+
+  let current = {};
+  try { current = JSON.parse(getAllData()); } catch (_) {}
+  if (String(current.shopName || '').trim() && hasFilledReportData(current)) {
+    saveReportCheckpoint(current, '套回前自動備份');
+  }
+
+  if (checkpoint.dateKey !== currentViewingReportDateKey) {
+    loadReportDate(checkpoint.dateKey, { silent:true });
+  }
+  const targetKey = findDraftSlotForCheckpoint(checkpoint);
+  if (!targetKey) {
+    showToast('⚠️ 當日五個巡店位置都已有其他門市，為避免覆蓋已停止套回。', 4200);
+    return;
+  }
+
+  const restored = JSON.parse(JSON.stringify(checkpoint.data));
+  restored._lastAutoSavedAt = new Date().toISOString();
+  localStorage.setItem(targetKey, JSON.stringify(restored));
+  currentDraftKey = targetKey;
+  saveDailyDraftSnapshot(checkpoint.dateKey, checkpoint.dateKey === formatDateISO(new Date()));
+  loadData(false);
+  updateDraftLabels();
+  updateReportSaveStatus();
+  renderTodayDashboard();
+  closeCheckpointRestoreModal();
+  showToast(`📂 已套回 ${checkpoint.dateKey}・${getShortStoreName(checkpoint.storeName)}・${formatCheckpointTime(checkpoint.savedAt)} 的紀錄`, 4500);
 }
 
 function saveDataAndSyncToSchedule(showAlert) {
+  if (!isViewingHistoricalReport) handleDailyRollover();
   const dataStr = getAllData();
   localStorage.setItem(currentDraftKey, dataStr);
+  saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
   updateDraftLabels();
   renderTodayDashboard();
 
   try {
     const parsed = JSON.parse(dataStr);
-    if (parsed.shopName && parsed.shopName.trim() !== '') {
+    if (!isViewingHistoricalReport && parsed.shopName && parsed.shopName.trim() !== '') {
       const todayKey = formatDateISO(new Date());
       const savedSchedule = JSON.parse(localStorage.getItem('shopee_user_schedule') || '{}');
       
       const shiftStr = parsed.shift ? `${parsed.shift}班` : '';
       let dayData = savedSchedule[todayKey] || { loc: '', supportLocs: [], t1: '', isOff: false };
       
-      dayData.loc = parsed.shopName;
+      // 若資料來自 Excel 班表，保留店長原始附註文字，不把「公館(含NDD打包)」改寫掉。
+      dayData.loc = parsed._scheduleOriginal || parsed.shopName;
       dayData.t1 = shiftStr;
       dayData.isOff = false;
 
@@ -2934,7 +3877,7 @@ function saveDataAndSyncToSchedule(showAlert) {
   syncScheduleToDrive();
 
   if (showAlert) {
-    showToast(`🔄 已成功儲存巡店資料，並同步寫入班表與雲端！`);
+    showToast(isViewingHistoricalReport ? '💾 歷史日期巡店資料已保存；未改動今日班表。' : `🔄 已成功儲存巡店資料，並同步寫入班表與雲端！`);
   }
 }
 
@@ -2942,6 +3885,7 @@ function resetFormFields() {
   const elements = document.querySelectorAll('#report-tab input, #report-tab select');
   elements.forEach(el => {
     if (el.id) {
+      if (el.id === 'report-date-picker') return;
       if (el.type === 'checkbox') el.checked = false;
       else if (el.tagName === 'SELECT') el.selectedIndex = 0;
       else if (el.id === 'c3_overdue' || el.id === 'c3_scs' || el.id === 'c3_fbs' || 
@@ -2958,7 +3902,7 @@ function resetFormFields() {
   });
   
   const dateEl = document.getElementById('date');
-  if (dateEl) dateEl.value = getTodayString();
+  if (dateEl) dateEl.value = reportDateDisplay(currentViewingReportDateKey);
   
   toggleBatchMode();
   calcAvgTime();
@@ -2974,7 +3918,8 @@ function loadData(showAlert) {
 
   if (saved) {
     try {
-      const data = JSON.parse(saved);
+      const data = normalizeDraftStoreMetadata(JSON.parse(saved));
+      localStorage.setItem(currentDraftKey, JSON.stringify(data));
       for (let id in data) {
         const el = document.getElementById(id);
         if (el) {
@@ -2996,10 +3941,12 @@ function loadData(showAlert) {
   }
   updateSubjectConfirmationUI();
   updateReportProgress();
+  updateReportSaveStatus();
 }
 
 function clearFormOnly() {
   resetFormFields();
+  updateReportSaveStatus();
   showToast('🧹 已清空目前畫面輸入欄位（已存巡店資料不受影響）');
 }
 
@@ -3009,6 +3956,7 @@ function clearData() {
     clearTimeout(clearConfirmTimer);
     clearConfirmTimer = null;
     localStorage.removeItem(currentDraftKey);
+    saveDailyDraftSnapshot(currentViewingReportDateKey, !isViewingHistoricalReport);
     showToast('🗑️ 已徹底刪除此店巡店資料！');
     setTimeout(() => { resetFormFields(); updateDraftLabels(); updateSubjectConfirmationUI(); updateReportProgress(); renderTodayDashboard(); }, 400);
     return;
@@ -3071,7 +4019,7 @@ function populateShopOptions() {
 function getCleanShopName() {
   const shopEl = document.getElementById('shopName');
   if (!shopEl) return '';
-  const rawName = shopEl.value.trim();
+  const rawName = matchStoreName(shopEl.value.trim());
   return rawName.replace(/-智取店$/, '').replace(/智取店$/, '');
 }
 
@@ -3079,7 +4027,8 @@ function updateStoreInfo() {
   const shopEl = document.getElementById('shopName');
   if (!shopEl) return;
   const selectedName = shopEl.value.trim();
-  const store = storesData.find(s => s.name === selectedName || s.name.replace(/-智取店$/, '') === selectedName);
+  const matchedName = matchStoreName(selectedName);
+  const store = storesData.find(s => s.name === matchedName || s.name.replace(/-智取店$/, '') === matchedName);
   const detailCard = document.getElementById('storeDetailCard');
   if (!detailCard) return;
   
@@ -3087,8 +4036,11 @@ function updateStoreInfo() {
     document.getElementById('storeAddressText').innerText = store.address;
     const tagListDiv = document.getElementById('storeTagList');
     tagListDiv.innerHTML = '';
-    if (store.tags.length > 0) {
-      store.tags.forEach(t => {
+    let draftData = {};
+    try { draftData = JSON.parse(localStorage.getItem(currentDraftKey) || '{}'); } catch (_) {}
+    const mergedTags = [...new Set([...(store.tags || []), ...(draftData._scheduleTags || [])])];
+    if (mergedTags.length > 0) {
+      mergedTags.forEach(t => {
         const span = document.createElement('span');
         span.className = (t.includes('重點店') || t.includes('有人店')) ? 'tag tag-key' : 'tag';
         span.innerText = t;
@@ -3096,6 +4048,17 @@ function updateStoreInfo() {
       });
     } else {
       tagListDiv.innerHTML = '<span style="font-size:12px; color:var(--ops-muted);">無特殊打包標籤</span>';
+    }
+
+    const reminderBox = document.getElementById('scheduleReminderBox');
+    const reminders = Array.isArray(draftData._scheduleReminders) ? draftData._scheduleReminders.filter(Boolean) : [];
+    if (reminderBox) {
+      if (reminders.length) {
+        reminderBox.style.display = 'block';
+        reminderBox.innerText = `📌 班表提醒：${reminders.join('、')}${draftData._schedulePriority ? '（優先注意）' : ''}`;
+      } else {
+        reminderBox.style.display = 'none';
+      }
     }
 
     const notesBox = document.getElementById('storeNotesBox');
@@ -3334,108 +4297,74 @@ function copyC15() {
   copyText(txt, '科目15 AMS維修');
 }
 
-function copySupportReport() {
-  const date = document.getElementById('date')?.value || getTodayString();
-  const shop = getCleanShopName() || "未填門市";
-  const shift = document.getElementById('shift')?.value || '早';
+function reportValue(data, key, fallback = '') {
+  const value = data?.[key];
+  return value === undefined || value === null || String(value).trim() === '' ? fallback : String(value).trim();
+}
 
-  let reportLines = [`${date} ${shop} ${shift}班支援匯報\n`];
+function formatShipTextFromData(data, northKey, southKey) {
+  const north = reportValue(data, northKey, '');
+  const south = reportValue(data, southKey, '');
+  let result = '';
+  if (north && north !== '0' && north !== '無') result += `${north}北`;
+  if (south && south !== '0' && south !== '無') result += `${south}南`;
+  return result || '無';
+}
 
-  if (shift === '早') {
-    const c3_overdue = document.getElementById('c3_overdue')?.value || '0';
-    const c3_scs = document.getElementById('c3_scs')?.value || '0';
-    const c3_fbs = document.getElementById('c3_fbs')?.value || '0';
-    reportLines.push(`【科目3 逾期包裹】\n逾期:${c3_overdue} | SCS:${c3_scs} | FBS:${c3_fbs}`);
-  }
+function compactSlashValues(values) {
+  return values.map(value => String(value || '').trim()).filter(Boolean).join('/');
+}
 
-  const c4_del = document.getElementById('c4_delivery')?.value || '是';
-  const c4_box = document.getElementById('c4_boxes')?.value || '0';
-  const c4_stay = document.getElementById('c4_stay')?.value || '0';
-  const c4_ndd = document.getElementById('c4_ndd')?.value || '0';
-  const c4_whndd = document.getElementById('c4_whndd')?.value || '0';
-  const c4_as = document.getElementById('c4_as')?.value || '0';
-  const c4_not_left = document.getElementById('c4_not_left')?.value || '0';
-  reportLines.push(`【科目4 配送數據】\n物流配送:${c4_del} | 配送箱數:${c4_box} | 滯留箱數:${c4_stay} | NDD:${c4_ndd} | WHNDD:${c4_whndd} | 管制品:${c4_as} | 未離店箱數:${c4_not_left}`);
+function buildFormalSupportReport() {
+  const data = JSON.parse(getAllData());
+  const date = reportValue(data, 'date', getTodayString());
+  const fullShop = reportValue(data, 'shopName', document.getElementById('shopName')?.value || '未填門市').replace(/-?智取店$/u, '');
+  const shift = reportValue(data, 'shift', '早');
+  const applicable = getApplicableSubjects(fullShop, shift);
+  const blocks = [];
 
-  const isMulti = document.getElementById('c5_multi_mode')?.checked;
-  let countStr = "", startStr = "", endStr = "";
-  if (!isMulti) {
-    countStr = document.getElementById('c5_count')?.value || '';
-    startStr = document.getElementById('c5_startTime')?.value || '';
-    endStr = document.getElementById('c5_endTime')?.value || '';
+  const add = (subjectId, text) => { if (applicable.includes(subjectId)) blocks.push(text); };
+
+  add('c3', `逾期：${reportValue(data,'c3_overdue','0')}\nSCS：${reportValue(data,'c3_scs','0')}\nFBS：${reportValue(data,'c3_fbs','0')}`);
+
+  add('c4', `⭕️物流是否配送：${reportValue(data,'c4_delivery','是')}\n⭕️配送箱數：${reportValue(data,'c4_boxes','0')}\n⭕️前日滯留箱數：${reportValue(data,'c4_stay','0')}\n⭕️NDD配送箱數：${reportValue(data,'c4_ndd','0')}\n⭕️WHNDD：${reportValue(data,'c4_whndd','0')}\n⭕️管制品（需回報AS）：${reportValue(data,'c4_as','0')}\n⭕️前日未離店箱數：${reportValue(data,'c4_not_left','0')}`);
+
+  let countText, startText, endText;
+  if (data.c5_multi_mode) {
+    countText = compactSlashValues([data.c5_b1_count,data.c5_b2_count,data.c5_b3_count]);
+    startText = compactSlashValues([data.c5_b1_start,data.c5_b2_start,data.c5_b3_start]);
+    endText = compactSlashValues([data.c5_b1_end,data.c5_b2_end,data.c5_b3_end]);
   } else {
-    const counts = [], starts = [], ends = [];
-    for (let i = 1; i <= 3; i++) {
-      const c = document.getElementById(`c5_b${i}_count`)?.value.trim() || '';
-      const s = document.getElementById(`c5_b${i}_start`)?.value.trim() || '';
-      const e = document.getElementById(`c5_b${i}_end`)?.value.trim() || '';
-      if (c || s || e) { counts.push(c); starts.push(s); ends.push(e); }
-    }
-    countStr = counts.join('/'); startStr = starts.join('/'); endStr = ends.join('/');
+    countText = reportValue(data,'c5_count','');
+    startText = reportValue(data,'c5_startTime','');
+    endText = reportValue(data,'c5_endTime','');
   }
+  add('c5', `驗收完畢回報\n\n驗收包裹數量：${countText}\n第一顆上架時間：${startText}\n完成驗收時間：${endText}\n平均驗收時間：${reportValue(data,'c5_avg','')}\nNDD完成驗收時間：${reportValue(data,'c5_ndd_time','')}\nWH NDD完成驗收時間：${reportValue(data,'c5_whndd_time','')}\n\n————————————-\n⭕️滯留：${reportValue(data,'c5_stay_box','0')}\n⭕️剩餘櫃位：${reportValue(data,'c5_seats','')}\n‼️產生滯留且有剩餘櫃位時，需通報值班幹部以利立刻進行人員調度\n————————————-\n到店TO單：${reportValue(data,'c5_to_in','')}\n離店TO單：${reportValue(data,'c5_to_out','')}`);
 
-  const c5_avg = document.getElementById('c5_avg')?.value || '';
-  const c5_ndd = document.getElementById('c5_ndd_time')?.value || '';
-  const c5_whndd = document.getElementById('c5_whndd_time')?.value || '';
-  const c5_stay = document.getElementById('c5_stay_box')?.value || '0';
-  const c5_seats = document.getElementById('c5_seats')?.value || '';
-  const c5_to_in = document.getElementById('c5_to_in')?.value || '';
-  const c5_to_out = document.getElementById('c5_to_out')?.value || '';
+  add('c6', `單顆錯店：${reportValue(data,'c6_wrong','0')}\n破損：${reportValue(data,'c6_damaged','0')}\n濕損：${reportValue(data,'c6_wet','0')}\n打X往SOC：${reportValue(data,'c6_soc','0')}`);
 
-  reportLines.push(`【科目5 驗收回報】\n驗收包裹數量：${countStr}\n第一顆上架時間：${startStr}\n完成驗收時間：${endStr}\n平均驗收時間：${c5_avg}\nNDD完成驗收時間：${c5_ndd}\nWH NDD完成驗收時間：${c5_whndd}\n滯留：${c5_stay} | 剩餘櫃位：${c5_seats}\n到店TO單：${c5_to_in} | 離店TO單：${c5_to_out}`);
+  const lockText = reportValue(data,'c8_lock_type','has') === 'has'
+    ? `‼️寄件櫃共${reportValue(data,'c8_lock_count','4')}個鑰匙孔已確認上鎖`
+    : '‼️無寄件櫃';
+  add('c8', `⭕️NDD警示條消除${reportValue(data,'c8_ndd_alert','✅')}\n⭕️FBS警示條消除${reportValue(data,'c8_fbs_alert','✅')}\n⭕️正物流寄件離店：${formatShipTextFromData(data,'c8_normal_north','c8_normal_south')}\n⭕️NDD寄件離店：${formatShipTextFromData(data,'c8_ndd_north','c8_ndd_south')}\n⭕️FBS寄件離店：${formatShipTextFromData(data,'c8_fbs_north','c8_fbs_south')}\n⭕️逆物流離店：${reportValue(data,'c8_reverse','0')}\n⭕️單顆錯店：${reportValue(data,'c8_wrong','0')}\n⭕️異常包裹：${reportValue(data,'c8_abnormal','0')}\n${lockText}\n⭕️WH空箱在店數：${reportValue(data,'c8_wh_empty','0')}\n⭕️橘箱空箱在店數：${reportValue(data,'c8_orange_empty','0')}\n⭕️空箱收/補：${reportValue(data,'c8_empty_as','0')}（AS回報）`);
 
-  const c6_wrong = document.getElementById('c6_wrong')?.value || '0';
-  const c6_damaged = document.getElementById('c6_damaged')?.value || '0';
-  const c6_wet = document.getElementById('c6_wet')?.value || '0';
-  const c6_soc = document.getElementById('c6_soc')?.value || '0';
-  reportLines.push(`【科目6 異常包裹】\n單顆錯店:${c6_wrong} | 破損:${c6_damaged} | 濕損:${c6_wet} | 打X往SOC:${c6_soc}`);
+  add('c9', `⭕️SCS HD打包：${reportValue(data,'c9_pack','0')}\n⭕️昨晚打包：${reportValue(data,'c9_last_night','0')}\n⭕️合計：${reportValue(data,'c9_total','0')}`);
+  add('c10', `⭕️SCS HD成功上架：${reportValue(data,'c10_success','0')}\n⭕️SCS HD滯留：${reportValue(data,'c10_stay','0')}`);
+  add('c11', `⭕️SCS HD 打包：${reportValue(data,'c11_pack','0')}`);
+  add('c12', `中正速配倉進貨${reportValue(data,'c12_bags','0')}袋已上架`);
+  add('c14', `⭕️系統需上架數：${reportValue(data,'c14_sys','0')}\n⭕️實際上架包裹數 ：${reportValue(data,'c14_real','0')}\n⭕️不需上架包裹數：${reportValue(data,'c14_no_need','無')}`);
+  add('c15', `⭕️入庫：${reportValue(data,'c15_in','無')}\n⭕️維修：${reportValue(data,'c15_repair','無')}`);
 
-  const c8_ndd_alert = document.getElementById('c8_ndd_alert')?.value || '✅';
-  const c8_fbs_alert = document.getElementById('c8_fbs_alert')?.value || '✅';
-  const normalShip = formatShipText('c8_normal_north', 'c8_normal_south');
-  const nddShip = formatShipText('c8_ndd_north', 'c8_ndd_south');
-  const fbsShip = formatShipText('c8_fbs_north', 'c8_fbs_south');
-  const c8_reverse = document.getElementById('c8_reverse')?.value || '0';
-  const c8_wrong = document.getElementById('c8_wrong')?.value || '0';
-  const c8_abnormal = document.getElementById('c8_abnormal')?.value || '0';
-  const c8_wh_empty = document.getElementById('c8_wh_empty')?.value || '0';
-  const c8_orange_empty = document.getElementById('c8_orange_empty')?.value || '0';
-  const c8_empty_as = document.getElementById('c8_empty_as')?.value || '0';
+  return `${date} ${fullShop}${shift}班\n\n${blocks.join('\n\n')}`.trim();
+}
 
-  reportLines.push(`【科目8 離店盤點】\nNDD警示條:${c8_ndd_alert} | FBS警示條:${c8_fbs_alert}\n正物流寄件離店：${normalShip}\nNDD寄件離店：${nddShip}\nFBS寄件離店：${fbsShip}\n逆物流離店：${c8_reverse} | 錯店：${c8_wrong} | 異常包裹：${c8_abnormal}\nWH空箱：${c8_wh_empty} | 橘箱空箱：${c8_orange_empty} | 空箱收補：${c8_empty_as}`);
-
-  if (shift === '早') {
-    const c9_pack = document.getElementById('c9_pack')?.value || '0';
-    const c9_last = document.getElementById('c9_last_night')?.value || '0';
-    const c9_total = document.getElementById('c9_total')?.value || '0';
-    reportLines.push(`【科目9 SCS HD打包】\n打包:${c9_pack} | 昨晚打包:${c9_last} | 合計:${c9_total}`);
-
-    const c10_success = document.getElementById('c10_success')?.value || '0';
-    const c10_stay = document.getElementById('c10_stay')?.value || '0';
-    reportLines.push(`【科目10 SCS HD上架】\n成功上架:${c10_success} | 滯留:${c10_stay}`);
+function copySupportReport() {
+  if (!document.getElementById('shopName')?.value.trim()) {
+    showToast('⚠️ 請先選擇巡店門市');
+    return;
   }
-
-  if (shift === '晚') {
-    const c11_pack = document.getElementById('c11_pack')?.value || '0';
-    reportLines.push(`【科目11 晚班打包HD】\n打包:${c11_pack}`);
-  }
-
-  const c12_bags = document.getElementById('c12_bags')?.value || '0';
-  reportLines.push(`【科目12 中正速配倉進貨】\n進貨袋數:${c12_bags}`);
-
-  if (shift === '晚') {
-    const c14_sys = document.getElementById('c14_sys')?.value || '0';
-    const c14_real = document.getElementById('c14_real')?.value || '0';
-    const c14_no = document.getElementById('c14_no_need')?.value || '無';
-    reportLines.push(`【科目14 晚班HD上架】\n系統需上架:${c14_sys} | 實際上架:${c14_real} | 不需上架:${c14_no}`);
-  }
-
-  const c15_in = document.getElementById('c15_in')?.value || '無';
-  const c15_repair = document.getElementById('c15_repair')?.value || '無';
-  reportLines.push(`【科目15 AMS維修】\n入庫:${c15_in} | 維修:${c15_repair}`);
-
-  const fullText = reportLines.join('\n\n');
-  copyText(fullText, '支援群全科目匯報');
+  autoSave();
+  copyText(buildFormalSupportReport(), '支援群完整回報');
 }
 
 function handleExcelImport(event) {
@@ -3583,6 +4512,8 @@ function updateSystemStatus() {
   const setStatusEl = document.getElementById('settings-system-status');
 
   const isOnline = navigator.onLine;
+  const cloudPending = localStorage.getItem('shopee_cloud_pending') === 'true';
+  const hasCloudToken = Boolean(window.gapi?.client?.getToken?.()?.access_token);
   let isStorageOk = true;
 
   try {
@@ -3596,14 +4527,18 @@ function updateSystemStatus() {
   let statusHtml = '';
   if (!isStorageOk) {
     statusHtml = '系統狀態：<span style="color:#d32f2f; font-weight:bold;">● 儲存空間已滿/受限</span>';
-  } else if (isOnline) {
-    statusHtml = '系統狀態：<span style="color:#2ea44f; font-weight:bold;">● 連線正常</span>';
+  } else if (!isOnline) {
+    statusHtml = '系統狀態：<span style="color:#ff9800; font-weight:bold;">● 離線，本機資料安全</span>';
+  } else if (cloudPending) {
+    statusHtml = '系統狀態：<span style="color:#ff9800; font-weight:bold;">● 本機已存，待雲端同步</span>';
+  } else if (hasCloudToken) {
+    statusHtml = '系統狀態：<span style="color:#2ea44f; font-weight:bold;">● 本機與雲端已同步</span>';
   } else {
-    statusHtml = '系統狀態：<span style="color:#ff9800; font-weight:bold;">● 離線模式 (本機儲存)</span>';
+    statusHtml = '系統狀態：<span style="color:#2e7d32; font-weight:bold;">● 瀏覽器本機保存模式</span>';
   }
 
   if (statusEl) statusEl.innerHTML = statusHtml;
-  if (setStatusEl) setStatusEl.innerHTML = `<b>系統連線狀態：</b> ${isOnline ? '<span style="color:#2ea44f;">● 連線正常 (雲端同步就緒)</span>' : '<span style="color:#ff9800;">● 離線模式</span>'}`;
+  if (setStatusEl) setStatusEl.innerHTML = `<b>系統連線狀態：</b> ${statusHtml.replace('系統狀態：', '')}`;
 
   updateStorageUsage();
   if (typeof renderTodayDashboard === 'function') renderTodayDashboard();
@@ -3629,6 +4564,34 @@ function updateStorageUsage() {
   const usageText = `${usedKB} KB (${percent}%)`;
   if (usageEl) usageEl.innerText = `容量：${usageText}`;
   if (setStorageEl) setStorageEl.innerHTML = `<b>本機儲存空間：</b> ${usageText}`;
+}
+
+let clearWebsiteMemoryTimer = null;
+function clearWebsiteMemory() {
+  const button = document.getElementById('clear-web-memory-btn');
+  if (!clearWebsiteMemoryTimer) {
+    if (button) button.textContent = '⚠️ 5 秒內再按一次，確認清除全部本機資料';
+    showToast('⚠️ 將清除本應用的班表、巡店紀錄、門市設定與同步狀態；請再按一次確認。', 5000);
+    clearWebsiteMemoryTimer = setTimeout(() => {
+      clearWebsiteMemoryTimer = null;
+      if (button) button.textContent = '🧪 清除本應用網頁記憶（測試重置）';
+    }, 5000);
+    return;
+  }
+
+  clearTimeout(clearWebsiteMemoryTimer);
+  clearWebsiteMemoryTimer = null;
+  const keys = [];
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index);
+    if (key?.startsWith('shopee_') || key === 'clock_format_12h') keys.push(key);
+  }
+  keys.forEach(key => localStorage.removeItem(key));
+  try {
+    Object.keys(sessionStorage).filter(key => key.startsWith('shopee_')).forEach(key => sessionStorage.removeItem(key));
+  } catch (_) {}
+  showToast(`🧹 已清除 ${keys.length} 筆本應用網頁記憶，正在重新載入…`, 1800);
+  setTimeout(() => window.location.reload(), 900);
 }
 
 function exportBackupData() {
