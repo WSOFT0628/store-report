@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店勤務助手 v6.6.0</title>
+<title>蝦皮智取店勤務助手 v6.6.1</title>
 
 <!-- 正式／試用資料空間隔離層：正式空間沿用既有鍵值，試用空間自動加上專屬前綴。 -->
 <script>
@@ -60,6 +60,8 @@
   let tokenClient;
   let gapiInited = false;
   let gsisInited = false;
+  const CLOUD_BACKUP_NAME = 'shopee_system_backup.json';
+  let pendingCloudDownload = null;
 
   function gapiLoaded() {
       try { gapi.load('client', initializeGapiClient); } catch(e) {}
@@ -74,7 +76,7 @@
           if (savedToken) {
               gapi.client.setToken({ access_token: savedToken });
               updateSyncUIConnected();
-              pullScheduleFromDrive();
+              inspectCloudBackup({ source: 'resume' });
           }
           maybeEnableSyncUI();
       } catch (err) {
@@ -94,7 +96,7 @@
                   }
                   updateSyncUIConnected();
                   showToast("☁️ Google 雲端連線成功！");
-                  pullScheduleFromDrive();
+                  inspectCloudBackup({ source: 'login' });
               },
           });
           gsisInited = true;
@@ -166,6 +168,55 @@
     if (typeof updateReportSaveStatus === 'function') updateReportSaveStatus();
   }
 
+  function escapeDriveQueryValue(value) {
+    return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  }
+
+  async function findCloudBackupFile() {
+    const response = await gapi.client.drive.files.list({
+      spaces: 'appDataFolder',
+      q: `name = '${escapeDriveQueryValue(CLOUD_BACKUP_NAME)}' and trashed = false`,
+      fields: 'files(id,name,modifiedTime,size)',
+      orderBy: 'modifiedTime desc',
+      pageSize: 10
+    });
+    const files = response.result.files || [];
+    return files.find(file => file.name === CLOUD_BACKUP_NAME) || null;
+  }
+
+  function updateCloudLocationUI(file = null, state = '') {
+    const el = document.getElementById('cloud-location-info');
+    if (!el) return;
+    const modified = file?.modifiedTime ? new Date(file.modifiedTime).toLocaleString('zh-TW', { hour12:false }) : '尚無雲端檔案';
+    const fileId = file?.id || appStorage.getItem('shopee_cloud_file_id') || '尚未建立';
+    el.innerHTML = `<b>雲端位置：</b>Google Drive › 應用程式隱藏資料區<br><b>檔名：</b>${CLOUD_BACKUP_NAME}<br><b>檔案 ID：</b><span style="word-break:break-all">${fileId}</span><br><b>雲端最後更新：</b>${modified}${state ? `<br><b>狀態：</b>${state}` : ''}`;
+  }
+
+  async function inspectCloudBackup(options = {}) {
+    if (window.IS_TRIAL_PROFILE) {
+      if (options.source === 'manual') showToast('🧪 試用空間不連接 Google 雲端。', 3000);
+      return;
+    }
+    if (!gapiInited || !gapi.client?.getToken?.()) {
+      if (options.source === 'manual') showToast('請先連接 Google 雲端，再檢查備份位置。', 3500);
+      return;
+    }
+    try {
+      const file = await findCloudBackupFile();
+      if (!file) {
+        updateCloudLocationUI(null, '已連線；雲端尚未建立備份');
+        return;
+      }
+      appStorage.setItem('shopee_cloud_file_id', file.id);
+      appStorage.setItem('shopee_cloud_modified_time', file.modifiedTime || '');
+      updateCloudLocationUI(file, '已找到指定備份檔，等待你決定是否下載');
+      await pullScheduleFromDrive({ file, requireConfirmation:true, source:options.source || 'inspect' });
+    } catch (err) {
+      console.error('檢查雲端備份失敗:', err);
+      updateCloudLocationUI(null, '無法讀取雲端備份資訊');
+    }
+  }
+
   async function syncScheduleToDrive(options = {}) {
     const manual = options.manual === true;
     if (window.IS_TRIAL_PROFILE) {
@@ -190,23 +241,18 @@
       }
       const fileContent = JSON.stringify(allData);
       
-      const response = await gapi.client.drive.files.list({
-        spaces: 'appDataFolder',
-        fields: 'files(id, name)',
-        pageSize: 10
-      });
-
-      const files = response.result.files;
-      let fileId = files && files.length > 0 ? files[0].id : null;
+      const cloudFile = await findCloudBackupFile();
+      let fileId = cloudFile?.id || null;
 
       const metadata = {
-        name: 'shopee_system_backup.json',
+        name: CLOUD_BACKUP_NAME,
         mimeType: 'application/json',
         parents: fileId ? [] : ['appDataFolder']
       };
 
+      let savedFile = cloudFile;
       if (fileId) {
-        await gapi.client.request({
+        const created = await gapi.client.request({
           path: `/upload/drive/v3/files/${fileId}`,
           method: 'PATCH',
           params: { uploadType: 'media' },
@@ -235,10 +281,17 @@
           },
           body: multipartResponseBody
         });
+        savedFile = created.result || null;
       }
 
       if (manual) showToast("✅ 雲端同步完成！所有巡店與班表資料已安全備份。");
       markCloudSynced();
+      const refreshedFile = await findCloudBackupFile();
+      if (refreshedFile) {
+        appStorage.setItem('shopee_cloud_file_id', refreshedFile.id);
+        appStorage.setItem('shopee_cloud_modified_time', refreshedFile.modifiedTime || '');
+      }
+      updateCloudLocationUI(refreshedFile || savedFile, '同步完成');
       updateSystemStatus();
       return true;
     } catch (err) {
@@ -249,20 +302,14 @@
     }
   }
 
-  async function pullScheduleFromDrive() {
+  async function pullScheduleFromDrive(options = {}) {
     if (window.IS_TRIAL_PROFILE) return;
     if (!gapiInited || !gapi.client || !gapi.client.getToken()) return;
 
     try {
-      const response = await gapi.client.drive.files.list({
-        spaces: 'appDataFolder',
-        fields: 'files(id, name)',
-        pageSize: 1
-      });
-
-      const files = response.result.files;
-      if (files && files.length > 0) {
-        const fileId = files[0].id;
+      const file = options.file || await findCloudBackupFile();
+      if (file) {
+        const fileId = file.id;
         const fileRes = await gapi.client.drive.files.get({
           fileId: fileId,
           alt: 'media'
@@ -271,20 +318,12 @@
         if (fileRes.body) {
           try {
             const remoteData = JSON.parse(fileRes.body);
-            for (let key in remoteData) {
-              if (key.startsWith('shopee_')) {
-                appStorage.setItem(key, remoteData[key]);
-              }
+            if (options.requireConfirmation !== false) {
+              pendingCloudDownload = { remoteData, file };
+              openCloudChoiceModal(file);
+              return;
             }
-            handleDailyRollover();
-            reloadStoresDataFromStorage();
-            updateHistoryDropdown();
-            loadWeekSchedule();
-            renderMonthView();
-            renderDayView();
-            loadData(false);
-            updateDraftLabels();
-            showToast("☁️ 已自動從雲端拉取最新資料！");
+            applyCloudData(remoteData, file);
           } catch(e) {
             appStorage.setItem('shopee_user_schedule', fileRes.body);
             loadWeekSchedule();
@@ -294,6 +333,57 @@
     } catch (err) {
       console.error("拉取雲端資料失敗:", err);
     }
+  }
+
+  function applyCloudData(remoteData, file = null) {
+    const recovery = {};
+    for (let i = 0; i < appStorage.length; i++) {
+      const key = appStorage.key(i);
+      if (key?.startsWith('shopee_')) recovery[key] = appStorage.getItem(key);
+    }
+    sessionStorage.setItem('shopee_before_cloud_restore', JSON.stringify(recovery));
+    Object.keys(remoteData).forEach(key => {
+      if (key.startsWith('shopee_')) appStorage.setItem(key, remoteData[key]);
+    });
+    if (file?.id) appStorage.setItem('shopee_cloud_file_id', file.id);
+    if (file?.modifiedTime) appStorage.setItem('shopee_cloud_modified_time', file.modifiedTime);
+    markCloudSynced();
+    handleDailyRollover(); reloadStoresDataFromStorage(); updateHistoryDropdown();
+    loadWeekSchedule(); renderMonthView(); renderDayView(); loadData(false); updateDraftLabels();
+    updateCloudLocationUI(file, '已套用雲端資料；套用前本機資料已建立復原快照');
+    showToast('☁️ 已依你的選擇套用雲端備份。', 3500);
+  }
+
+  function openCloudChoiceModal(file) {
+    const modal = document.getElementById('cloud-choice-modal');
+    const info = document.getElementById('cloud-choice-info');
+    if (info) info.textContent = `雲端檔案：${file.name}｜更新：${file.modifiedTime ? new Date(file.modifiedTime).toLocaleString('zh-TW', {hour12:false}) : '未知'}。系統不會自動覆蓋，請選擇要保留哪份資料。`;
+    modal?.classList.add('active');
+  }
+
+  function closeCloudChoiceModal() {
+    document.getElementById('cloud-choice-modal')?.classList.remove('active');
+  }
+
+  function keepLocalCloudChoice() {
+    pendingCloudDownload = null;
+    closeCloudChoiceModal();
+    markCloudPending();
+    showToast('💾 已保留目前本機資料；雲端資料未套用。', 3500);
+  }
+
+  function useCloudCloudChoice() {
+    if (!pendingCloudDownload) return;
+    const selected = pendingCloudDownload;
+    pendingCloudDownload = null;
+    closeCloudChoiceModal();
+    applyCloudData(selected.remoteData, selected.file);
+  }
+
+  async function overwriteCloudWithLocalChoice() {
+    pendingCloudDownload = null;
+    closeCloudChoiceModal();
+    await syncScheduleToDrive({ manual:true });
   }
 </script>
 
@@ -712,7 +802,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店勤務助手 v6.6.0
+      📦 蝦皮智取店勤務助手 v6.6.1
     </h1>
   </div>
   <div class="main-nav">
@@ -1166,6 +1256,8 @@
     <div class="settings-grid">
       <button id="gdrive-login-btn" onclick="handleAuthClick()">連接 Google 雲端</button>
       <button id="gdrive-sync-btn" onclick="syncScheduleToDrive({manual:true})">寫入並同步至雲端</button>
+      <button onclick="inspectCloudBackup({source:'manual'})">檢查雲端備份位置</button>
+      <button onclick="restoreLastSafetySnapshot()">還原最近安全快照</button>
       <button onclick="exportBackupData()">下載本機備份檔</button>
       <button onclick="importBackupData()">還原 JSON 備份檔</button>
       <button onclick="document.getElementById('excel-file-input').click()" style="grid-column: span 2;">📊 匯入 Excel 班表 (.xlsx)</button>
@@ -1173,6 +1265,9 @@
       <button id="copy-current-profile-btn" onclick="copyCurrentProfileLink()" style="display:none;background:#2878d0;color:#fff;">🔗 複製目前試用網址</button>
       <button id="exit-trial-profile-btn" onclick="exitTrialProfile()" style="display:none;background:#667085;color:#fff;">↩️ 返回正式空間</button>
       <button id="clear-web-memory-btn" onclick="clearWebsiteMemory()" style="grid-column:span 2;background:#c62828;color:#fff;">🧪 清除本應用網頁記憶（測試重置）</button>
+    </div>
+    <div id="cloud-location-info" style="margin-top:10px;padding:10px;border:1px solid var(--ops-border);border-radius:8px;background:var(--ops-bg);font-size:12px;line-height:1.65;color:var(--ops-text);">
+      <b>雲端位置：</b>尚未連接 Google Drive<br><b>檔名：</b>shopee_system_backup.json<br><span style="color:var(--ops-muted)">此檔案位於 Google Drive 的應用程式隱藏資料區，Drive 網頁不會列在「我的雲端硬碟」中，但可在這裡確認位置與檔案 ID。</span>
     </div>
     <p style="font-size:11px;color:var(--ops-muted);margin:8px 0 0;">只會清除本勤務助手在此瀏覽器的班表、巡店、設定及同步狀態；不影響其他網站。</p>
   </div>
@@ -1229,7 +1324,7 @@
   <div class="card">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v6.6.0 Shopee Ops Pro</div>
+      <div><b>目前版本：</b> v6.6.1 Shopee Ops Pro</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -1261,6 +1356,34 @@
   <input type="file" id="excel-file-input" style="display:none;" onchange="handleExcelImport(event)" accept=".xlsx, .xls">
   <input type="file" id="backup-file-input" style="display:none;" onchange="handleFileImport(event)" accept=".json">
 </footer>
+
+<!-- 雲端與本機資料衝突選擇 -->
+<div id="cloud-choice-modal" class="modal-overlay">
+  <div class="modal-card" style="max-width:460px;">
+    <h3 style="margin-top:0;color:#2878d0;font-size:17px;">☁️ 選擇要保留的資料</h3>
+    <p id="cloud-choice-info" style="font-size:13px;line-height:1.6;color:var(--ops-text);"></p>
+    <p style="font-size:12px;color:#b45309;background:#fff7ed;padding:9px;border-radius:7px;">為避免誤蓋，系統不會自動套用雲端資料。選擇雲端時，會先備份目前本機資料供復原。</p>
+    <div style="display:grid;gap:8px;margin-top:14px;">
+      <button onclick="keepLocalCloudChoice()" style="background:#2ea44f;color:#fff;">保留目前本機資料</button>
+      <button onclick="overwriteCloudWithLocalChoice()" style="background:#ee4d2d;color:#fff;">用本機資料覆蓋雲端</button>
+      <button onclick="useCloudCloudChoice()" style="background:#2878d0;color:#fff;">改用雲端資料</button>
+      <button onclick="closeCloudChoiceModal()" style="background:#667085;color:#fff;">稍後決定</button>
+    </div>
+  </div>
+</div>
+
+<!-- JSON 匯入後的保存選擇 -->
+<div id="backup-import-choice-modal" class="modal-overlay">
+  <div class="modal-card" style="max-width:460px;">
+    <h3 style="margin-top:0;color:#2ea44f;font-size:17px;">📂 備份已匯入本機</h3>
+    <p id="backup-import-choice-info" style="font-size:13px;line-height:1.6;color:var(--ops-text);"></p>
+    <div style="display:grid;gap:8px;margin-top:14px;">
+      <button onclick="finishImportedBackupLocal()" style="background:#2ea44f;color:#fff;">保留匯入後的本機資料</button>
+      <button id="import-overwrite-cloud-btn" onclick="finishImportedBackupCloud()" style="background:#ee4d2d;color:#fff;">用匯入資料覆蓋雲端</button>
+      <button id="import-use-cloud-btn" onclick="finishImportedBackupUseCloud()" style="background:#2878d0;color:#fff;">捨棄匯入結果，改用雲端</button>
+    </div>
+  </div>
+</div>
 
 <!-- 編輯 Modal 彈窗 -->
 <div id="edit-day-modal" class="modal-overlay">
@@ -4755,6 +4878,13 @@ function handleFileImport(event) {
   reader.onload = function(e) {
     try {
       const importedData = JSON.parse(e.target.result);
+      if (!importedData || Array.isArray(importedData) || typeof importedData !== 'object') throw new Error('invalid backup');
+      const recovery = {};
+      for (let index = 0; index < appStorage.length; index++) {
+        const existingKey = appStorage.key(index);
+        if (existingKey?.startsWith('shopee_')) recovery[existingKey] = appStorage.getItem(existingKey);
+      }
+      sessionStorage.setItem('shopee_before_json_import', JSON.stringify(recovery));
       let count = 0;
       for (let key in importedData) {
         if (key.startsWith('shopee_')) {
@@ -4762,13 +4892,81 @@ function handleFileImport(event) {
           count++;
         }
       }
-      showToast(`📂 成功還原 ${count} 筆紀錄！頁面即將刷新...`);
-      setTimeout(() => { location.reload(); }, 1500);
+      if (count === 0) throw new Error('empty backup');
+      markCloudPending();
+      handleDailyRollover(); reloadStoresDataFromStorage(); updateHistoryDropdown();
+      loadWeekSchedule(); renderMonthView(); renderDayView(); loadData(false); updateDraftLabels(); updateSystemStatus();
+      const connected = !window.IS_TRIAL_PROFILE && Boolean(window.gapi?.client?.getToken?.()?.access_token);
+      const info = document.getElementById('backup-import-choice-info');
+      if (info) info.textContent = `已從「${file.name}」匯入 ${count} 筆資料到${window.IS_TRIAL_PROFILE ? '目前試用空間' : '正式本機空間'}。匯入前的資料已建立復原快照；系統不會重新整理，也不會讓雲端舊資料自動蓋回來。`;
+      ['import-overwrite-cloud-btn','import-use-cloud-btn'].forEach(id => {
+        const button = document.getElementById(id);
+        if (button) { button.disabled = !connected; button.style.opacity = connected ? '1' : '.45'; }
+      });
+      document.getElementById('backup-import-choice-modal')?.classList.add('active');
+      showToast(`📂 成功匯入 ${count} 筆紀錄，請選擇保存方式。`, 3500);
     } catch (err) {
-      showToast('❌ 還原失敗：無效的備份檔案格式！');
+      showToast('❌ 還原失敗：無效或沒有勤務助手資料的備份檔！');
+    } finally {
+      event.target.value = '';
     }
   };
   reader.readAsText(file);
+}
+
+function closeBackupImportChoiceModal() {
+  document.getElementById('backup-import-choice-modal')?.classList.remove('active');
+}
+
+function finishImportedBackupLocal() {
+  closeBackupImportChoiceModal();
+  markCloudPending();
+  showToast('💾 已保留匯入後的本機資料；雲端未被更動。', 3500);
+}
+
+function restoreLastSafetySnapshot() {
+  const importSnapshot = sessionStorage.getItem('shopee_before_json_import');
+  const cloudSnapshot = sessionStorage.getItem('shopee_before_cloud_restore');
+  const raw = cloudSnapshot || importSnapshot;
+  if (!raw) {
+    showToast('目前沒有可還原的安全快照。', 3000);
+    return;
+  }
+  try {
+    const snapshot = JSON.parse(raw);
+    const keys = [];
+    for (let index = 0; index < appStorage.length; index++) {
+      const key = appStorage.key(index);
+      if (key?.startsWith('shopee_')) keys.push(key);
+    }
+    keys.forEach(key => appStorage.removeItem(key));
+    Object.keys(snapshot).forEach(key => {
+      if (key.startsWith('shopee_')) appStorage.setItem(key, snapshot[key]);
+    });
+    sessionStorage.removeItem('shopee_before_json_import');
+    sessionStorage.removeItem('shopee_before_cloud_restore');
+    markCloudPending();
+    handleDailyRollover(); reloadStoresDataFromStorage(); updateHistoryDropdown();
+    loadWeekSchedule(); renderMonthView(); renderDayView(); loadData(false); updateDraftLabels(); updateSystemStatus();
+    showToast('↩️ 已還原最近一次匯入／雲端套用前的本機資料。', 4000);
+  } catch (err) {
+    showToast('❌ 安全快照損壞，無法還原。', 3500);
+  }
+}
+
+async function finishImportedBackupCloud() {
+  closeBackupImportChoiceModal();
+  await syncScheduleToDrive({ manual:true });
+}
+
+async function finishImportedBackupUseCloud() {
+  closeBackupImportChoiceModal();
+  const file = await findCloudBackupFile();
+  if (!file) {
+    showToast('⚠️ 找不到指定的雲端備份檔，已保留匯入資料。', 4000);
+    return;
+  }
+  await pullScheduleFromDrive({ file, requireConfirmation:false, source:'import-choice' });
 }
 
 function showToast(message, duration = 2000) {
