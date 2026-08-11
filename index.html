@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店勤務助手 v7.0.5</title>
+<title>蝦皮智取店勤務助手 v7.1.4</title>
 
 <!--
   v7.0.0 程式碼註解與維護規則
@@ -78,7 +78,8 @@
 </script>
 
 <!-- 引入 SheetJS 解析 Excel -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>  
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>  
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 
 <!-- 🌐 Google API & GIS 官方 SDK 庫 -->
@@ -97,7 +98,79 @@
   let gapiInited = false;
   let gsisInited = false;
   const CLOUD_BACKUP_NAME = 'shopee_system_backup.json';
+  const GOOGLE_TOKEN_KEY = 'gdrive_access_token';
+  const GOOGLE_TOKEN_EXPIRY_KEY = 'gdrive_access_token_expiry';
+  const GOOGLE_CONNECTED_KEY = 'shopee_google_connected';
+  const GOOGLE_TOKEN_EXPIRY_MARGIN_MS = 60 * 1000;
   let pendingCloudDownload = null;
+  let tokenRequestPromise = null;
+
+  // v7.0.6：保存權杖與到期時間，讓重新開啟分頁時可恢復連線；到期後再由 GIS 嘗試續權。
+  function saveGoogleToken(resp) {
+      if (!resp?.access_token) return;
+      const expiresInMs = Math.max(0, Number(resp.expires_in || 3600)) * 1000;
+      localStorage.setItem(GOOGLE_TOKEN_KEY, resp.access_token);
+      localStorage.setItem(GOOGLE_TOKEN_EXPIRY_KEY, String(Date.now() + expiresInMs));
+      localStorage.setItem(GOOGLE_CONNECTED_KEY, 'true');
+      gapi.client.setToken({ access_token: resp.access_token });
+  }
+
+  function restoreGoogleToken() {
+      const accessToken = localStorage.getItem(GOOGLE_TOKEN_KEY);
+      const expiresAt = Number(localStorage.getItem(GOOGLE_TOKEN_EXPIRY_KEY) || 0);
+      if (!accessToken || expiresAt <= Date.now() + GOOGLE_TOKEN_EXPIRY_MARGIN_MS) {
+          localStorage.removeItem(GOOGLE_TOKEN_KEY);
+          localStorage.removeItem(GOOGLE_TOKEN_EXPIRY_KEY);
+          return false;
+      }
+      gapi.client.setToken({ access_token: accessToken });
+      return true;
+  }
+
+  function clearGoogleToken() {
+      localStorage.removeItem(GOOGLE_TOKEN_KEY);
+      localStorage.removeItem(GOOGLE_TOKEN_EXPIRY_KEY);
+      try { gapi.client.setToken(null); } catch (e) {}
+  }
+
+  function isGoogleAuthError(err) {
+      const status = Number(err?.status || err?.result?.error?.code || 0);
+      const message = String(err?.result?.error?.message || err?.message || '').toLowerCase();
+      return status === 401 || message.includes('invalid credentials') || message.includes('login required');
+  }
+
+  // v7.0.6：統一請求權杖。曾連線過時先使用 prompt:''，只有 Google 無法靜默續權才提示使用者操作。
+  function requestGoogleToken(options = {}) {
+      if (!gsisInited || !tokenClient) return Promise.reject(new Error('Google Identity Services 尚未完成載入'));
+      if (tokenRequestPromise) return tokenRequestPromise;
+      const interactive = options.interactive === true;
+      tokenRequestPromise = new Promise((resolve, reject) => {
+          tokenClient.callback = (resp) => {
+              tokenRequestPromise = null;
+              if (resp?.error) {
+                  reject(resp);
+                  return;
+              }
+              saveGoogleToken(resp);
+              updateSyncUIConnected();
+              resolve(resp);
+          };
+          tokenClient.requestAccessToken({ prompt: interactive ? 'select_account' : '' });
+      });
+      return tokenRequestPromise;
+  }
+
+  // v7.0.6：Drive 回傳 401 時清除舊權杖、嘗試續權一次，再重送原操作。
+  async function withGoogleAuthRetry(operation) {
+      try {
+          return await operation();
+      } catch (err) {
+          if (!isGoogleAuthError(err)) throw err;
+          clearGoogleToken();
+          await requestGoogleToken({ interactive:false });
+          return operation();
+      }
+  }
 
   function gapiLoaded() {
       try { gapi.load('client', initializeGapiClient); } catch(e) {}
@@ -108,11 +181,13 @@
           await gapi.client.init({ discoveryDocs: [DISCOVERY_DOC] });
           gapiInited = true;
           
-          const savedToken = sessionStorage.getItem('gdrive_access_token');
-          if (savedToken) {
-              gapi.client.setToken({ access_token: savedToken });
+          if (restoreGoogleToken()) {
               updateSyncUIConnected();
               inspectCloudBackup({ source: 'resume' });
+          } else if (gsisInited && localStorage.getItem(GOOGLE_CONNECTED_KEY) === 'true') {
+              requestGoogleToken({ interactive:false })
+                  .then(() => inspectCloudBackup({ source:'resume' }))
+                  .catch(() => clearGoogleToken());
           }
           maybeEnableSyncUI();
       } catch (err) {
@@ -127,9 +202,7 @@
               scope: SCOPES,
               callback: async (resp) => {
                   if (resp.error !== undefined) return;
-                  if (resp.access_token) {
-                      sessionStorage.setItem('gdrive_access_token', resp.access_token);
-                  }
+                  saveGoogleToken(resp);
                   updateSyncUIConnected();
                   showToast("☁️ Google 雲端連線成功！");
                   inspectCloudBackup({ source: 'login' });
@@ -137,6 +210,11 @@
           });
           gsisInited = true;
           maybeEnableSyncUI();
+          if (gapiInited && !gapi.client?.getToken?.()?.access_token && localStorage.getItem(GOOGLE_CONNECTED_KEY) === 'true') {
+              requestGoogleToken({ interactive:false })
+                  .then(() => inspectCloudBackup({ source:'resume' }))
+                  .catch(() => clearGoogleToken());
+          }
       } catch (err) {
           console.error("GIS 初始化失敗:", err);
       }
@@ -180,7 +258,17 @@
       }
 
       const hasToken = Boolean(gapi.client?.getToken()?.access_token);
-      tokenClient.requestAccessToken({ prompt: hasToken ? '' : 'select_account' });
+      if (hasToken) {
+          updateSyncUIConnected();
+          inspectCloudBackup({ source:'manual' });
+          return;
+      }
+      requestGoogleToken({ interactive:true })
+          .then(() => {
+              showToast("☁️ Google 雲端連線成功！");
+              inspectCloudBackup({ source:'login' });
+          })
+          .catch(() => showToast('⚠️ Google 登入未完成，請再試一次。', 3500));
   }
 
   function markCloudPending() {
@@ -209,13 +297,13 @@
   }
 
   async function findCloudBackupFile() {
-    const response = await gapi.client.drive.files.list({
+    const response = await withGoogleAuthRetry(() => gapi.client.drive.files.list({
       spaces: 'appDataFolder',
       q: `name = '${escapeDriveQueryValue(CLOUD_BACKUP_NAME)}' and trashed = false`,
       fields: 'files(id,name,modifiedTime,size)',
       orderBy: 'modifiedTime desc',
       pageSize: 10
-    });
+    }));
     const files = response.result.files || [];
     return files.find(file => file.name === CLOUD_BACKUP_NAME) || null;
   }
@@ -289,12 +377,12 @@
 
       let savedFile = cloudFile;
       if (fileId) {
-        const created = await gapi.client.request({
+        await withGoogleAuthRetry(() => gapi.client.request({
           path: `/upload/drive/v3/files/${fileId}`,
           method: 'PATCH',
           params: { uploadType: 'media' },
           body: fileContent
-        });
+        }));
       } else {
         const boundary = '314159265358979323846';
         const delimiter = "\r\n--" + boundary + "\r\n";
@@ -309,7 +397,7 @@
           fileContent +
           close_delim;
 
-        await gapi.client.request({
+        const created = await withGoogleAuthRetry(() => gapi.client.request({
           path: '/upload/drive/v3/files',
           method: 'POST',
           params: { uploadType: 'multipart' },
@@ -317,7 +405,7 @@
             'Content-Type': 'multipart/related; boundary="' + boundary + '"'
           },
           body: multipartResponseBody
-        });
+        }));
         savedFile = created.result || null;
       }
 
@@ -347,10 +435,10 @@
       const file = options.file || await findCloudBackupFile();
       if (file) {
         const fileId = file.id;
-        const fileRes = await gapi.client.drive.files.get({
+        const fileRes = await withGoogleAuthRetry(() => gapi.client.drive.files.get({
           fileId: fileId,
           alt: 'media'
-        });
+        }));
 
         if (fileRes.body) {
           try {
@@ -809,6 +897,55 @@
   .settings-grid button { padding:14px 8px; border:1px solid var(--ops-border); background:var(--ops-surface); color:var(--ops-text); border-radius:10px; font-weight:700; cursor:pointer; }
 
   .report-filter-panel { background: var(--ops-bg); border: 1px solid var(--ops-border); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  /* v7.1.3 報表中心：畫面、Excel 與 PDF 共用正式框架。 */
+  .report-center-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:10px 0; }
+  .report-center-stat { padding:12px; border:1px solid var(--ops-border); border-radius:10px; background:var(--ops-surface); text-align:center; }
+  .report-center-stat b { display:block; font-size:20px; color:var(--ops-orange); }
+  .report-center-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .report-center-actions button { flex:1 1 130px; }
+  .report-preview-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:7px; }
+  .report-preview-toggle { width:auto; padding:6px 10px; border:1px solid var(--ops-border); background:var(--ops-surface); color:var(--ops-text); font-size:12px; }
+  #report-center-preview { min-height:240px; overflow-x:auto; background:var(--ops-bg); border:1px solid var(--ops-border); border-radius:10px; padding:10px; }
+  .formal-report-sheet { min-width:720px; background:#fff; color:#172b4d; border:1px solid #7f8fa6; box-shadow:0 3px 14px rgba(23,43,77,.12); font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif; }
+  .formal-report-title { padding:16px 12px 10px; text-align:center; font-size:21px; font-weight:900; color:#17365d; border-bottom:2px solid #17365d; }
+  .formal-report-meta,.formal-report-table { width:100%; border-collapse:collapse; table-layout:fixed; }
+  .formal-report-meta th,.formal-report-meta td,.formal-report-table th,.formal-report-table td { border:1px solid #7f8fa6; padding:7px 8px; font-size:12px; vertical-align:top; white-space:pre-wrap; word-break:break-word; }
+  .formal-report-meta th { width:105px; color:#fff; background:#2f75b5; text-align:left; }
+  .formal-report-table thead th { color:#fff; background:#2f75b5; text-align:center; }
+  .formal-report-table tbody tr:nth-child(even) { background:#edf4fb; }
+  .formal-report-record-title { padding:7px 10px; color:#fff; background:#2f75b5; border-top:2px solid #17365d; font-size:12px; font-weight:900; }
+  .formal-report-detail-grid { display:grid; grid-template-columns:115px minmax(0,1fr) 115px minmax(0,1fr); border-top:1px solid #7f8fa6; }
+  .formal-report-detail-grid b,.formal-report-detail-grid span { min-height:34px; padding:7px 8px; border-right:1px solid #7f8fa6; border-bottom:1px solid #7f8fa6; font-size:12px; white-space:pre-wrap; word-break:break-word; }
+  .formal-report-detail-grid b { color:#17365d; background:#edf4fb; }
+  .formal-report-section { padding:8px 10px; color:#17365d; background:#d9eaf7; border-top:2px solid #2f75b5; border-bottom:1px solid #7f8fa6; font-size:13px; font-weight:900; }
+  .formal-report-empty { padding:24px; color:#667085; text-align:center; }
+  .formal-report-footer { display:flex; justify-content:space-between; gap:10px; padding:8px 10px; border-top:1px solid #7f8fa6; color:#667085; font-size:10px; }
+  /* v7.1.3 班表月曆：一個月一張、每週一列，預覽／PDF／Excel 共用相同資訊層次。 */
+  .schedule-report-month { padding:14px; background:#fff; color:#24324a; }
+  .schedule-report-month + .schedule-report-month { border-top:12px solid var(--ops-bg); }
+  .schedule-month-head { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; margin-bottom:10px; }
+  .schedule-month-title { color:#312e81; font-size:19px; font-weight:900; }
+  .schedule-month-subtitle { color:#667085; font-size:10px; }
+  .schedule-calendar { display:grid; grid-template-columns:repeat(7,minmax(92px,1fr)); border-top:1px solid #cbd5e1; border-left:1px solid #cbd5e1; }
+  .schedule-weekday { padding:7px 4px; background:#4338ca; color:#fff; border-right:1px solid #cbd5e1; border-bottom:1px solid #cbd5e1; text-align:center; font-size:11px; font-weight:900; }
+  .schedule-day { position:relative; min-height:112px; padding:8px 7px; border-right:1px solid #cbd5e1; border-bottom:1px solid #cbd5e1; background:#fff; }
+  .schedule-day.weekend { background:#faf7ff; }
+  .schedule-day.outside { background:#f8fafc; color:#a0aec0; }
+  .schedule-day.off { background:#f1f5f9; }
+  .schedule-date { display:flex; justify-content:space-between; gap:5px; margin-bottom:6px; font-size:11px; font-weight:900; }
+  .schedule-week-badge { padding:1px 5px; border-radius:999px; background:#eef2ff; color:#4338ca; font-size:8px; }
+  .schedule-shift { color:#4338ca; font-size:10px; font-weight:900; }
+  .schedule-time { color:#64748b; font-size:9px; margin:2px 0 5px; }
+  .schedule-store { margin-top:3px; font-size:10px; font-weight:800; line-height:1.35; }
+  .schedule-store.support { color:#7c3aed; }
+  .schedule-tag { display:inline-block; margin:3px 3px 0 0; padding:1px 5px; border-radius:999px; background:#fff1ed; color:#c2410c; font-size:8px; font-weight:900; }
+  .schedule-off-label { color:#64748b; font-size:11px; font-weight:800; }
+  .schedule-legend { display:flex; flex-wrap:wrap; gap:5px 12px; padding:10px 2px 2px; color:#64748b; font-size:9px; }
+  .support-live-card { display:none; margin-top:10px; padding:10px; border:2px solid var(--ops-orange); border-radius:10px; background:var(--ops-orange-soft); }
+  .support-live-card.active { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .quick-support-btn { background:var(--ops-orange)!important; color:#fff!important; border-color:var(--ops-orange)!important; font-weight:900!important; }
+  #report-quick-support-btn { width:auto!important; min-width:150px; max-width:240px; padding:8px 14px!important; margin:0 0 10px!important; }
+  .support-record { padding:10px; border:1px solid var(--ops-border); border-radius:9px; margin-top:8px; background:var(--ops-surface); }
   .filter-row { display: flex; align-items: center; border-bottom: 1px solid var(--ops-border); padding: 8px 0; font-size: 13px; }
   .filter-row:last-child { border-bottom: none; }
   .filter-title { width: 90px; font-weight: bold; color: var(--ops-text); }
@@ -925,6 +1062,22 @@
   .sop-step-editor { display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:center;margin-top:6px; }
   .sop-step-editor input { margin:0; }
   .sop-step-editor button { padding:7px 9px; }
+  /* v7.1.4 視覺型 SOP：配置圖以主內容呈現，並提供獨立的全螢幕縮放檢視。 */
+  .knowledge-mode-switch { display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:7px 0 10px; }
+  .knowledge-mode-switch button { border:1px solid var(--ops-border);background:var(--ops-bg);color:var(--ops-text); }
+  .knowledge-mode-switch button.active { background:#7c3aed;border-color:#7c3aed;color:#fff; }
+  .knowledge-layout-preview { margin-top:10px;border:1px solid var(--ops-border);border-radius:12px;overflow:hidden;background:#111827; }
+  .knowledge-layout-preview img { display:block;width:100%;max-height:560px;object-fit:contain;cursor:zoom-in; }
+  .knowledge-layout-caption { display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:var(--ops-bg);font-size:12px;font-weight:800; }
+  .knowledge-points { margin:9px 0 0;padding-left:22px;font-size:12px;line-height:1.65; }
+  .knowledge-viewer { position:fixed;inset:0;z-index:12000;background:rgba(2,6,23,.96);display:none;flex-direction:column;color:#fff; }
+  .knowledge-viewer.active { display:flex; }
+  .knowledge-viewer-bar { display:flex;align-items:center;gap:7px;padding:10px;background:rgba(15,23,42,.92); }
+  .knowledge-viewer-bar strong { flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+  .knowledge-viewer-bar button { background:#334155;color:#fff;border:1px solid #64748b;min-width:42px; }
+  .knowledge-viewer-stage { flex:1;overflow:hidden;position:relative;touch-action:none;cursor:grab; }
+  .knowledge-viewer-stage.dragging { cursor:grabbing; }
+  .knowledge-viewer-stage img { position:absolute;left:50%;top:50%;max-width:none;max-height:none;transform-origin:center;user-select:none;-webkit-user-drag:none; }
 
   @media (min-width: 760px) { 
     .today-hero { margin-top:15px; border-radius:22px; } 
@@ -957,13 +1110,14 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店勤務助手 v7.0.5
+      📦 蝦皮智取店勤務助手 v7.1.4
     </h1>
   </div>
   <div class="main-nav">
     <button class="nav-btn active" onclick="switchMainTab('today-tab', this)"><span class="nav-icon">⌂</span><span>今日</span></button>
     <button class="nav-btn" onclick="switchMainTab('report-tab', this)"><span class="nav-icon">▣</span><span>回報</span></button>
     <button class="nav-btn" onclick="switchMainTab('schedule-tab', this)"><span class="nav-icon">▦</span><span>班表</span></button>
+    <button class="nav-btn" onclick="switchMainTab('reports-tab', this)"><span class="nav-icon">▤</span><span>報表</span></button>
     <button class="nav-btn" onclick="switchMainTab('knowledge-tab', this)"><span class="nav-icon">☷</span><span>資料庫</span></button>
     <button class="nav-btn" onclick="switchMainTab('settings-tab', this)"><span class="nav-icon">⚙</span><span>更多</span></button>
   </div>
@@ -999,12 +1153,12 @@
     <!-- v7.0.0 勤務指揮卡：用既有班表、目前門市與回報完成度推導下一步；狀態另存 shopee_v7_duty_state，不覆寫巡店草稿。 -->
     <div id="duty-command" class="duty-command">
       <div class="duty-command-head"><div><small style="color:var(--ops-muted);font-weight:800;">勤務模式</small><h3 id="duty-command-title">尚未開始勤務</h3><div id="duty-command-meta" style="font-size:12px;color:var(--ops-muted);">開始後會依目前門市安排下一步</div></div><span id="duty-command-state" class="duty-command-state">待命</span></div>
-      <div class="duty-command-actions"><button id="duty-primary-btn" class="main" onclick="advanceDutyState()">▶ 開始今日勤務</button><button onclick="toggleDutyPause()">暫停</button><button onclick="openIncidentEditor()">＋ 異常</button></div>
+      <div class="duty-command-actions"><button id="duty-primary-btn" class="main" onclick="advanceDutyState()">▶ 開始今日勤務</button><button onclick="toggleDutyPause()">暫停</button><button onclick="openIncidentEditor()">＋ 異常</button><button class="quick-support-btn" onclick="openQuickSupportDuty()">🤝 開始臨時支援</button></div>
       <div id="next-action-card" class="next-action-card"></div>
+      <div id="support-live-card" class="support-live-card" aria-live="polite"></div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:16px;">
+    <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:16px;">
       <button class="primary-action" onclick="openTodaySchedule()">查看／編輯今日班表</button>
-      <button id="home-import-backup-btn" onclick="importBackupData()" style="display:none;background:#2878d0;color:#fff;">匯入資料</button>
     </div>
 
     <div id="home-overview-panel" class="home-overview-panel" style="display:none;">
@@ -1039,6 +1193,7 @@
 <div id="report-tab" class="tab-content">
 
   <h2 style="color: #ee4d2d; font-size: 16px; text-align: center; margin: 5px 0 15px 0;">📋 巡店門市填表與回報區</h2>
+  <button id="report-quick-support-btn" class="quick-support-btn" onclick="openQuickSupportDuty()">🤝 開始臨時支援</button>
 
   <!-- 支援拖曳排序的進度膠囊列與總覽按鈕 -->
   <div class="card" style="background: var(--ops-surface); border: 1px solid var(--ops-border);">
@@ -1428,6 +1583,28 @@
 
 </div>
 
+<!-- v7.1.3 獨立報表中心：只負責篩選、正式預覽與匯出。 -->
+<div id="reports-tab" class="tab-content">
+  <h2 style="color:var(--ops-success);font-size:18px;margin:6px 0 4px;">▤ 報表中心</h2>
+  <p style="color:var(--ops-muted);font-size:12px;margin:0 0 12px;">各項勤務報表檢視、產生與匯出</p>
+  <div class="card">
+    <div class="report-filter-panel">
+      <div class="filter-row"><div class="filter-title">統計區間</div><div class="filter-content">
+        <button class="badge-btn" onclick="setReportRange('yesterday')">昨日</button><button class="badge-btn" onclick="setReportRange('today')">今天</button>
+        <button class="badge-btn" onclick="setReportRange('week')">本週</button><button class="badge-btn" onclick="setReportRange('lastWeek')">上週</button><button class="badge-btn" onclick="setReportRange('month')">本月</button><button class="badge-btn" onclick="setReportRange('lastMonth')">上個月</button>
+        <input type="date" id="report-start-date" style="width:140px;padding:4px;font-size:12px;"><span>至</span><input type="date" id="report-end-date" style="width:140px;padding:4px;font-size:12px;">
+      </div></div>
+      <div class="filter-row"><div class="filter-title">報表類型</div><div class="filter-content"><select id="report-kind" onchange="previewAdvancedReport(true)"><option value="daily">每日工作日報</option><option value="support">支援勤務報表</option><option value="schedule">班表報表</option><option value="incident">異常與交接</option></select></div></div>
+      <div class="filter-row"><div class="filter-title">門市範圍</div><div class="filter-content"><label><input type="radio" name="reportScope" value="all" checked onchange="toggleScopeInput(false)"> 全部門市</label><label style="margin-left:12px;"><input type="radio" name="reportScope" value="specific" onchange="toggleScopeInput(true)"> 指定門市</label><input type="text" id="report-specific-store" list="reportStoreList" placeholder="選擇或輸入店名" style="display:none;width:180px;padding:4px;margin-left:8px;"><datalist id="reportStoreList"></datalist></div></div>
+      <div class="filter-row"><div class="filter-title">勤務條件</div><div class="filter-content"><select id="report-shift"><option value="">全部班別</option><option value="早">早班</option><option value="晚">晚班</option></select><select id="report-role"><option value="">主要與支援</option><option value="主要門市">主要門市</option><option value="支援門市">支援門市</option></select><select id="report-state"><option value="">全部狀態</option><option value="進行中">進行中</option><option value="已完成">已完成</option><option value="部分完成">部分完成</option><option value="支援至下班">支援至下班</option><option value="未排除">未排除異常</option><option value="已排除">已排除異常</option></select><label><input id="report-remaining-only" type="checkbox" style="width:auto;"> 僅含滯留</label><label><input id="report-handover-only" type="checkbox" style="width:auto;"> 僅需交接</label></div></div>
+    </div>
+    <div id="report-center-stats" class="report-center-grid"></div>
+    <div class="report-preview-heading"><label for="report-center-preview"><b>正式報表預覽</b></label><button id="report-preview-toggle" class="report-preview-toggle" type="button" onclick="toggleReportPreview()" aria-controls="report-center-preview" aria-expanded="true">▴ 收合預覽</button></div>
+    <div id="report-center-preview"><div class="formal-report-empty">選擇條件後按「更新預覽」</div></div>
+    <div class="report-center-actions"><button onclick="previewAdvancedReport(true)">👁 更新預覽</button><button onclick="copyAdvancedReport()">📋 複製文字</button><button onclick="exportReportExcel()" style="background:#137333;color:#fff;">📊 匯出 Excel</button><button onclick="exportReportPdf()" style="background:#c62828;color:#fff;">📄 匯出 PDF</button></div>
+  </div>
+</div>
+
 <!-- 勤務資料庫 -->
 <div id="knowledge-tab" class="tab-content">
   <h2 style="color:#7c3aed;font-size:18px;margin:6px 0 15px;">☷ 勤務資料庫</h2>
@@ -1445,14 +1622,14 @@
 <!-- 📍 設定頁面 -->
 <div id="settings-tab" class="tab-content">
   <!-- v7.0.0 更多中心：把日常工具、基礎資料、備份與設定分流，避免所有功能堆成單一長頁。 -->
-  <div class="more-hero"><h2>更多工具與設定</h2><p>資料維護集中在這裡；回報頁維持快速、單純。</p></div>
+  <div class="more-hero"><h2>更多</h2><p>管理門市、設備、QR、備份與各項功能設定</p></div>
   <div class="more-grid">
     <button class="more-tile" onclick="openDeviceVaultManager()">🔐<b>設備資料</b><small>新增、編輯、刪除與門市共用</small></button>
     <button class="more-tile" onclick="focusMoreSection('arrival-tools-card')">▣<b>QR 管理</b><small>到離店條碼與紙捲蓋綁定</small></button>
     <button class="more-tile" onclick="switchMainTab('knowledge-tab',navButtonFor('knowledge-tab'))">☷<b>勤務資料庫</b><small>SOP、注意事項與異常排除</small></button>
     <button class="more-tile" onclick="openIncidentList()">⚠<b>異常與交接</b><small>未排除事件與下班交接</small></button>
     <button class="more-tile" onclick="selectSettingsGroup('global')">🌐<b>應用程式全域</b><small>同步、外觀、安全與儲存</small></button>
-    <button class="more-tile" onclick="selectSettingsGroup('feature')">🧩<b>各項功能設定</b><small>門市、QR、報表與勤務規則</small></button>
+    <button class="more-tile" onclick="selectSettingsGroup('feature')">🧩<b>各項功能設定</b><small>門市、QR 與勤務規則</small></button>
   </div>
   <div class="settings-center-tabs"><button id="settings-global-btn" class="active" onclick="selectSettingsGroup('global')">🌐 全域設定</button><button id="settings-feature-btn" onclick="selectSettingsGroup('feature')">🧩 功能設定</button></div>
   <div id="settings-search-wrap" class="card" style="padding:10px;"><input id="settings-search" placeholder="搜尋設定，例如：雲端、門市、QR…" oninput="filterSettingsCards()" style="margin:0;"></div>
@@ -1503,46 +1680,18 @@
     <p style="font-size:11px;color:#b45309;background:#fff7ed;padding:8px;border-radius:7px;">🔐 設備帳密會跟隨正式 Google 雲端與 JSON 備份；試用空間仍無法讀取。請妥善保護 Google 帳戶與備份檔。</p>
   </div>
 
-  <!-- 工作日報表生成中心 -->
-  <div class="card settings-section" data-settings-group="feature" hidden style="border: 1px solid var(--ops-success);">
-    <h3 style="color: var(--ops-success); border-bottom-color: rgba(18,161,80,0.3);">📊 工作日報表生成與篩選中心</h3>
-    
-    <div class="report-filter-panel">
-      <div class="filter-row">
-        <div class="filter-title">統計區間</div>
-        <div class="filter-content">
-          <button class="badge-btn" onclick="setReportRange('today')">今天</button>
-          <button class="badge-btn" onclick="setReportRange('week')">本週</button>
-          <button class="badge-btn" onclick="setReportRange('lastWeek')">上週</button>
-          <button class="badge-btn" onclick="setReportRange('month')">本月</button>
-          <input type="date" id="report-start-date" style="width: 140px; padding: 4px; font-size: 12px;">
-          <span>至</span>
-          <input type="date" id="report-end-date" style="width: 140px; padding: 4px; font-size: 12px;">
-        </div>
-      </div>
-
-      <div class="filter-row">
-        <div class="filter-title">統計範圍</div>
-        <div class="filter-content">
-          <label style="display:inline-flex; align-items:center; gap:4px; font-weight:normal; cursor:pointer;"><input type="radio" name="reportScope" value="all" checked onchange="toggleScopeInput(false)"> 全部門市</label>
-          <label style="display:inline-flex; align-items:center; gap:4px; font-weight:normal; cursor:pointer; margin-left:12px;"><input type="radio" name="reportScope" value="specific" onchange="toggleScopeInput(true)"> 指定門市</label>
-          
-          <input type="text" id="report-specific-store" list="reportStoreList" placeholder="選擇或輸入店名" style="display:none; width: 180px; padding: 4px; font-size: 12px; margin-left: 8px;">
-          <datalist id="reportStoreList"></datalist>
-        </div>
-      </div>
-    </div>
-
-    <div style="text-align: center; margin-top: 10px;">
-      <button class="btn-generate-report" onclick="generateAdvancedTextReport()">📋 產出並複製自訂工作日報表</button>
-    </div>
+  <div class="card settings-section" data-settings-group="feature" hidden style="border:1px solid var(--ops-orange);">
+    <h3 style="color:var(--ops-orange);">🤝 支援勤務管理</h3>
+    <p style="font-size:12px;color:var(--ops-muted);">補登、查看、編輯或刪除支援勤務；勤務進行中請使用首頁或回報頁的快速支援。</p>
+    <button onclick="openSupportDutyEditor()" style="background:var(--ops-orange);color:#fff;">＋ 補登支援勤務</button>
+    <div id="support-duty-list"></div>
   </div>
 
   <!-- 系統維護與狀態 -->
   <div class="card settings-section" data-settings-group="global">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v7.0.5 Shopee Ops Pro</div>
+      <div><b>目前版本：</b> v7.1.4（2026/08/11） Shopee Ops Pro</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -1644,6 +1793,17 @@
   <button onclick="closeIncidentModal()" style="width:100%;margin-top:8px;">關閉</button>
 </div></div>
 
+<!-- v7.1.3 支援勤務：快速開始／結束與完整管理共用資料。 -->
+<div id="support-duty-modal" class="modal-overlay" onclick="if(event.target===this)closeSupportDutyEditor()"><div class="modal-card" style="max-width:560px;max-height:90vh;overflow:auto;">
+  <h3 id="support-duty-modal-title" style="margin-top:0;color:var(--ops-orange);">🤝 支援勤務紀錄</h3>
+  <input id="support-duty-id" type="hidden"><div class="row"><div><label>日期</label><input id="support-duty-date" type="date"></div><div><label>支援門市</label><input id="support-duty-store" list="shopList" placeholder="例：興豐"></div></div>
+  <label>支援工作（可複選）</label><div id="support-duty-tasks" class="multi-picker"><label><input type="checkbox" value="上架正物流">上架正物流</label><label><input type="checkbox" value="打包正物流">打包正物流</label><label><input type="checkbox" value="HD上架">HD 上架</label><label><input type="checkbox" value="NDD打包">NDD 打包</label><label><input type="checkbox" value="FBS打包">FBS 打包</label><label><input type="checkbox" value="其他">其他</label></div>
+  <div class="row"><div><label>開始時間</label><input id="support-duty-start" type="time"></div><div><label>結束時間</label><input id="support-duty-end" type="time"></div></div>
+  <div id="support-duty-result-fields"><div class="row"><div><label>完成狀態</label><select id="support-duty-status"><option>進行中</option><option>支援至下班</option><option>部分完成</option><option>已完成</option></select></div><div><label>處理數量（選填）</label><input id="support-duty-count" inputmode="numeric"></div></div>
+  <label>剩餘／滯留（選填）</label><input id="support-duty-remaining" placeholder="例：現場仍有滯留"><label>備註</label><textarea id="support-duty-note" rows="3" placeholder="補充支援範圍或交接內容"></textarea></div>
+  <div style="display:flex;gap:8px;margin-top:12px;"><button id="support-duty-save-btn" onclick="saveSupportDuty()" style="flex:1;background:var(--ops-orange);color:#fff;">儲存支援勤務</button><button onclick="closeSupportDutyEditor()" style="flex:1;">取消</button></div>
+</div></div>
+
 <div id="knowledge-editor-modal" class="modal-overlay">
   <div class="modal-card" style="max-width:620px;max-height:90vh;overflow:auto;">
     <h3 id="knowledge-editor-title" style="margin-top:0;color:#7c3aed;">新增勤務資料</h3>
@@ -1661,10 +1821,11 @@
     </div>
     <label>關鍵字（以逗號分隔）</label><input id="knowledge-keywords" placeholder="SCS, NDD, FBS, HD">
     <label>簡要說明／注意事項</label><textarea id="knowledge-note" rows="3" placeholder="輸入重點說明"></textarea>
-    <label>作業步驟</label>
-    <div id="knowledge-step-editor"></div>
-    <button onclick="addKnowledgeStep()" style="margin-top:7px;">＋ 新增步驟</button>
-    <label style="margin-top:10px;">原始照片（選填，收合保存）</label>
+    <label>內容呈現方式</label>
+    <div class="knowledge-mode-switch"><button id="knowledge-mode-steps" type="button" onclick="setKnowledgeContentType('steps')">☑ 文字步驟</button><button id="knowledge-mode-layout" type="button" onclick="setKnowledgeContentType('layout-map')">▧ 位置配置圖</button></div>
+    <div id="knowledge-steps-fields"><label>作業步驟</label><div id="knowledge-step-editor"></div><button onclick="addKnowledgeStep()" style="margin-top:7px;">＋ 新增步驟</button></div>
+    <div id="knowledge-layout-fields" hidden><label>配置圖重點（每行一點，可被搜尋）</label><textarea id="knowledge-layout-points" rows="5" placeholder="例：司機進貨處保留 2～3 落空間&#10;宅配滯留區依圖示位置擺放"></textarea><p style="font-size:11px;color:var(--ops-muted);margin:5px 0 0;">請先在手機或圖片工具完成框線與文字標註，再上傳整張配置圖。</p></div>
+    <label id="knowledge-image-label" style="margin-top:10px;">原始照片（選填，收合保存）</label>
     <input id="knowledge-image-file" type="file" accept="image/*" onchange="handleKnowledgeImage(event)">
     <div id="knowledge-image-status" style="font-size:11px;color:var(--ops-muted);"></div>
     <div style="display:flex;gap:8px;margin-top:14px;">
@@ -1672,6 +1833,11 @@
       <button onclick="closeKnowledgeEditor()" style="flex:1;background:#667085;color:#fff;">取消</button>
     </div>
   </div>
+</div>
+
+<div id="knowledge-image-viewer" class="knowledge-viewer" role="dialog" aria-modal="true" aria-label="配置圖檢視器">
+  <div class="knowledge-viewer-bar"><strong id="knowledge-viewer-title">配置圖</strong><button onclick="changeKnowledgeViewerZoom(-.25)">－</button><button onclick="resetKnowledgeViewer()">還原</button><button onclick="changeKnowledgeViewerZoom(.25)">＋</button><button onclick="closeKnowledgeImageViewer()">關閉</button></div>
+  <div id="knowledge-viewer-stage" class="knowledge-viewer-stage"><img id="knowledge-viewer-image" alt="SOP 配置圖"></div>
 </div>
 
 <!-- 全域簡化版 Footer -->
@@ -2281,10 +2447,12 @@ function switchMainTab(tabId, btn) {
   if (btn) btn.classList.add('active');
   if (tabId === 'today-tab') renderTodayDashboard();
   if (tabId === 'knowledge-tab') renderKnowledgeBase();
+  if (tabId === 'reports-tab') { populateReportStoreDatalist(); initReportCenter(); renderSupportDutyList(); }
   if (tabId === 'settings-tab') {
     populateReportStoreDatalist();
     initArrivalTools();
     renderStoreManageList();
+    renderSupportDutyList();
     selectSettingsGroup(appStorage.getItem('shopee_v7_settings_group') || 'global');
     runDataHealthCheck();
   }
@@ -2783,7 +2951,6 @@ function renderTodayDashboard() {
   const progressLabel = document.getElementById('today-progress-label');
   const reminderBox = document.getElementById('today-reminders');
   const homePanel = document.getElementById('home-overview-panel');
-  const importButton = document.getElementById('home-import-backup-btn');
   renderPinnedKnowledgeHome();
   
   const statusDot = document.getElementById('today-status-dot');
@@ -2815,7 +2982,6 @@ function renderTodayDashboard() {
   }
 
   if (!dayData || (!dayData.loc && !(dayData.supportLocs || []).length)) {
-    if (importButton) importButton.style.display = 'block';
     renderDutyCommand([]);
     renderSmartDashboard();
     if (locLabel) locLabel.textContent = '今日尚未排班';
@@ -2828,7 +2994,6 @@ function renderTodayDashboard() {
   }
 
   if (dayData.isOff || String(dayData.loc || '').toUpperCase() === 'X') {
-    if (importButton) importButton.style.display = 'none';
     renderDutyCommand([]);
     renderSmartDashboard();
     if (locLabel) locLabel.textContent = '今天休假';
@@ -2841,7 +3006,6 @@ function renderTodayDashboard() {
   }
 
   const locations = getParsedLocations(dayData);
-  if (importButton) importButton.style.display = 'none';
   const locationDetails = locations.map(getScheduleStoreDetails);
   // v7.0.1 修正：核心門市資訊必須先由今日班表完成更新；時效、勤務卡等附屬模組
   // 即使遇到單筆舊資料格式異常，也不能讓首頁停留在前一次顯示的門市。
@@ -2912,18 +3076,15 @@ function startTodayReport() {
 function populateReportStoreDatalist() {
   const datalist = document.getElementById('reportStoreList');
   if (!datalist) return;
-  
-  const existingValues = new Set();
-  storesData.forEach(s => existingValues.add(s.name));
-
-  const savedSchedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
-  Object.values(savedSchedule).forEach(day => {
-    if (day.loc) day.loc.split(/[\/\n]/).forEach(l => existingValues.add(l.trim()));
-    if (day.supportLocs) day.supportLocs.forEach(s => existingValues.add(s.trim()));
+  // v7.1.1：報表選單只顯示門市主檔 canonical 名稱。班表簡稱、任務附註、X 與休假不再污染選單。
+  const canonicalStores = new Map();
+  storesData.forEach(store => {
+    const name = String(store?.name || '').trim();
+    const identity = getStoreNameIdentity(name);
+    if (name && identity && name.toUpperCase() !== 'X') canonicalStores.set(identity, name);
   });
-
   datalist.innerHTML = '';
-  Array.from(existingValues).sort().forEach(storeName => {
+  Array.from(canonicalStores.values()).sort((a,b)=>a.localeCompare(b,'zh-Hant')).forEach(storeName => {
     const opt = document.createElement('option');
     opt.value = storeName;
     datalist.appendChild(opt);
@@ -2939,7 +3100,10 @@ function setReportRange(type) {
   let start = new Date();
   let end = new Date();
 
-  if (type === 'today') {
+  if (type === 'yesterday') {
+    start.setDate(today.getDate() - 1);
+    end = new Date(start);
+  } else if (type === 'today') {
     // 保持今天
   } else if (type === 'week') {
     start = getMonday(today);
@@ -2951,6 +3115,10 @@ function setReportRange(type) {
     end.setDate(end.getDate() + 6);
   } else if (type === 'month') {
     start = new Date(today.getFullYear(), today.getMonth(), 1);
+    end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  } else if (type === 'lastMonth') {
+    start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    end = new Date(today.getFullYear(), today.getMonth(), 0);
   }
 
   startInput.value = formatDateISO(start);
@@ -3541,6 +3709,9 @@ function saveStoreModalData() {
   renderStoreManageList();
   populateShopOptions();
   populateReportStoreDatalist();
+  // v7.1.3：門市主檔變更後立即重建到店工具箱綁定清單，避免新增門市必須重開頁面才出現。
+  renderPaperQrSettings();
+  renderPaperQrTools();
   updateStoreInfo();
   applyShiftLock();
   renderTodayDashboard();
@@ -3607,6 +3778,8 @@ async function deleteStoreItem(index) {
   renderStoreManageList();
   populateShopOptions();
   populateReportStoreDatalist();
+  renderPaperQrSettings();
+  renderPaperQrTools();
   updateStoreInfo();
   renderTodayDashboard();
   syncScheduleToDrive();
@@ -4000,6 +4173,7 @@ function syncCurrentDayScheduleToReportDraft(options = {}) {
     loadData(false);
     updateDraftLabels();
     renderTodayDashboard();
+    renderActiveSupportDuty();
     loadWeekSchedule();
     renderMonthView();
     renderDayView();
@@ -4573,6 +4747,7 @@ window.onload = function() {
       showToast(`✅ ${messages.join('；')}`, 5000);
     }
     setInterval(() => {
+      renderActiveSupportDuty();
       if (!isViewingHistoricalReport && handleDailyRollover()) {
         ensureTodayDraftsFromSchedule();
         loadData(false);
@@ -5901,7 +6076,7 @@ const DEFAULT_SOP_IMAGE='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAiQAAALbC
  */
 const DEFAULT_KNOWLEDGE_CATEGORIES=['SOP 作業流程','門市注意事項','設備操作','異常排除','圖片與文件','個人備忘'];
 const KNOWLEDGE_CATEGORY_KEY='shopee_knowledge_categories_v1';
-let activeKnowledgeCategory='全部',editingKnowledgeImage='',editingKnowledgeImageRef='',knowledgeStepDraft=[];
+let activeKnowledgeCategory='全部',editingKnowledgeImage='',editingKnowledgeImageRef='',editingKnowledgeContentType='steps',knowledgeStepDraft=[];
 const DEFAULT_KNOWLEDGE_ENTRY={id:'default-priority-sop',title:'上架／打包優先順序',category:'SOP 作業流程',shift:'全天',stores:[],priority:'重要',versionDate:'2026-02-02',keywords:['SCS','NDD','FBS','HD','上架','打包'],note:'依現場公告整理；早、晚班請依標示時效優先處理。',pinned:true,image:'',imageRef:'default-sop',steps:[
   {text:'黑箱上架',timing:'早班 12:00 前／晚班 21:00 前'},{text:'SCS HD 包裝',timing:'早班 10:00 前／晚班 21:00 前'},{text:'SCS HD 上架 HD 櫃',timing:'早班 11:00–12:00'},{text:'NDD 上架',timing:'晚班 21:30 前'},{text:'標準配送上架',timing:'依當日到貨'},{text:'NDD／FBS 打包',timing:'晚班 19:00–20:00'},{text:'標準配送打包',timing:'依現場作業'},{text:'一般 HD 上架 HD 櫃',timing:'晚班 21:00–23:00'},{text:'包裹重新分配',timing:'早晚班皆適用'},{text:'標準配送上架',timing:'上架至滿櫃'}]};
 // v7.0.0 用途：內建 SOP 公告以代號引用 HTML 圖片；舊版重複保存的同圖 Base64 會自動移除。
@@ -5914,12 +6089,13 @@ function saveKnowledgeCategories(categories){appStorage.setItem(KNOWLEDGE_CATEGO
 function renderKnowledgeFilters(){const c=document.getElementById('knowledge-filters');if(!c)return;const categories=['全部',...getKnowledgeCategories()];if(!categories.includes(activeKnowledgeCategory))activeKnowledgeCategory='全部';c.innerHTML=categories.map(x=>`<button class="${x===activeKnowledgeCategory?'active':''}" onclick="setKnowledgeCategory(decodeURIComponent('${encodeURIComponent(x)}'))">${escapeStoreHTML(x)}</button>`).join('');}
 function setKnowledgeCategory(category){activeKnowledgeCategory=category;renderKnowledgeBase();}
 function knowledgeMatchesStore(entry,storeName){if(!entry.stores?.length)return true;const id=getStoreNameIdentity(storeName||'');return entry.stores.some(x=>getStoreNameIdentity(x)===id);}
-function renderKnowledgeBase(){renderKnowledgeFilters();const q=(document.getElementById('knowledge-search')?.value||'').trim().toLowerCase(),items=getKnowledgeEntries().filter(e=>(activeKnowledgeCategory==='全部'||e.category===activeKnowledgeCategory)&&(!q||[e.title,e.note,e.category,e.shift,...(e.keywords||[]),...(e.steps||[]).flatMap(s=>[s.text,s.timing])].join(' ').toLowerCase().includes(q)));const pinned=items.filter(e=>e.pinned),others=items.filter(e=>!e.pinned);const p=document.getElementById('knowledge-pinned'),list=document.getElementById('knowledge-list');if(p)p.innerHTML=pinned.length?`<div class="card"><h3>📌 已釘選</h3>${pinned.map(renderKnowledgeCard).join('')}</div>`:'';if(list)list.innerHTML=others.length?`<div class="card"><h3>勤務資料</h3>${others.map(renderKnowledgeCard).join('')}</div>`:'<div class="card" style="color:var(--ops-muted);">找不到符合條件的資料。</div>';renderPinnedKnowledgeHome();}
-function renderKnowledgeCard(e){const stores=e.stores?.length?e.stores.map(getShortStoreName).join('、'):'所有門市',steps=(e.steps||[]).map((s,i)=>{const key=`shopee_sop_check_${formatDateISO(new Date())}_${e.id}_${i}`,checked=appStorage.getItem(key)==='true';return `<li><label><input type="checkbox" ${checked?'checked':''} onchange="saveKnowledgeStepCheck('${key}',this.checked)"><span>${escapeStoreHTML(s.text)}${s.timing?`<br><small style="color:var(--ops-muted);">⏱ ${escapeStoreHTML(s.timing)}</small>`:''}</span></label></li>`;}).join(''),image=resolveKnowledgeImage(e);return `<article class="knowledge-item"><h4>${e.pinned?'📌 ':''}${escapeStoreHTML(e.title)}</h4><div class="knowledge-meta"><span>${escapeStoreHTML(e.category)}</span><span>${escapeStoreHTML(e.shift)}</span><span>${escapeStoreHTML(stores)}</span><span>${escapeStoreHTML(e.priority)}</span><span>版本 ${escapeStoreHTML(e.versionDate||'未註記')}</span></div>${e.note?`<div style="font-size:12px;line-height:1.6;">${escapeStoreHTML(e.note)}</div>`:''}${steps?`<ul class="knowledge-steps">${steps}</ul>`:''}${image?`<details style="margin-top:9px;"><summary style="cursor:pointer;font-size:12px;font-weight:800;">查看原始公告</summary><img src="${image}" alt="${escapeStoreHTML(e.title)}原始公告" style="width:100%;max-height:520px;object-fit:contain;margin-top:8px;border-radius:8px;"></details>`:''}<div class="knowledge-actions"><button onclick="toggleKnowledgePin('${e.id}')">${e.pinned?'取消釘選':'釘選首頁'}</button><button onclick="openKnowledgeEditor('${e.id}')">編輯</button><button onclick="duplicateKnowledgeEntry('${e.id}')">複製</button><button onclick="deleteKnowledgeEntry('${e.id}')" style="background:#c62828;color:#fff;">刪除</button></div></article>`;}
+function renderKnowledgeBase(){renderKnowledgeFilters();const q=(document.getElementById('knowledge-search')?.value||'').trim().toLowerCase(),items=getKnowledgeEntries().filter(e=>(activeKnowledgeCategory==='全部'||e.category===activeKnowledgeCategory)&&(!q||[e.title,e.note,e.category,e.shift,...(e.keywords||[]),...(e.points||[]),...(e.steps||[]).flatMap(s=>[s.text,s.timing])].join(' ').toLowerCase().includes(q)));const pinned=items.filter(e=>e.pinned),others=items.filter(e=>!e.pinned);const p=document.getElementById('knowledge-pinned'),list=document.getElementById('knowledge-list');if(p)p.innerHTML=pinned.length?`<div class="card"><h3>📌 已釘選</h3>${pinned.map(renderKnowledgeCard).join('')}</div>`:'';if(list)list.innerHTML=others.length?`<div class="card"><h3>勤務資料</h3>${others.map(renderKnowledgeCard).join('')}</div>`:'<div class="card" style="color:var(--ops-muted);">找不到符合條件的資料。</div>';renderPinnedKnowledgeHome();}
+function renderKnowledgeCard(e){const stores=e.stores?.length?e.stores.map(getShortStoreName).join('、'):'所有門市',isLayout=e.contentType==='layout-map',steps=!isLayout?(e.steps||[]).map((s,i)=>{const key=`shopee_sop_check_${formatDateISO(new Date())}_${e.id}_${i}`,checked=appStorage.getItem(key)==='true';return `<li><label><input type="checkbox" ${checked?'checked':''} onchange="saveKnowledgeStepCheck('${key}',this.checked)"><span>${escapeStoreHTML(s.text)}${s.timing?`<br><small style="color:var(--ops-muted);">⏱ ${escapeStoreHTML(s.timing)}</small>`:''}</span></label></li>`;}).join(''):'',image=resolveKnowledgeImage(e),points=(e.points||[]).map(x=>`<li>${escapeStoreHTML(x)}</li>`).join('');const visual=isLayout?(image?`<div class="knowledge-layout-preview"><img src="${image}" alt="${escapeStoreHTML(e.title)}配置圖" onclick="openKnowledgeImageViewer('${e.id}')"><div class="knowledge-layout-caption"><span>▧ 位置配置圖</span><button onclick="openKnowledgeImageViewer('${e.id}')">全螢幕查看</button></div></div>`:'<div style="margin-top:9px;color:#b45309;font-size:12px;">⚠ 尚未附加配置圖</div>'):(image?`<details style="margin-top:9px;"><summary style="cursor:pointer;font-size:12px;font-weight:800;">查看原始公告</summary><img src="${image}" alt="${escapeStoreHTML(e.title)}原始公告" style="width:100%;max-height:520px;object-fit:contain;margin-top:8px;border-radius:8px;"></details>`:'');return `<article class="knowledge-item"><h4>${e.pinned?'📌 ':''}${escapeStoreHTML(e.title)}</h4><div class="knowledge-meta"><span>${escapeStoreHTML(e.category)}</span><span>${escapeStoreHTML(e.shift)}</span><span>${escapeStoreHTML(stores)}</span><span>${escapeStoreHTML(e.priority)}</span>${isLayout?'<span>位置配置圖</span>':''}<span>版本 ${escapeStoreHTML(e.versionDate||'未註記')}</span></div>${e.note?`<div style="font-size:12px;line-height:1.6;">${escapeStoreHTML(e.note)}</div>`:''}${visual}${points?`<ul class="knowledge-points">${points}</ul>`:''}${steps?`<ul class="knowledge-steps">${steps}</ul>`:''}<div class="knowledge-actions"><button onclick="toggleKnowledgePin('${e.id}')">${e.pinned?'取消釘選':'釘選首頁'}</button><button onclick="openKnowledgeEditor('${e.id}')">編輯</button><button onclick="duplicateKnowledgeEntry('${e.id}')">複製</button><button onclick="deleteKnowledgeEntry('${e.id}')" style="background:#c62828;color:#fff;">刪除</button></div></article>`;}
 function saveKnowledgeStepCheck(key,checked){appStorage.setItem(key,checked?'true':'false');markCloudPending();}
 function renderPinnedKnowledgeHome(){const panel=document.getElementById('home-knowledge-panel'),list=document.getElementById('home-knowledge-list');if(!panel||!list)return;const schedule=JSON.parse(appStorage.getItem('shopee_user_schedule')||'{}'),day=schedule[formatDateISO(new Date())],stores=day?getParsedLocations(day):[],items=getKnowledgeEntries().filter(e=>e.pinned&&(!e.stores?.length||stores.some(s=>knowledgeMatchesStore(e,s))));panel.style.display=items.length?'block':'none';list.innerHTML=items.map(e=>`<button class="home-sop-link" onclick="switchMainTab('knowledge-tab',navButtonFor('knowledge-tab'));setTimeout(()=>document.getElementById('knowledge-search').value=decodeURIComponent('${encodeURIComponent(e.title)}'),0);setTimeout(renderKnowledgeBase,0)"><span>📄 ${escapeStoreHTML(e.title)}</span><small>${escapeStoreHTML(e.shift)} ›</small></button>`).join('');}
 function populateKnowledgeCategorySelect(selected=''){const select=document.getElementById('knowledge-category');if(!select)return;let categories=getKnowledgeCategories();if(selected&&!categories.includes(selected))categories=[selected,...categories];select.innerHTML=categories.map(x=>`<option value="${escapeStoreHTML(x)}">${escapeStoreHTML(x)}</option>`).join('');select.value=selected||categories[0]||'未分類';}
-function openKnowledgeEditor(id=''){const e=getKnowledgeEntries().find(x=>x.id===id);document.getElementById('knowledge-edit-id').value=e?.id||'';document.getElementById('knowledge-editor-title').textContent=e?'編輯勤務資料':'新增勤務資料';document.getElementById('knowledge-title').value=e?.title||'';populateKnowledgeCategorySelect(e?.category||'SOP 作業流程');document.getElementById('knowledge-shift').value=e?.shift||'全天';document.getElementById('knowledge-priority').value=e?.priority||'一般';document.getElementById('knowledge-version-date').value=e?.versionDate||formatDateISO(new Date());document.getElementById('knowledge-keywords').value=(e?.keywords||[]).join(', ');document.getElementById('knowledge-note').value=e?.note||'';editingKnowledgeImage=e?.image||'';editingKnowledgeImageRef=e?.imageRef||'';knowledgeStepDraft=(e?.steps||[{text:'',timing:''}]).map(x=>({...x}));renderKnowledgeStorePicker(e?.stores||[]);renderKnowledgeStepEditor();updateKnowledgeImageStatus();document.getElementById('knowledge-editor-modal').classList.add('active');}
+function openKnowledgeEditor(id=''){const e=getKnowledgeEntries().find(x=>x.id===id);document.getElementById('knowledge-edit-id').value=e?.id||'';document.getElementById('knowledge-editor-title').textContent=e?'編輯勤務資料':'新增勤務資料';document.getElementById('knowledge-title').value=e?.title||'';populateKnowledgeCategorySelect(e?.category||'SOP 作業流程');document.getElementById('knowledge-shift').value=e?.shift||'全天';document.getElementById('knowledge-priority').value=e?.priority||'一般';document.getElementById('knowledge-version-date').value=e?.versionDate||formatDateISO(new Date());document.getElementById('knowledge-keywords').value=(e?.keywords||[]).join(', ');document.getElementById('knowledge-note').value=e?.note||'';document.getElementById('knowledge-layout-points').value=(e?.points||[]).join('\n');editingKnowledgeImage=e?.image||'';editingKnowledgeImageRef=e?.imageRef||'';editingKnowledgeContentType=e?.contentType||'steps';knowledgeStepDraft=(e?.steps||[{text:'',timing:''}]).map(x=>({...x}));renderKnowledgeStorePicker(e?.stores||[]);renderKnowledgeStepEditor();setKnowledgeContentType(editingKnowledgeContentType);updateKnowledgeImageStatus();document.getElementById('knowledge-editor-modal').classList.add('active');}
+function setKnowledgeContentType(type){editingKnowledgeContentType=type==='layout-map'?'layout-map':'steps';document.getElementById('knowledge-steps-fields').hidden=editingKnowledgeContentType!=='steps';document.getElementById('knowledge-layout-fields').hidden=editingKnowledgeContentType!=='layout-map';document.getElementById('knowledge-mode-steps').classList.toggle('active',editingKnowledgeContentType==='steps');document.getElementById('knowledge-mode-layout').classList.toggle('active',editingKnowledgeContentType==='layout-map');document.getElementById('knowledge-image-label').textContent=editingKnowledgeContentType==='layout-map'?'位置配置圖（必要）':'原始照片（選填，收合保存)';updateKnowledgeImageStatus();}
 function closeKnowledgeEditor(){document.getElementById('knowledge-editor-modal')?.classList.remove('active');document.getElementById('knowledge-image-file').value='';}
 function renderKnowledgeStorePicker(selected=[]){const c=document.getElementById('knowledge-store-picker'),ids=selected.map(getStoreNameIdentity);c.innerHTML=`<div class="multi-actions"><button onclick="setKnowledgeStores(true)">全選</button><button onclick="setKnowledgeStores(false)">取消全選</button><label style="display:flex;align-items:center;gap:5px;margin:0;"><input id="knowledge-all-stores" type="checkbox" style="width:auto;margin:0;" ${selected.length?'':'checked'} onchange="toggleKnowledgeAllStores()"> 所有門市</label><input id="knowledge-store-search" placeholder="搜尋門市" oninput="filterKnowledgeStores()" style="flex:1;min-width:100px;margin:0;padding:5px;"><span class="count" id="knowledge-store-count"></span></div><div class="multi-options" id="knowledge-store-options">${storesData.map(s=>`<label data-store="${escapeStoreHTML(s.name.toLowerCase())}"><input type="checkbox" value="${escapeStoreHTML(s.name)}" ${ids.includes(getStoreNameIdentity(s.name))?'checked':''} onchange="updateKnowledgeStoreCount()"> ${escapeStoreHTML(s.name)}</label>`).join('')}</div>`;updateKnowledgeStoreCount();}
 function setKnowledgeStores(checked){document.querySelectorAll('#knowledge-store-options input').forEach(x=>{if(x.closest('label').style.display!=='none')x.checked=checked;});document.getElementById('knowledge-all-stores').checked=false;updateKnowledgeStoreCount();}
@@ -5930,8 +6106,15 @@ function renderKnowledgeStepEditor(){document.getElementById('knowledge-step-edi
 function addKnowledgeStep(){knowledgeStepDraft.push({text:'',timing:''});renderKnowledgeStepEditor();}
 function removeKnowledgeStep(i){knowledgeStepDraft.splice(i,1);if(!knowledgeStepDraft.length)knowledgeStepDraft.push({text:'',timing:''});renderKnowledgeStepEditor();}
 function handleKnowledgeImage(event){const f=event.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=()=>{const img=new Image();img.onload=()=>{const scale=Math.min(1,1400/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);editingKnowledgeImage=c.toDataURL('image/jpeg',.82);editingKnowledgeImageRef='';updateKnowledgeImageStatus();};img.src=r.result;};r.readAsDataURL(f);}
-function updateKnowledgeImageStatus(){const e=document.getElementById('knowledge-image-status');if(e)e.innerHTML=(editingKnowledgeImage||editingKnowledgeImageRef)?'已附加原始照片 <button onclick="editingKnowledgeImage=\'\';editingKnowledgeImageRef=\'\';updateKnowledgeImageStatus()">移除照片</button>':'尚未附加照片';}
-function saveKnowledgeEntry(){const title=document.getElementById('knowledge-title').value.trim();if(!title)return showToast('請輸入標題。');const id=document.getElementById('knowledge-edit-id').value||`kb-${Date.now()}`,items=getKnowledgeEntries(),old=items.find(x=>x.id===id),entry={id,title,category:document.getElementById('knowledge-category').value,shift:document.getElementById('knowledge-shift').value,stores:[...document.querySelectorAll('#knowledge-store-options input:checked')].map(x=>x.value),priority:document.getElementById('knowledge-priority').value,versionDate:document.getElementById('knowledge-version-date').value,keywords:document.getElementById('knowledge-keywords').value.split(/[,，]/).map(x=>x.trim()).filter(Boolean),note:document.getElementById('knowledge-note').value.trim(),pinned:old?.pinned||false,image:editingKnowledgeImage,imageRef:editingKnowledgeImageRef,steps:knowledgeStepDraft.map(x=>({text:x.text.trim(),timing:(x.timing||'').trim()})).filter(x=>x.text),updatedAt:new Date().toISOString()};const index=items.findIndex(x=>x.id===id);index>=0?items.splice(index,1,entry):items.unshift(entry);try{saveKnowledgeEntries(items);}catch(_){return showToast('圖片容量過大，請移除或改用較小圖片。',3500);}closeKnowledgeEditor();renderKnowledgeBase();showToast('✅ 勤務資料已儲存。');}
+function updateKnowledgeImageStatus(){const e=document.getElementById('knowledge-image-status'),has=editingKnowledgeImage||editingKnowledgeImageRef;if(e)e.innerHTML=has?`已附加${editingKnowledgeContentType==='layout-map'?'位置配置圖':'原始照片'} <button onclick="editingKnowledgeImage='';editingKnowledgeImageRef='';updateKnowledgeImageStatus()">移除照片</button>`:`尚未附加${editingKnowledgeContentType==='layout-map'?'配置圖':'照片'}`;}
+function saveKnowledgeEntry(){const title=document.getElementById('knowledge-title').value.trim();if(!title)return showToast('請輸入標題。');if(editingKnowledgeContentType==='layout-map'&&!editingKnowledgeImage&&!editingKnowledgeImageRef)return showToast('位置配置圖模式必須附加圖片。');const id=document.getElementById('knowledge-edit-id').value||`kb-${Date.now()}`,items=getKnowledgeEntries(),old=items.find(x=>x.id===id),entry={id,title,contentType:editingKnowledgeContentType,category:document.getElementById('knowledge-category').value,shift:document.getElementById('knowledge-shift').value,stores:[...document.querySelectorAll('#knowledge-store-options input:checked')].map(x=>x.value),priority:document.getElementById('knowledge-priority').value,versionDate:document.getElementById('knowledge-version-date').value,keywords:document.getElementById('knowledge-keywords').value.split(/[,，]/).map(x=>x.trim()).filter(Boolean),note:document.getElementById('knowledge-note').value.trim(),points:document.getElementById('knowledge-layout-points').value.split(/\n/).map(x=>x.trim()).filter(Boolean),pinned:old?.pinned||false,image:editingKnowledgeImage,imageRef:editingKnowledgeImageRef,steps:knowledgeStepDraft.map(x=>({text:x.text.trim(),timing:(x.timing||'').trim()})).filter(x=>x.text),updatedAt:new Date().toISOString()};const index=items.findIndex(x=>x.id===id);index>=0?items.splice(index,1,entry):items.unshift(entry);try{saveKnowledgeEntries(items);}catch(_){return showToast('圖片容量過大，請移除或改用較小圖片。',3500);}closeKnowledgeEditor();renderKnowledgeBase();showToast('✅ 勤務資料已儲存。');}
+let knowledgeViewerState={scale:1,x:0,y:0,startX:0,startY:0,dragging:false,pinchDistance:0,pinchScale:1};
+function applyKnowledgeViewerTransform(){const img=document.getElementById('knowledge-viewer-image'),s=knowledgeViewerState;if(img)img.style.transform=`translate(calc(-50% + ${s.x}px),calc(-50% + ${s.y}px)) scale(${s.scale})`;}
+function resetKnowledgeViewer(){knowledgeViewerState={...knowledgeViewerState,scale:1,x:0,y:0,dragging:false,pinchDistance:0,pinchScale:1};applyKnowledgeViewerTransform();}
+function changeKnowledgeViewerZoom(delta){knowledgeViewerState.scale=Math.max(.5,Math.min(5,knowledgeViewerState.scale+delta));applyKnowledgeViewerTransform();}
+function openKnowledgeImageViewer(id){const e=getKnowledgeEntries().find(x=>x.id===id),image=resolveKnowledgeImage(e);if(!image)return showToast('這筆資料尚未附加配置圖。');document.getElementById('knowledge-viewer-title').textContent=e.title;document.getElementById('knowledge-viewer-image').src=image;document.getElementById('knowledge-image-viewer').classList.add('active');resetKnowledgeViewer();}
+function closeKnowledgeImageViewer(){document.getElementById('knowledge-image-viewer').classList.remove('active');}
+(()=>{const stage=document.getElementById('knowledge-viewer-stage');if(!stage)return;stage.addEventListener('wheel',e=>{e.preventDefault();changeKnowledgeViewerZoom(e.deltaY<0?.2:-.2);},{passive:false});stage.addEventListener('pointerdown',e=>{knowledgeViewerState.dragging=true;knowledgeViewerState.startX=e.clientX-knowledgeViewerState.x;knowledgeViewerState.startY=e.clientY-knowledgeViewerState.y;stage.setPointerCapture(e.pointerId);stage.classList.add('dragging');});stage.addEventListener('pointermove',e=>{if(!knowledgeViewerState.dragging)return;knowledgeViewerState.x=e.clientX-knowledgeViewerState.startX;knowledgeViewerState.y=e.clientY-knowledgeViewerState.startY;applyKnowledgeViewerTransform();});stage.addEventListener('pointerup',()=>{knowledgeViewerState.dragging=false;stage.classList.remove('dragging');});stage.addEventListener('touchstart',e=>{if(e.touches.length===2){knowledgeViewerState.pinchDistance=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);knowledgeViewerState.pinchScale=knowledgeViewerState.scale;}},{passive:true});stage.addEventListener('touchmove',e=>{if(e.touches.length===2&&knowledgeViewerState.pinchDistance){const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);knowledgeViewerState.scale=Math.max(.5,Math.min(5,knowledgeViewerState.pinchScale*d/knowledgeViewerState.pinchDistance));applyKnowledgeViewerTransform();}},{passive:true});})();
 function toggleKnowledgePin(id){const items=getKnowledgeEntries(),e=items.find(x=>x.id===id);if(!e)return;e.pinned=!e.pinned;saveKnowledgeEntries(items);renderKnowledgeBase();}
 function duplicateKnowledgeEntry(id){const items=getKnowledgeEntries(),e=items.find(x=>x.id===id);if(!e)return;items.unshift({...e,id:`kb-${Date.now()}`,title:`${e.title}（副本）`,pinned:false,steps:(e.steps||[]).map(x=>({...x}))});saveKnowledgeEntries(items);renderKnowledgeBase();showToast('已建立 SOP 副本。');}
 async function deleteKnowledgeEntry(id){if(!await showAppConfirm({title:'刪除勤務資料',message:'此筆勤務資料將被刪除。',confirmText:'確定刪除',danger:true,icon:'⚠️'}))return;saveKnowledgeEntries(getKnowledgeEntries().filter(x=>x.id!==id));renderKnowledgeBase();showToast('已刪除勤務資料。');}
@@ -5993,6 +6176,164 @@ function showAppConfirm({title='請確認操作', message='', confirmText='確�
     modal.onclick = event => { if (event.target === modal) closeAppConfirm(false); };
     setTimeout(() => cancel.focus(), 0);
   });
+}
+
+/* v7.1.3 支援勤務資料：快捷開窗每次抓取當下日期時間，但保留人工校正能力。 */
+const SUPPORT_DUTY_KEY='shopee_v71_support_duties';
+function getSupportDuties(){try{const rows=JSON.parse(appStorage.getItem(SUPPORT_DUTY_KEY)||'[]');return Array.isArray(rows)?rows:[];}catch(_){return[];}}
+function saveSupportDuties(rows){appStorage.setItem(SUPPORT_DUTY_KEY,JSON.stringify(rows));markCloudPending();renderSupportDutyList();renderActiveSupportDuty();}
+function getCurrentDutyStore(){const locations=getTodayLocationsForV7(),index=locations.length?getActiveDutyStoreIndex(locations):0;return locations[index]||document.getElementById('shopName')?.value||'';}
+function currentTimeValue(){const now=new Date();return `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;}
+function openQuickSupportDuty(){
+  const active=getSupportDuties().find(x=>x.status==='進行中'&&!x.end);
+  if(active)return finishQuickSupportDuty(active.id);
+  openSupportDutyEditor('',true);
+}
+function finishQuickSupportDuty(id){
+  openSupportDutyEditor(id,false);
+  document.getElementById('support-duty-modal-title').textContent='🤝 結束臨時支援';
+  document.getElementById('support-duty-end').value=currentTimeValue();
+  document.getElementById('support-duty-status').value='已完成';
+  document.getElementById('support-duty-save-btn').textContent='完成並儲存';
+}
+function openSupportDutyEditor(id=''){
+  const quickMode=arguments.length>1?Boolean(arguments[1]):false;
+  const row=getSupportDuties().find(x=>x.id===id)||{};
+  document.getElementById('support-duty-id').value=row.id||'';
+  document.getElementById('support-duty-date').value=row.date||formatDateISO(new Date());
+  document.getElementById('support-duty-store').value=row.store||'';
+  document.getElementById('support-duty-start').value=row.start||(quickMode?currentTimeValue():''); document.getElementById('support-duty-end').value=row.end||'';
+  document.getElementById('support-duty-status').value=row.status||(quickMode?'進行中':'支援至下班'); document.getElementById('support-duty-count').value=row.count||'';
+  document.getElementById('support-duty-remaining').value=row.remaining||''; document.getElementById('support-duty-note').value=row.note||'';
+  const selected=new Set(row.tasks||[]); document.querySelectorAll('#support-duty-tasks input').forEach(x=>x.checked=selected.has(x.value));
+  document.getElementById('support-duty-modal-title').textContent=quickMode?'🤝 開始臨時支援':(id?'🤝 編輯支援勤務':'🤝 補登支援勤務');
+  document.getElementById('support-duty-result-fields').style.display=quickMode?'none':'block';
+  document.getElementById('support-duty-end').closest('div').style.display=quickMode?'none':'block';
+  document.getElementById('support-duty-date').disabled=false;
+  document.getElementById('support-duty-start').disabled=false;
+  document.getElementById('support-duty-save-btn').textContent=quickMode?'開始並計時':'儲存支援勤務';
+  document.getElementById('support-duty-modal').dataset.quick=quickMode?'1':'0';
+  document.getElementById('support-duty-modal').classList.add('active');
+}
+function closeSupportDutyEditor(){document.getElementById('support-duty-modal')?.classList.remove('active');}
+function saveSupportDuty(){
+  const id=document.getElementById('support-duty-id').value||`support-${Date.now()}`,date=document.getElementById('support-duty-date').value,store=document.getElementById('support-duty-store').value.trim();
+  const tasks=[...document.querySelectorAll('#support-duty-tasks input:checked')].map(x=>x.value);
+  if(!date||!store||!tasks.length)return showToast('⚠️ 請填寫日期、支援門市並至少選一項工作。');
+  const quickMode=document.getElementById('support-duty-modal').dataset.quick==='1';
+  const row={id,date,store:matchStoreName(store)||store,sourceStore:quickMode?getCurrentDutyStore():(getSupportDuties().find(x=>x.id===id)?.sourceStore||''),tasks,start:document.getElementById('support-duty-start').value,end:quickMode?'':document.getElementById('support-duty-end').value,status:quickMode?'進行中':document.getElementById('support-duty-status').value,count:document.getElementById('support-duty-count').value.trim(),remaining:document.getElementById('support-duty-remaining').value.trim(),note:document.getElementById('support-duty-note').value.trim(),updatedAt:new Date().toISOString()};
+  const rows=getSupportDuties(),index=rows.findIndex(x=>x.id===id); if(index>=0)rows[index]=row;else rows.unshift(row); saveSupportDuties(rows);closeSupportDutyEditor();showToast('✅ 支援勤務已儲存。');
+}
+async function deleteSupportDuty(id){if(!await showAppConfirm({title:'刪除支援勤務',message:'此筆支援紀錄將永久刪除。',confirmText:'確定刪除',danger:true,icon:'⚠️'}))return;saveSupportDuties(getSupportDuties().filter(x=>x.id!==id));}
+function renderSupportDutyList(){const box=document.getElementById('support-duty-list');if(!box)return;const rows=getSupportDuties().slice().sort((a,b)=>(`${b.date}${b.start||''}`).localeCompare(`${a.date}${a.start||''}`));box.innerHTML=rows.length?rows.map(x=>`<div class="support-record"><b>${x.status==='進行中'?'🟠':'🤝'} ${escapeStoreHTML(x.date)}｜${escapeStoreHTML(matchStoreName(x.store)||x.store)}</b><div style="font-size:12px;line-height:1.6;">${escapeStoreHTML((x.tasks||[]).join('、'))}・${escapeStoreHTML(x.status||'')}</div><small>${escapeStoreHTML([x.sourceStore&&`開始位置：${getShortStoreName(x.sourceStore)}`,x.start&&`${x.start}–${x.end||'進行中'}`,x.remaining,x.note].filter(Boolean).join('｜'))}</small><div style="margin-top:6px;display:flex;gap:6px;">${x.status==='進行中'?`<button class="quick-support-btn" onclick="finishQuickSupportDuty('${x.id}')">結束支援</button>`:''}<button onclick="openSupportDutyEditor('${x.id}')">編輯</button><button onclick="deleteSupportDuty('${x.id}')" style="background:#c62828;color:#fff;">刪除</button></div></div>`).join(''):'<div style="color:var(--ops-muted);font-size:12px;padding:12px 0;">尚無支援勤務紀錄。</div>';}
+function renderActiveSupportDuty(){
+  const active=getSupportDuties().find(x=>x.status==='進行中'&&!x.end),card=document.getElementById('support-live-card'),reportBtn=document.getElementById('report-quick-support-btn');
+  let elapsed='';if(active?.date&&active?.start){const began=new Date(`${active.date}T${active.start}:00`),mins=Math.max(0,Math.floor((Date.now()-began.getTime())/60000));elapsed=`已進行 ${Math.floor(mins/60)?`${Math.floor(mins/60)} 小時 `:''}${mins%60} 分鐘`;}
+  if(card){card.classList.toggle('active',Boolean(active));card.innerHTML=active?`<div><b>🟠 支援進行中｜${escapeStoreHTML(getShortStoreName(active.store))}</b><div style="font-size:11px;margin-top:3px;">${escapeStoreHTML((active.tasks||[]).join('、'))}・${escapeStoreHTML(elapsed||active.start||'')}</div></div><button class="quick-support-btn" onclick="finishQuickSupportDuty('${active.id}')">結束支援</button>`:'';}
+  if(reportBtn){reportBtn.textContent=active?'🟠 結束目前臨時支援':'🤝 開始臨時支援';}
+}
+
+/* v7.1.3 報表資料層：畫面、Excel、PDF 共用「基本資料＋逐筆明細」正式版型。 */
+function getReportFilters(){const start=document.getElementById('report-start-date')?.value,end=document.getElementById('report-end-date')?.value,kind=document.getElementById('report-kind')?.value||'daily',scope=document.querySelector('input[name="reportScope"]:checked')?.value||'all',store=(document.getElementById('report-specific-store')?.value||'').trim(),shift=document.getElementById('report-shift')?.value||'',role=document.getElementById('report-role')?.value||'',state=document.getElementById('report-state')?.value||'',remainingOnly=Boolean(document.getElementById('report-remaining-only')?.checked),handoverOnly=Boolean(document.getElementById('report-handover-only')?.checked);return{start,end,kind,scope,store,shift,role,state,remainingOnly,handoverOnly};}
+function reportStoreMatches(name,f){if(f.scope!=='specific')return true;const a=getStoreNameIdentity(name||''),b=getStoreNameIdentity(f.store||'');return Boolean(a&&b&&(a.includes(b)||b.includes(a)));}
+function dateInReportRange(date,f){return Boolean(date&&f.start&&f.end&&date>=f.start&&date<=f.end);}
+function collectReportRows(f=getReportFilters()){
+  const rows=[];
+  if(f.kind==='support')getSupportDuties().filter(x=>dateInReportRange(x.date,f)&&reportStoreMatches(x.store,f)).forEach(x=>rows.push({日期:x.date,門市:matchStoreName(x.store)||x.store,門市角色:'支援門市',開始位置:x.sourceStore?(matchStoreName(x.sourceStore)||x.sourceStore):'',工作:(x.tasks||[]).join('、'),開始:x.start||'',結束:x.end||'',狀態:x.status||'',處理數量:x.count||'',剩餘滯留:x.remaining||'',備註:x.note||''}));
+  else if(f.kind==='schedule'){const schedule=JSON.parse(appStorage.getItem('shopee_user_schedule')||'{}');Object.entries(schedule).filter(([date])=>dateInReportRange(date,f)).forEach(([date,day])=>{const stores=getParsedLocations(day),supportIds=new Set((day.supportLocs||[]).flatMap(splitStoreLocationText).map(scheduleStoreIdentity));if(!stores.length&&day?.isOff)rows.push({日期:date,班別:'休假',勤務時間:'',門市:'休假',門市角色:'',路線:'',備註:day.note||''});stores.filter(x=>reportStoreMatches(x,f)).forEach(store=>rows.push({日期:date,班別:day.shift||'',勤務時間:[day.startTime,day.endTime].filter(Boolean).join('–'),門市:matchStoreName(store)||store,門市角色:supportIds.has(scheduleStoreIdentity(store))?'支援門市':'主要門市',路線:(day.routeOrder||[]).map(x=>getShortStoreName(matchStoreName(x)||x)).join(' → '),備註:day.note||''}));});}
+  else if(f.kind==='incident')getIncidents().filter(x=>dateInReportRange((x.createdAt||'').slice(0,10),f)&&reportStoreMatches(x.store,f)).forEach(x=>rows.push({日期:(x.createdAt||'').slice(0,10),門市:matchStoreName(x.store)||x.store,類型:x.type,狀態:x.resolved?'已排除':'未排除',需交接:x.handover?'是':'否',說明:x.note||''}));
+  else {let cur=new Date(`${f.start}T12:00:00`),end=new Date(`${f.end}T12:00:00`);while(cur<=end){const date=formatDateISO(cur);getDailyReportDrafts(date).filter(x=>reportStoreMatches(x.shopName,f)).forEach(data=>{const applicable=getApplicableSubjects(data.shopName,data.shift||'');rows.push({日期:date,門市:matchStoreName(data.shopName)||data.shopName,門市角色:'主要門市',班別:data.shift||'',類型:'完整巡店',已確認科目:applicable.filter(id=>data._confirmedSubjects?.[id]).map(id=>dailyReportSubjects[id]?.title||id).join('、'),科目內容:applicable.map(id=>formatDailySubject(id,data)).filter(Boolean).join('\n'),備註:data.note||data.remark||''});});cur.setDate(cur.getDate()+1);}}
+  return rows.filter(row=>(!f.shift||String(row.班別||'').includes(f.shift))&&(!f.role||row.門市角色===f.role)&&(!f.state||row.狀態===f.state)&&(!f.remainingOnly||Boolean(String(row.剩餘滯留||'').trim()))&&(!f.handoverOnly||row.需交接==='是'));
+}
+function reportKindTitle(kind){return({daily:'每日工作日報',support:'支援勤務報表',schedule:'班表報表',incident:'異常與交接'})[kind]||'勤務報表';}
+function buildAdvancedReportText(f=getReportFilters(),rows=collectReportRows(f)){const title=`蝦皮智取店勤務助手｜${reportKindTitle(f.kind)}`,head=[title,`統計期間：${f.start} 至 ${f.end}`,f.scope==='specific'?`指定門市：${f.store}`:'門市範圍：全部',''];if(!rows.length)return head.concat('此條件沒有資料。').join('\n');return head.concat(rows.map((row,i)=>[`【${i+1}】`,...Object.entries(row).map(([k,v])=>`${k}：${v||'—'}`)].join('\n')).join('\n\n')).join('\n');}
+function getFormalReportColumns(rows){const keys=[];rows.forEach(row=>Object.keys(row).forEach(key=>{if(!keys.includes(key))keys.push(key);}));return keys;}
+function getFormalReportModel(f,rows){
+  const stores=new Set(rows.map(x=>x.門市).filter(x=>x&&x!=='休假'));
+  return {title:`蝦皮智取店勤務助手－${reportKindTitle(f.kind)}`,scope:f.scope==='specific'?(matchStoreName(f.store)||f.store):'全部門市',stores:stores.size,generated:new Date().toLocaleString('zh-TW',{hour12:false}),records:rows.map((row,index)=>({title:`第 ${index+1} 筆｜${row.日期||'未註記日期'}${row.門市?`｜${row.門市}`:''}`,pairs:Object.entries(row)}))};
+}
+function getScheduleCalendarModels(f,rows){
+  const schedule=JSON.parse(appStorage.getItem('shopee_user_schedule')||'{}'),byDate=new Map();
+  rows.forEach(row=>{if(!byDate.has(row.日期))byDate.set(row.日期,[]);byDate.get(row.日期).push(row);});
+  const models=[];let cursor=new Date(`${f.start.slice(0,7)}-01T12:00:00`),last=new Date(`${f.end.slice(0,7)}-01T12:00:00`);
+  while(cursor<=last){
+    const year=cursor.getFullYear(),month=cursor.getMonth(),monthKey=`${year}-${String(month+1).padStart(2,'0')}`;
+    const first=new Date(year,month,1,12),gridStart=new Date(first),weekday=(first.getDay()+6)%7;gridStart.setDate(first.getDate()-weekday);
+    const weeks=[],legend=new Map();
+    for(let w=0;w<6;w++){
+      const days=[];
+      for(let d=0;d<7;d++){
+        const dt=new Date(gridStart);dt.setDate(gridStart.getDate()+w*7+d);const date=formatDateISO(dt),inside=dt.getMonth()===month,inRange=date>=f.start&&date<=f.end;
+        const entries=(inside&&inRange?byDate.get(date):[])||[],raw=schedule[date]||{},rawText=JSON.stringify(raw),tags=[...new Set((rawText.match(/NDD|FBS|HD|SCS|AS|速配倉/g)||[]))];
+        entries.forEach(entry=>{const full=entry.門市;if(full&&full!=='休假')legend.set(getShortStoreName(full),full);});
+        days.push({date,day:dt.getDate(),inside,inRange,weekend:d>=5,off:entries.some(x=>x.門市==='休假'||x.班別==='休假'),entries,tags,weekNo:w+1});
+      }
+      weeks.push(days);
+      if(weeks.flat().some(x=>x.inside&&x.inRange)&&w>=4){const nextWeekStart=new Date(gridStart);nextWeekStart.setDate(gridStart.getDate()+(w+1)*7);if(nextWeekStart.getMonth()!==month)break;}
+    }
+    models.push({year,month:month+1,monthKey,weeks,legend:[...legend.entries()]});cursor=new Date(year,month+1,1,12);
+  }
+  return models;
+}
+function scheduleDayText(day){
+  if(!day.inside)return '';
+  const lines=[`${day.day}日`];
+  if(!day.inRange)return lines.join('\n');
+  if(day.off)return lines.concat('休假').join('\n');
+  day.entries.forEach(entry=>{if(entry.班別)lines.push(`${entry.班別}${entry.勤務時間?`｜${entry.勤務時間}`:''}`);if(entry.門市&&entry.門市!=='休假')lines.push(`${entry.門市角色==='支援門市'?'支援':'主要'}｜${getShortStoreName(entry.門市)}`);});
+  if(day.tags.length)lines.push(day.tags.join('・'));
+  return lines.join('\n');
+}
+function buildScheduleCalendarHtml(f,rows){
+  const weekdays=['星期一','星期二','星期三','星期四','星期五','星期六','星期日'];
+  return getScheduleCalendarModels(f,rows).map(model=>{
+    const grid=weekdays.map(x=>`<div class="schedule-weekday">${x}</div>`).join('')+model.weeks.flatMap((week,w)=>week.map((day,d)=>{
+      const classes=['schedule-day',day.weekend?'weekend':'',!day.inside?'outside':'',day.off?'off':''].filter(Boolean).join(' ');
+      const entries=day.inRange?day.entries.filter(x=>x.門市!=='休假').map(entry=>`<div class="schedule-shift">${escapeStoreHTML(entry.班別||'勤務')}</div>${entry.勤務時間?`<div class="schedule-time">${escapeStoreHTML(entry.勤務時間)}</div>`:''}<div class="schedule-store ${entry.門市角色==='支援門市'?'support':''}">${entry.門市角色==='支援門市'?'支援':'主要'}｜${escapeStoreHTML(getShortStoreName(entry.門市))}</div>`).join(''):'';
+      return `<div class="${classes}"><div class="schedule-date"><span>${day.day}</span>${d===0&&day.inside?`<span class="schedule-week-badge">第 ${w+1} 週</span>`:''}</div>${day.off?'<div class="schedule-off-label">休假</div>':entries}${day.inRange?day.tags.map(tag=>`<span class="schedule-tag">${tag}</span>`).join(''):''}</div>`;
+    })).join('');
+    const legend=model.legend.length?`<div class="schedule-legend"><b>門市圖例</b>${model.legend.map(([short,full])=>`<span>${escapeStoreHTML(short)}＝${escapeStoreHTML(full)}</span>`).join('')}</div>`:'';
+    return `<section class="schedule-report-month"><div class="schedule-month-head"><div><div class="schedule-month-title">${model.year} 年 ${model.month} 月｜個人勤務班表</div><div class="schedule-month-subtitle">每週一列・主要門市與支援勤務分色呈現</div></div><div class="schedule-month-subtitle">統計範圍：${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</div></div><div class="schedule-calendar">${grid}</div>${legend}</section>`;
+  }).join('');
+}
+function buildFormalReportHtml(f,rows){
+  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v7.1.4</span></div></article>`;
+  const model=getFormalReportModel(f,rows);
+  const records=model.records.map(record=>{const cells=[];for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];cells.push(`<b>${escapeStoreHTML(a[0])}</b><span>${escapeStoreHTML(String(a[1]??'—'))}</span>${b?`<b>${escapeStoreHTML(b[0])}</b><span>${escapeStoreHTML(String(b[1]??'—'))}</span>`:'<b></b><span></span>'}`);}return `<section><div class="formal-report-record-title">${escapeStoreHTML(record.title)}</div><div class="formal-report-detail-grid">${cells.join('')}</div></section>`;}).join('');
+  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${model.stores}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v7.1.4｜第 1 頁</span></div></article>`;
+}
+function initReportCenter(){const f=getReportFilters();if(!f.start||!f.end)setReportRange('today');previewAdvancedReport();}
+// v7.1.4 報表預覽可收合：只改變畫面顯示，不清除預覽或勤務資料。
+function setReportPreviewCollapsed(collapsed){const preview=document.getElementById('report-center-preview'),button=document.getElementById('report-preview-toggle');if(preview)preview.hidden=collapsed;if(button){button.textContent=collapsed?'▾ 展開預覽':'▴ 收合預覽';button.setAttribute('aria-expanded',String(!collapsed));}}
+function toggleReportPreview(){const preview=document.getElementById('report-center-preview');if(preview)setReportPreviewCollapsed(!preview.hidden);}
+function previewAdvancedReport(expandPreview=false){const f=getReportFilters();if(!f.start||!f.end)return showToast('⚠️ 請選擇完整日期區間。');if(f.start>f.end)return showToast('⚠️ 起始日期不可晚於結束日期。');if(f.scope==='specific'&&!f.store)return showToast('⚠️ 請選擇指定門市。');saveDailyDraftSnapshot(currentViewingReportDateKey,!isViewingHistoricalReport);const rows=collectReportRows(f),text=buildAdvancedReportText(f,rows),html=buildFormalReportHtml(f,rows),preview=document.getElementById('report-center-preview');if(preview)preview.innerHTML=html;if(expandPreview)setReportPreviewCollapsed(false);const stores=new Set(rows.map(x=>x.門市).filter(Boolean));document.getElementById('report-center-stats').innerHTML=`<div class="report-center-stat"><b>${rows.length}</b><span>資料筆數</span></div><div class="report-center-stat"><b>${stores.size}</b><span>涉及門市</span></div><div class="report-center-stat"><b>${getSupportDuties().filter(x=>dateInReportRange(x.date,f)).length}</b><span>區間支援</span></div>`;return{text,html,rows,f};}
+function copyAdvancedReport(){const result=previewAdvancedReport();if(result)copyText(result.text,reportKindTitle(result.f.kind));}
+function appendFormalExcelSheet(wb,name,rows,f){
+  const model=getFormalReportModel(f,rows),aoa=[[model.title],['統計期間',`${f.start} 至 ${f.end}`,'門市範圍',model.scope],['資料筆數',rows.length,'涉及門市',model.stores],['勤務明細']],merges=[{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:3,c:0},e:{r:3,c:3}}];
+  if(!model.records.length)aoa.push(['此條件沒有資料。']);
+  model.records.forEach(record=>{const titleRow=aoa.length;aoa.push([record.title]);merges.push({s:{r:titleRow,c:0},e:{r:titleRow,c:3}});for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];aoa.push([a[0],a[1]??'',b?.[0]||'',b?.[1]??'']);}});
+  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v7.1.4']);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=merges;ws['!cols']=[{wch:16},{wch:46},{wch:16},{wch:46}];ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:Math.max(22,18+String(aoa[r][1]||'').split('\n').length*12)}));ws['!freeze']={xSplit:0,ySplit:4};ws['!autofilter']=undefined;ws['!margins']={left:.35,right:.35,top:.5,bottom:.5,header:.2,footer:.2};ws['!pageSetup']={paperSize:9,orientation:'portrait',fitToWidth:1,fitToHeight:0};
+  const border={top:{style:'thin',color:{rgb:'7F8FA6'}},bottom:{style:'thin',color:{rgb:'7F8FA6'}},left:{style:'thin',color:{rgb:'7F8FA6'}},right:{style:'thin',color:{rgb:'7F8FA6'}}};
+  for(let r=0;r<aoa.length;r++)for(let c=0;c<4;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:10,bold:r===0},alignment:{vertical:'top',wrapText:true,horizontal:r===0?'center':'left'},border};if(r===0)cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'17365D'}};else if(r===3||model.records.some(record=>aoa[r]?.[0]===record.title)){cell.s.fill={fgColor:{rgb:r===3?'D9EAF7':'2F75B5'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:r===3?'17365D':'FFFFFF'}};}else if(r===1||r===2||((r>3)&&(c===0||c===2))){cell.s.fill={fgColor:{rgb:'EDF4FB'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'17365D'}};}}
+  XLSX.utils.book_append_sheet(wb,ws,name.slice(0,31));
+}
+function appendScheduleCalendarSheets(wb,f,rows){
+  const weekdays=['星期一','星期二','星期三','星期四','星期五','星期六','星期日'],border={top:{style:'thin',color:{rgb:'CBD5E1'}},bottom:{style:'thin',color:{rgb:'CBD5E1'}},left:{style:'thin',color:{rgb:'CBD5E1'}},right:{style:'thin',color:{rgb:'CBD5E1'}}};
+  getScheduleCalendarModels(f,rows).forEach(model=>{
+    const aoa=[[`${model.year} 年 ${model.month} 月｜個人勤務班表`],[`統計範圍：${f.start} 至 ${f.end}`],weekdays];
+    model.weeks.forEach(week=>aoa.push(week.map(scheduleDayText)));
+    if(model.legend.length){aoa.push(['門市圖例',...model.legend.map(([short,full])=>`${short}＝${full}`)]);}
+    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v7.1.4']);
+    const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}},{s:{r:1,c:0},e:{r:1,c:6}}];ws['!cols']=weekdays.map(()=>({wch:22}));ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:r===1||r===2?22:(r>=3&&r<3+model.weeks.length?88:26)}));ws['!margins']={left:.25,right:.25,top:.4,bottom:.4,header:.15,footer:.15};ws['!pageSetup']={paperSize:9,orientation:'landscape',fitToWidth:1,fitToHeight:1};ws['!freeze']={xSplit:0,ySplit:3};
+    for(let r=0;r<aoa.length;r++)for(let c=0;c<7;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:r===2?10:9,bold:r===0||r===2},alignment:{vertical:'top',wrapText:true,horizontal:r<=2?'center':'left'},border};if(r===0){cell.s.fill={fgColor:{rgb:'EEF2FF'}};cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'312E81'}};}else if(r===2){cell.s.fill={fgColor:{rgb:'4338CA'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'FFFFFF'}};}else if(r>=3&&r<3+model.weeks.length){cell.s.fill={fgColor:{rgb:c>=5?'FAF7FF':'FFFFFF'}};}}
+    XLSX.utils.book_append_sheet(wb,ws,`${model.year}-${String(model.month).padStart(2,'0')}班表`);
+  });
+}
+function exportReportExcel(){const result=previewAdvancedReport();if(!result)return;if(typeof XLSX==='undefined')return showToast('⚠️ Excel 元件尚未載入，請確認網路後重試。');const wb=XLSX.utils.book_new();if(result.f.kind==='schedule'){appendScheduleCalendarSheets(wb,result.f,result.rows);}else{appendFormalExcelSheet(wb,reportKindTitle(result.f.kind),result.rows,result.f);const supports=getSupportDuties().filter(x=>dateInReportRange(x.date,result.f));if(supports.length)appendFormalExcelSheet(wb,'支援勤務',supports.map(x=>({日期:x.date,門市:matchStoreName(x.store)||x.store,工作:(x.tasks||[]).join('、'),狀態:x.status,開始:x.start,結束:x.end,處理數量:x.count,剩餘滯留:x.remaining,備註:x.note})),result.f);}XLSX.writeFile(wb,`勤務助手_${reportKindTitle(result.f.kind)}_${result.f.start}_${result.f.end}.xlsx`);showToast('✅ Excel 已匯出。');}
+function exportReportPdf(){
+  const result=previewAdvancedReport();if(!result)return;const win=window.open('','_blank');if(!win)return showToast('⚠️ 瀏覽器阻擋了 PDF 預覽視窗。');const landscape=result.f.kind==='schedule';
+  win.document.write(`<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>${reportKindTitle(result.f.kind)}</title><style>@page{size:A4 ${landscape?'landscape':'portrait'};margin:${landscape?'8mm':'12mm'}}*{box-sizing:border-box}body{font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;margin:0;color:#172b4d}.print-actions{margin:0 0 10px}.formal-report-sheet{width:100%;background:#fff;border:1px solid #7f8fa6}.formal-report-title{padding:14px;text-align:center;font-size:20px;font-weight:900;color:#17365d;border-bottom:2px solid #17365d}.formal-report-meta{width:100%;border-collapse:collapse;table-layout:fixed}.formal-report-meta th,.formal-report-meta td{border:1px solid #7f8fa6;padding:6px;font-size:10px;vertical-align:top;white-space:pre-wrap;word-break:break-word}.formal-report-meta th{width:90px;color:#fff;background:#2f75b5}.formal-report-section{padding:7px 9px;color:#17365d;background:#d9eaf7;border-top:2px solid #2f75b5;font-weight:900}.formal-report-record-title{padding:6px 8px;color:#fff;background:#2f75b5;border-top:2px solid #17365d;font-size:10px;font-weight:900}.formal-report-detail-grid{display:grid;grid-template-columns:90px minmax(0,1fr) 90px minmax(0,1fr);border-top:1px solid #7f8fa6}.formal-report-detail-grid b,.formal-report-detail-grid span{padding:5px 6px;border-right:1px solid #7f8fa6;border-bottom:1px solid #7f8fa6;font-size:9px;white-space:pre-wrap;word-break:break-word}.formal-report-detail-grid b{color:#17365d;background:#edf4fb}.formal-report-footer{display:flex;justify-content:space-between;padding:7px 9px;color:#667085;font-size:8px}.formal-report-empty{padding:22px;text-align:center}.schedule-report-month{padding:8px;background:#fff;color:#24324a;break-after:page}.schedule-report-month:last-child{break-after:auto}.schedule-month-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:7px}.schedule-month-title{color:#312e81;font-size:16px;font-weight:900}.schedule-month-subtitle{color:#667085;font-size:8px}.schedule-calendar{display:grid;grid-template-columns:repeat(7,1fr);border-top:1px solid #cbd5e1;border-left:1px solid #cbd5e1}.schedule-weekday{padding:5px;background:#4338ca;color:#fff;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;text-align:center;font-size:8px;font-weight:900}.schedule-day{position:relative;min-height:82px;padding:5px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;background:#fff}.schedule-day.weekend{background:#faf7ff}.schedule-day.outside{background:#f8fafc;color:#a0aec0}.schedule-day.off{background:#f1f5f9}.schedule-date{display:flex;justify-content:space-between;margin-bottom:3px;font-size:8px;font-weight:900}.schedule-week-badge{padding:1px 4px;border-radius:99px;background:#eef2ff;color:#4338ca;font-size:6px}.schedule-shift{color:#4338ca;font-size:7px;font-weight:900}.schedule-time{color:#64748b;font-size:6px;margin:1px 0 2px}.schedule-store{font-size:7px;font-weight:800;line-height:1.25}.schedule-store.support{color:#7c3aed}.schedule-tag{display:inline-block;margin:2px 2px 0 0;padding:1px 4px;border-radius:99px;background:#fff1ed;color:#c2410c;font-size:6px;font-weight:900}.schedule-off-label{color:#64748b;font-size:8px;font-weight:800}.schedule-legend{display:flex;flex-wrap:wrap;gap:3px 8px;padding:5px 1px;color:#64748b;font-size:6px}@media print{.print-actions{display:none}section:not(.schedule-report-month){break-inside:avoid}}</style></head><body><button class="print-actions" onclick="print()">列印／另存 PDF</button>${result.html}<script>setTimeout(()=>print(),300)<\/script></body></html>`);win.document.close();
 }
 
 function showToast(message, duration = 2000) {
