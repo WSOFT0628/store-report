@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店勤務助手 v7.1.12</title>
+<title>蝦皮智取店勤務助手 v7.1.13</title>
 
 <!--
   v7.0.0 程式碼註解與維護規則
@@ -1056,7 +1056,7 @@
   .home-sop-link { width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;padding:10px 12px;text-align:left;border:1px solid var(--ops-border);border-radius:9px;background:var(--ops-bg);color:var(--ops-text);font-weight:800; }
   .home-sop-link span { min-width:0;overflow-wrap:anywhere; }
   .home-sop-link small { flex:0 0 auto;color:var(--ops-muted); }
-  /* v7.1.12 首頁固定勤務：依勤務資料庫內的週／月規則動態顯示，不建立第二份任務清單。 */
+  /* v7.1.13 首頁固定勤務：依勤務資料庫內的週／月規則動態顯示，不建立第二份任務清單。 */
   .recurring-duty-head { display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap; }
   .recurring-duty-summary { font-size:11px;font-weight:900;color:var(--ops-muted); }
   .recurring-duty-list { display:grid;gap:8px;margin-top:10px; }
@@ -1131,6 +1131,9 @@
     #home-knowledge-panel h3 { align-items:stretch; }
     #home-knowledge-panel h3 .badge-btn { margin-left:0;width:100%;padding:8px 10px; }
     .duty-command-actions { grid-template-columns:1fr 1fr; }.duty-command-actions .main { grid-column:span 2; }.more-grid { grid-template-columns:1fr 1fr; }
+    /* v7.1.13 手機回報：保留底部導覽、快捷輸入與完成列所需空間，最後一張科目卡不被覆蓋。 */
+    #report-tab { padding-bottom:calc(190px + env(safe-area-inset-bottom, 0px)); }
+    #report-tab .bottom-action-bar { bottom:calc(64px + env(safe-area-inset-bottom, 0px)); }
   }
 </style>
 </head>
@@ -1147,7 +1150,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店勤務助手 v7.1.12
+      📦 蝦皮智取店勤務助手 v7.1.13
     </h1>
   </div>
   <div class="main-nav">
@@ -1505,7 +1508,7 @@
     <button class="copy-btn" id="btn_c15" onclick="copyC15()">📋 複製【科目15】</button>
   </div>
 
-  <div class="card" style="background: var(--ops-surface);">
+  <div class="card" id="support-report-copy-card" style="background: var(--ops-surface);">
     <button class="copy-btn" style="background: #2196f3; margin-top: 0;" onclick="copySupportReport()">
       ⚡ 複製【支援群完整回報】(正式格式)
     </button>
@@ -1774,7 +1777,7 @@
   <div class="card settings-section" data-settings-group="global">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v7.1.12（2026/08/12） Shopee Ops Pro</div>
+      <div><b>目前版本：</b> v7.1.13（2026/08/12） Shopee Ops Pro</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -3075,7 +3078,7 @@ function renderTodayDashboard() {
   const reminderBox = document.getElementById('today-reminders');
   const homePanel = document.getElementById('home-overview-panel');
   renderPinnedKnowledgeHome();
-  // v7.1.12：固定勤務獨立於是否有巡店班表；有符合日期的資料就顯示，避免休假／未排班時漏看全天任務。
+  // v7.1.13：固定勤務獨立於是否有巡店班表；有符合日期的資料就顯示，避免休假／未排班時漏看全天任務。
   renderRecurringDutyHome(now, dayData);
   
   const statusDot = document.getElementById('today-status-dot');
@@ -3396,23 +3399,26 @@ function buildReportGroups() {
   if (oldAnchor) oldAnchor.remove();
 
   const standardOrder = ['card_c3','card_c4','card_c5','card_c6','card_c8','card_c9','card_c10','card_c11','card_c12','card_c14','card_c15'];
-  const baseCard = document.querySelector('.card[style*="background: var(--ops-surface)"]') || document.querySelector('.card');
-  
-  if (baseCard) {
-    standardOrder.forEach(id => {
-      const card = document.getElementById(id);
-      if (card) report.appendChild(card);
-    });
-  }
+  const supportCopyCard = document.getElementById('support-report-copy-card');
+
+  // v7.1.13：每次重繪都重新鎖定回報 DOM 順序。舊版只移動科目卡，既有完成列可能留在
+  // 科目卡之前；手機上再受到黏附列影響，會誤以為全部表單消失。
+  standardOrder.forEach(id => {
+    const card = document.getElementById(id);
+    if (card) report.appendChild(card);
+  });
+  if (supportCopyCard) report.appendChild(supportCopyCard);
 
   setupSubjectConfirmationControls();
 
-  if (!document.querySelector('.bottom-action-bar')) {
-    const bar = document.createElement('div');
+  let bar = report.querySelector('.bottom-action-bar');
+  if (!bar) {
+    bar = document.createElement('div');
     bar.className = 'bottom-action-bar';
     bar.innerHTML = `<span class="progress-label" id="report-progress-label">檢查中</span><button class="btn-preview" onclick="previewReport()">預覽完整回報</button><button class="btn-finish" onclick="finishReport()">完成本店並封存</button>`;
-    report.appendChild(bar);
   }
+  // 完成列必須永遠是回報頁最後一個內容節點，反覆載入日期／門市也不會跑到科目之前。
+  report.appendChild(bar);
 
   report.addEventListener('input', handleSubjectMutation);
   report.addEventListener('change', handleSubjectMutation);
@@ -6343,7 +6349,7 @@ function renderKnowledgeCard(e){const stores=e.stores?.length?e.stores.map(getSh
 function saveKnowledgeStepCheck(key,checked){appStorage.setItem(key,checked?'true':'false');markCloudPending();}
 function renderPinnedKnowledgeHome(){const panel=document.getElementById('home-knowledge-panel'),list=document.getElementById('home-knowledge-list');if(!panel||!list)return;const schedule=JSON.parse(appStorage.getItem('shopee_user_schedule')||'{}'),day=schedule[formatDateISO(new Date())],stores=day?getParsedLocations(day):[],items=getKnowledgeEntries().filter(e=>e.pinned&&(!e.stores?.length||stores.some(s=>knowledgeMatchesStore(e,s))));panel.style.display=items.length?'block':'none';list.innerHTML=items.map(e=>`<button class="home-sop-link" onclick="switchMainTab('knowledge-tab',navButtonFor('knowledge-tab'));setTimeout(()=>document.getElementById('knowledge-search').value=decodeURIComponent('${encodeURIComponent(e.title)}'),0);setTimeout(renderKnowledgeBase,0)"><span>📄 ${escapeStoreHTML(e.title)}</span><small>${escapeStoreHTML(e.shift)} ›</small></button>`).join('');}
 
-// v7.1.12 固定勤務判定：週規則比對星期；月規則比對「當月第 N 個指定星期」，例如第二週週一即第二個星期一。
+// v7.1.13 固定勤務判定：週規則比對星期；月規則比對「當月第 N 個指定星期」，例如第二週週一即第二個星期一。
 const RECURRING_WEEKDAY_MAP={日:0,一:1,二:2,三:3,四:4,五:5,六:6};
 const RECURRING_ORDINAL_MAP={一:1,二:2,三:3,四:4,五:5,'1':1,'2':2,'3':3,'4':4,'5':5};
 function getKnowledgeCycle(entry){return [entry.note,...(entry.keywords||[]),...(entry.steps||[]).map(x=>x.timing)].filter(Boolean).join('｜');}
@@ -6592,10 +6598,10 @@ function buildScheduleCalendarHtml(f,rows){
   }).join('');
 }
 function buildFormalReportHtml(f,rows){
-  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v7.1.12</span></div></article>`;
+  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v7.1.13</span></div></article>`;
   const model=getFormalReportModel(f,rows);
   const records=model.records.map(record=>{const cells=[];for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];cells.push(`<b>${escapeStoreHTML(a[0])}</b><span>${escapeStoreHTML(String(a[1]??'—'))}</span>${b?`<b>${escapeStoreHTML(b[0])}</b><span>${escapeStoreHTML(String(b[1]??'—'))}</span>`:'<b></b><span></span>'}`);}return `<section><div class="formal-report-record-title">${escapeStoreHTML(record.title)}</div><div class="formal-report-detail-grid">${cells.join('')}</div></section>`;}).join('');
-  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${model.stores}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v7.1.12｜第 1 頁</span></div></article>`;
+  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${model.stores}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v7.1.13｜第 1 頁</span></div></article>`;
 }
 function initReportCenter(){const f=getReportFilters();if(!f.start||!f.end)setReportRange('today');previewAdvancedReport();}
 // v7.1.4 報表預覽可收合：只改變畫面顯示，不清除預覽或勤務資料。
@@ -6607,7 +6613,7 @@ function appendFormalExcelSheet(wb,name,rows,f){
   const model=getFormalReportModel(f,rows),aoa=[[model.title],['統計期間',`${f.start} 至 ${f.end}`,'門市範圍',model.scope],['資料筆數',rows.length,'涉及門市',model.stores],['勤務明細']],merges=[{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:3,c:0},e:{r:3,c:3}}];
   if(!model.records.length)aoa.push(['此條件沒有資料。']);
   model.records.forEach(record=>{const titleRow=aoa.length;aoa.push([record.title]);merges.push({s:{r:titleRow,c:0},e:{r:titleRow,c:3}});for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];aoa.push([a[0],a[1]??'',b?.[0]||'',b?.[1]??'']);}});
-  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v7.1.12']);
+  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v7.1.13']);
   const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=merges;ws['!cols']=[{wch:16},{wch:46},{wch:16},{wch:46}];ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:Math.max(22,18+String(aoa[r][1]||'').split('\n').length*12)}));ws['!freeze']={xSplit:0,ySplit:4};ws['!autofilter']=undefined;ws['!margins']={left:.35,right:.35,top:.5,bottom:.5,header:.2,footer:.2};ws['!pageSetup']={paperSize:9,orientation:'portrait',fitToWidth:1,fitToHeight:0};
   const border={top:{style:'thin',color:{rgb:'7F8FA6'}},bottom:{style:'thin',color:{rgb:'7F8FA6'}},left:{style:'thin',color:{rgb:'7F8FA6'}},right:{style:'thin',color:{rgb:'7F8FA6'}}};
   for(let r=0;r<aoa.length;r++)for(let c=0;c<4;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:10,bold:r===0},alignment:{vertical:'top',wrapText:true,horizontal:r===0?'center':'left'},border};if(r===0)cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'17365D'}};else if(r===3||model.records.some(record=>aoa[r]?.[0]===record.title)){cell.s.fill={fgColor:{rgb:r===3?'D9EAF7':'2F75B5'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:r===3?'17365D':'FFFFFF'}};}else if(r===1||r===2||((r>3)&&(c===0||c===2))){cell.s.fill={fgColor:{rgb:'EDF4FB'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'17365D'}};}}
@@ -6619,7 +6625,7 @@ function appendScheduleCalendarSheets(wb,f,rows){
     const aoa=[[`${model.year} 年 ${model.month} 月｜個人勤務班表`],[`統計範圍：${f.start} 至 ${f.end}`],weekdays];
     model.weeks.forEach(week=>aoa.push(week.map(scheduleDayText)));
     if(model.legend.length){aoa.push(['門市圖例',...model.legend.map(([short,full])=>`${short}＝${full}`)]);}
-    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v7.1.12']);
+    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v7.1.13']);
     const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}},{s:{r:1,c:0},e:{r:1,c:6}}];ws['!cols']=weekdays.map(()=>({wch:22}));ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:r===1||r===2?22:(r>=3&&r<3+model.weeks.length?88:26)}));ws['!margins']={left:.25,right:.25,top:.4,bottom:.4,header:.15,footer:.15};ws['!pageSetup']={paperSize:9,orientation:'landscape',fitToWidth:1,fitToHeight:1};ws['!freeze']={xSplit:0,ySplit:3};
     for(let r=0;r<aoa.length;r++)for(let c=0;c<7;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:r===2?10:9,bold:r===0||r===2},alignment:{vertical:'top',wrapText:true,horizontal:r<=2?'center':'left'},border};if(r===0){cell.s.fill={fgColor:{rgb:'EEF2FF'}};cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'312E81'}};}else if(r===2){cell.s.fill={fgColor:{rgb:'4338CA'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'FFFFFF'}};}else if(r>=3&&r<3+model.weeks.length){cell.s.fill={fgColor:{rgb:c>=5?'FAF7FF':'FFFFFF'}};}}
     XLSX.utils.book_append_sheet(wb,ws,`${model.year}-${String(model.month).padStart(2,'0')}班表`);
