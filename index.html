@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店勤務助手 v7.1.16</title>
+<title>蝦皮智取店勤務助手 v7.1.19</title>
 
 <!--
   v7.0.0 程式碼註解與維護規則
@@ -338,7 +338,7 @@
       const localPending = appStorage.getItem('shopee_cloud_pending') === 'true';
       const snoozedVersion = sessionStorage.getItem('shopee_cloud_choice_snoozed_version') || '';
 
-      // v7.1.16：重新開啟頁面時不再無條件彈出雲端選擇。
+      // v7.1.19：重新開啟頁面時不再無條件彈出雲端選擇。
       // 同一雲端版本、本機尚有未同步填寫資料，或本次使用已選擇「稍後」時，均不阻擋操作。
       const sameKnownVersion = Boolean(remoteModifiedTime && knownModifiedTime && remoteModifiedTime === knownModifiedTime);
       const snoozedThisVersion = Boolean(remoteModifiedTime && remoteModifiedTime === snoozedVersion);
@@ -857,32 +857,32 @@
   }
   .btn-generate-report:active { transform: scale(0.99); }
 
-  .bottom-action-bar { position:sticky; bottom:64px; z-index:900; display:flex; align-items:center; gap:8px; padding:10px max(10px,env(safe-area-inset-right)) 10px max(10px,env(safe-area-inset-left)); background:var(--ops-surface); border-top:1px solid var(--ops-border); box-shadow:0 -5px 18px rgba(0,0,0,.08); }
+  .bottom-action-bar { position:sticky; bottom:64px; z-index:900; display:flex; flex-direction:column; gap:0; padding:0; overflow:hidden; background:var(--ops-surface); border:1px solid var(--ops-border); border-radius:14px; box-shadow:0 -5px 18px rgba(0,0,0,.10); }
+  .bottom-action-main { width:100%; display:flex; align-items:center; gap:8px; padding:10px max(10px,env(safe-area-inset-right)) 10px max(10px,env(safe-area-inset-left)); box-sizing:border-box; }
   .bottom-action-bar .progress-label { min-width:72px; color:var(--ops-muted); font-size:12px; font-weight:700; }
-  .bottom-action-bar button { flex:1; border:0; border-radius:9px; padding:11px 8px; font-weight:800; cursor:pointer; }
+  .bottom-action-main button { flex:1; border:0; border-radius:9px; padding:11px 8px; font-weight:800; cursor:pointer; }
   .btn-preview { background:var(--ops-orange-soft); color:var(--ops-orange); }
   .btn-finish { background:var(--ops-orange); color:#fff; }
 
   .quick-input-dock {
-    position: sticky;
-    top: calc(50px + env(safe-area-inset-top, 0px));
-    z-index: 1020;
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
-    margin: 8px 0 12px;
-    padding: 8px 10px;
-    border: 1px solid var(--ops-border);
-    border-radius: 10px;
-    background: var(--ops-surface);
-    background: color-mix(in srgb, var(--ops-surface) 94%, transparent);
-    box-shadow: 0 5px 16px rgba(15, 35, 65, .16);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    margin: 0;
+    padding: 8px 10px 10px;
+    border: 0;
+    border-top: 1px solid var(--ops-border);
+    border-radius: 0;
+    background: color-mix(in srgb, var(--ops-surface) 97%, var(--ops-bg));
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
     font-size: 12px;
   }
-  [data-profile-mode="trial"] .quick-input-dock { top:calc(82px + env(safe-area-inset-top, 0px)); }
+  [data-profile-mode="trial"] .quick-input-dock { top:auto; }
   .report-jump-controls {
     position: fixed;
     right: max(10px, env(safe-area-inset-right));
@@ -1153,21 +1153,29 @@
     #home-knowledge-panel h3 { align-items:stretch; }
     #home-knowledge-panel h3 .badge-btn { margin-left:0;width:100%;padding:8px 10px; }
     .duty-command-actions { grid-template-columns:1fr 1fr; }.duty-command-actions .main { grid-column:span 2; }.more-grid { grid-template-columns:1fr 1fr; }
-    /* v7.1.16 手機快速輸入：固定停靠於主分頁列正上方。
-       頁尾只依實際快速列高度補償，避免 sticky 在容器底部被推到分頁下方。 */
-    #report-tab { padding-bottom:calc(76px + var(--quick-input-dock-height, 58px) + env(safe-area-inset-bottom, 0px)); }
-    #report-tab .quick-input-dock {
+    /* v7.1.19：回報操作停靠區改為真正的單一面板。
+       外層統一圓角與陰影，快速輸入只用內部分隔線，不再像兩張卡片刻意黏合。 */
+    #report-tab { padding-bottom:calc(76px + var(--report-action-dock-height, 112px) + env(safe-area-inset-bottom, 0px)); }
+    #report-tab .bottom-action-bar {
       position:fixed;
       left:8px;
       right:8px;
-      bottom:calc(64px + env(safe-area-inset-bottom, 0px));
-      top:auto;
+      bottom:calc(72px + env(safe-area-inset-bottom, 0px));
       z-index:1090;
-      margin:0;
-      max-height:96px;
+      max-height:176px;
       overflow-y:auto;
     }
-    #report-tab .bottom-action-bar { bottom:calc(64px + var(--quick-input-dock-height, 58px) + env(safe-area-inset-bottom, 0px)); }
+    #report-tab .quick-input-dock {
+      position:relative;
+      left:auto;
+      right:auto;
+      bottom:auto;
+      top:auto;
+      z-index:1;
+      margin:0;
+      max-height:84px;
+      overflow-y:auto;
+    }
   }
 </style>
 </head>
@@ -1184,7 +1192,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店勤務助手 v7.1.16
+      📦 蝦皮智取店勤務助手 v7.1.19
     </h1>
   </div>
   <div class="main-nav">
@@ -1303,6 +1311,7 @@
     <span class="report-save-status-badge">本機暫存</span>
   </div>
 
+  <!-- v7.1.19：啟動時由 buildReportGroups() 移入底部回報操作停靠區。 -->
   <div class="quick-input-dock"><b style="color:var(--ops-muted);">手機快速輸入：</b><span id="quick-input-buttons"></span></div>
 
   <div class="card" style="background: var(--ops-surface); border: 1px solid var(--ops-border);">
@@ -1811,7 +1820,7 @@
   <div class="card settings-section" data-settings-group="global">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v7.1.16（2026/08/13） Shopee Ops Pro</div>
+      <div><b>目前版本：</b> v7.1.19（2026/08/13） Shopee Ops Pro</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -2584,7 +2593,7 @@ function switchMainTab(tabId, btn) {
   document.getElementById(tabId).classList.add('active');
   if (btn) btn.classList.add('active');
   if (tabId === 'today-tab') renderTodayDashboard();
-  /* v7.1.16：回報頁每次開啟都主動建立快速輸入，避免首次載入或資料還原後維持空白。 */
+  /* v7.1.19：回報頁每次開啟都主動建立快速輸入，避免首次載入或資料還原後維持空白。 */
   if (tabId === 'report-tab') { renderQuickInputButtons(); initQuickInputDockLayout(); }
   if (tabId === 'knowledge-tab') renderKnowledgeBase();
   if (tabId === 'tools-tab') calculateToolSeconds();
@@ -3451,9 +3460,18 @@ function buildReportGroups() {
   if (!bar) {
     bar = document.createElement('div');
     bar.className = 'bottom-action-bar';
-    bar.innerHTML = `<span class="progress-label" id="report-progress-label">檢查中</span><button class="btn-preview" onclick="previewReport()">預覽完整回報</button><button class="btn-finish" onclick="finishReport()">完成本店並封存</button>`;
+    bar.innerHTML = `<div class="bottom-action-main"><span class="progress-label" id="report-progress-label">檢查中</span><button class="btn-preview" onclick="previewReport()">預覽完整回報</button><button class="btn-finish" onclick="finishReport()">完成本店並封存</button></div>`;
+  } else if (!bar.querySelector('.bottom-action-main')) {
+    // 將舊結構的進度與按鈕包成上排，避免升級後殘留兩套停靠邏輯。
+    const main = document.createElement('div');
+    main.className = 'bottom-action-main';
+    Array.from(bar.children).forEach(child => main.appendChild(child));
+    bar.appendChild(main);
   }
-  // 完成列必須永遠是回報頁最後一個內容節點，反覆載入日期／門市也不會跑到科目之前。
+  // v7.1.19：快速輸入成為同一停靠區的下排，不再獨立 fixed／sticky。
+  const quickDock = report.querySelector('.quick-input-dock');
+  if (quickDock) bar.appendChild(quickDock);
+  // 合併後的停靠區必須永遠是回報頁最後一個內容節點。
   report.appendChild(bar);
 
   report.addEventListener('input', handleSubjectMutation);
@@ -4967,7 +4985,7 @@ window.onload = function() {
     buildReportGroups();
     initLiveClock();
     populateReportStoreDatalist();
-    /* v7.1.16：快速輸入屬回報頁啟動必要元件，不再等待使用者先進入更多設定。 */
+    /* v7.1.19：快速輸入屬回報頁啟動必要元件，不再等待使用者先進入更多設定。 */
     renderQuickInputButtons();
     initQuickInputDockLayout();
     
@@ -5025,15 +5043,15 @@ function renderQuickInputButtons(){
   box.innerHTML=getQuickInputItems().map(item=>`<button type="button" class="badge-btn" onclick="insertQuickValue(decodeURIComponent('${encodeURIComponent(item.value)}'))">${escapeStoreHTML(item.label)}</button>`).join(' ');
   requestAnimationFrame(syncQuickInputDockHeight);
 }
-/* v7.1.16：高度同步只用於快速列與完成列的準確避讓，不使用寫死的頁尾空白。 */
+/* v7.1.19：量測合併後的整個回報操作停靠區，頁尾只避讓這一個實際高度。 */
 function syncQuickInputDockHeight(){
-  const dock=document.querySelector('#report-tab .quick-input-dock');
+  const dock=document.querySelector('#report-tab .bottom-action-bar');
   if(!dock)return;
-  const height=Math.ceil(dock.getBoundingClientRect().height||58);
-  document.documentElement.style.setProperty('--quick-input-dock-height',`${height}px`);
+  const height=Math.ceil(dock.getBoundingClientRect().height||112);
+  document.documentElement.style.setProperty('--report-action-dock-height',`${height}px`);
 }
 function initQuickInputDockLayout(){
-  const dock=document.querySelector('#report-tab .quick-input-dock');
+  const dock=document.querySelector('#report-tab .bottom-action-bar');
   if(!dock)return;
   syncQuickInputDockHeight();
   if(window.ResizeObserver&&!dock._quickInputObserver){
@@ -5075,7 +5093,11 @@ function calculatorClear(){calculatorExpression='';updateCalculatorDisplay('0');
 function calculatorBackspace(){calculatorExpression=calculatorExpression.slice(0,-1);updateCalculatorDisplay(calculatorExpression);}
 function calculatorEvaluate(){
   if(!calculatorExpression||!/^[0-9+\-*/().\s]+$/.test(calculatorExpression)){updateCalculatorDisplay('輸入錯誤');return;}
-  try{const result=Function(`"use strict";return (${calculatorExpression})`)();if(!Number.isFinite(result))throw new Error();calculatorExpression=String(Math.round((result+Number.EPSILON)*1e10)/1e10);updateCalculatorDisplay(calculatorExpression);}catch(_){calculatorExpression='';updateCalculatorDisplay('計算錯誤');}
+  // v7.1.19：對齊手機原生計算機的容錯。按等號時忽略尾端尚未完成的運算符與小數點，
+  // 例如 3+3+8+8+15+20+ 會以 3+3+8+8+15+20 計算為 57；算式中間的錯誤仍會阻擋。
+  const evaluableExpression=calculatorExpression.replace(/[+\-*/.\s]+$/,'');
+  if(!evaluableExpression){calculatorExpression='';updateCalculatorDisplay('計算錯誤');return;}
+  try{const result=Function(`"use strict";return (${evaluableExpression})`)();if(!Number.isFinite(result))throw new Error();calculatorExpression=String(Math.round((result+Number.EPSILON)*1e10)/1e10);updateCalculatorDisplay(calculatorExpression);}catch(_){calculatorExpression='';updateCalculatorDisplay('計算錯誤');}
 }
 function parseToolTime(value){const parts=String(value||'').trim().split(':').map(Number);if(parts.length<2||parts.length>3||parts.some(Number.isNaN))return null;const [h,m,s=0]=parts;if(h<0||h>23||m<0||m>59||s<0||s>59)return null;return h*3600+m*60+s;}
 function calculateToolSeconds(){
@@ -6658,10 +6680,10 @@ function buildScheduleCalendarHtml(f,rows){
   }).join('');
 }
 function buildFormalReportHtml(f,rows){
-  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v7.1.16</span></div></article>`;
+  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v7.1.19</span></div></article>`;
   const model=getFormalReportModel(f,rows);
   const records=model.records.map(record=>{const cells=[];for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];cells.push(`<b>${escapeStoreHTML(a[0])}</b><span>${escapeStoreHTML(String(a[1]??'—'))}</span>${b?`<b>${escapeStoreHTML(b[0])}</b><span>${escapeStoreHTML(String(b[1]??'—'))}</span>`:'<b></b><span></span>'}`);}return `<section><div class="formal-report-record-title">${escapeStoreHTML(record.title)}</div><div class="formal-report-detail-grid">${cells.join('')}</div></section>`;}).join('');
-  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${model.stores}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v7.1.16｜第 1 頁</span></div></article>`;
+  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${model.stores}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v7.1.19｜第 1 頁</span></div></article>`;
 }
 function initReportCenter(){const f=getReportFilters();if(!f.start||!f.end)setReportRange('today');previewAdvancedReport();}
 // v7.1.4 報表預覽可收合：只改變畫面顯示，不清除預覽或勤務資料。
@@ -6673,7 +6695,7 @@ function appendFormalExcelSheet(wb,name,rows,f){
   const model=getFormalReportModel(f,rows),aoa=[[model.title],['統計期間',`${f.start} 至 ${f.end}`,'門市範圍',model.scope],['資料筆數',rows.length,'涉及門市',model.stores],['勤務明細']],merges=[{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:3,c:0},e:{r:3,c:3}}];
   if(!model.records.length)aoa.push(['此條件沒有資料。']);
   model.records.forEach(record=>{const titleRow=aoa.length;aoa.push([record.title]);merges.push({s:{r:titleRow,c:0},e:{r:titleRow,c:3}});for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];aoa.push([a[0],a[1]??'',b?.[0]||'',b?.[1]??'']);}});
-  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v7.1.16']);
+  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v7.1.19']);
   const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=merges;ws['!cols']=[{wch:16},{wch:46},{wch:16},{wch:46}];ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:Math.max(22,18+String(aoa[r][1]||'').split('\n').length*12)}));ws['!freeze']={xSplit:0,ySplit:4};ws['!autofilter']=undefined;ws['!margins']={left:.35,right:.35,top:.5,bottom:.5,header:.2,footer:.2};ws['!pageSetup']={paperSize:9,orientation:'portrait',fitToWidth:1,fitToHeight:0};
   const border={top:{style:'thin',color:{rgb:'7F8FA6'}},bottom:{style:'thin',color:{rgb:'7F8FA6'}},left:{style:'thin',color:{rgb:'7F8FA6'}},right:{style:'thin',color:{rgb:'7F8FA6'}}};
   for(let r=0;r<aoa.length;r++)for(let c=0;c<4;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:10,bold:r===0},alignment:{vertical:'top',wrapText:true,horizontal:r===0?'center':'left'},border};if(r===0)cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'17365D'}};else if(r===3||model.records.some(record=>aoa[r]?.[0]===record.title)){cell.s.fill={fgColor:{rgb:r===3?'D9EAF7':'2F75B5'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:r===3?'17365D':'FFFFFF'}};}else if(r===1||r===2||((r>3)&&(c===0||c===2))){cell.s.fill={fgColor:{rgb:'EDF4FB'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'17365D'}};}}
@@ -6685,7 +6707,7 @@ function appendScheduleCalendarSheets(wb,f,rows){
     const aoa=[[`${model.year} 年 ${model.month} 月｜個人勤務班表`],[`統計範圍：${f.start} 至 ${f.end}`],weekdays];
     model.weeks.forEach(week=>aoa.push(week.map(scheduleDayText)));
     if(model.legend.length){aoa.push(['門市圖例',...model.legend.map(([short,full])=>`${short}＝${full}`)]);}
-    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v7.1.16']);
+    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v7.1.19']);
     const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}},{s:{r:1,c:0},e:{r:1,c:6}}];ws['!cols']=weekdays.map(()=>({wch:22}));ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:r===1||r===2?22:(r>=3&&r<3+model.weeks.length?88:26)}));ws['!margins']={left:.25,right:.25,top:.4,bottom:.4,header:.15,footer:.15};ws['!pageSetup']={paperSize:9,orientation:'landscape',fitToWidth:1,fitToHeight:1};ws['!freeze']={xSplit:0,ySplit:3};
     for(let r=0;r<aoa.length;r++)for(let c=0;c<7;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:r===2?10:9,bold:r===0||r===2},alignment:{vertical:'top',wrapText:true,horizontal:r<=2?'center':'left'},border};if(r===0){cell.s.fill={fgColor:{rgb:'EEF2FF'}};cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'312E81'}};}else if(r===2){cell.s.fill={fgColor:{rgb:'4338CA'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'FFFFFF'}};}else if(r>=3&&r<3+model.weeks.length){cell.s.fill={fgColor:{rgb:c>=5?'FAF7FF':'FFFFFF'}};}}
     XLSX.utils.book_append_sheet(wb,ws,`${model.year}-${String(model.month).padStart(2,'0')}班表`);
