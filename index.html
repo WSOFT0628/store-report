@@ -1,10 +1,9 @@
-<!-- redeploy 2026-08-13 -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店勤務助手 v7.1.15</title>
+<title>蝦皮智取店勤務助手 v7.1.16</title>
 
 <!--
   v7.0.0 程式碼註解與維護規則
@@ -333,8 +332,25 @@
         return;
       }
       appStorage.setItem('shopee_cloud_file_id', file.id);
-      appStorage.setItem('shopee_cloud_modified_time', file.modifiedTime || '');
-      updateCloudLocationUI(file, '已找到指定備份檔，等待你決定是否下載');
+      const source = options.source || 'inspect';
+      const knownModifiedTime = appStorage.getItem('shopee_cloud_modified_time') || '';
+      const remoteModifiedTime = file.modifiedTime || '';
+      const localPending = appStorage.getItem('shopee_cloud_pending') === 'true';
+      const snoozedVersion = sessionStorage.getItem('shopee_cloud_choice_snoozed_version') || '';
+
+      // v7.1.16：重新開啟頁面時不再無條件彈出雲端選擇。
+      // 同一雲端版本、本機尚有未同步填寫資料，或本次使用已選擇「稍後」時，均不阻擋操作。
+      const sameKnownVersion = Boolean(remoteModifiedTime && knownModifiedTime && remoteModifiedTime === knownModifiedTime);
+      const snoozedThisVersion = Boolean(remoteModifiedTime && remoteModifiedTime === snoozedVersion);
+      const manualInspection = source === 'manual';
+      if (!manualInspection && (sameKnownVersion || localPending || snoozedThisVersion)) {
+        const state = localPending
+          ? '已連線；本機有未同步資料，先保留本機並等待同步'
+          : '已連線；雲端資料無新版本';
+        updateCloudLocationUI(file, state);
+        return;
+      }
+      updateCloudLocationUI(file, '偵測到新的雲端備份，等待你決定是否套用');
       await pullScheduleFromDrive({ file, requireConfirmation:true, source:options.source || 'inspect' });
     } catch (err) {
       console.error('檢查雲端備份失敗:', err);
@@ -488,12 +504,15 @@
   }
 
   function closeCloudChoiceModal() {
+    const remoteVersion = pendingCloudDownload?.file?.modifiedTime || '';
+    if (remoteVersion) sessionStorage.setItem('shopee_cloud_choice_snoozed_version', remoteVersion);
+    pendingCloudDownload = null;
     document.getElementById('cloud-choice-modal')?.classList.remove('active');
   }
 
   function keepLocalCloudChoice() {
     pendingCloudDownload = null;
-    closeCloudChoiceModal();
+    document.getElementById('cloud-choice-modal')?.classList.remove('active');
     markCloudPending();
     showToast('💾 已保留目前本機資料；雲端資料未套用。', 3500);
   }
@@ -502,13 +521,15 @@
     if (!pendingCloudDownload) return;
     const selected = pendingCloudDownload;
     pendingCloudDownload = null;
-    closeCloudChoiceModal();
+    sessionStorage.removeItem('shopee_cloud_choice_snoozed_version');
+    document.getElementById('cloud-choice-modal')?.classList.remove('active');
     applyCloudData(selected.remoteData, selected.file);
   }
 
   async function overwriteCloudWithLocalChoice() {
     pendingCloudDownload = null;
-    closeCloudChoiceModal();
+    sessionStorage.removeItem('shopee_cloud_choice_snoozed_version');
+    document.getElementById('cloud-choice-modal')?.classList.remove('active');
     await syncScheduleToDrive({ manual:true });
   }
 </script>
@@ -1132,20 +1153,21 @@
     #home-knowledge-panel h3 { align-items:stretch; }
     #home-knowledge-panel h3 .badge-btn { margin-left:0;width:100%;padding:8px 10px; }
     .duty-command-actions { grid-template-columns:1fr 1fr; }.duty-command-actions .main { grid-column:span 2; }.more-grid { grid-template-columns:1fr 1fr; }
-    /* v7.1.15 手機快速輸入：留在回報內容頂端黏附，不再固定於視窗底部或製造大段頁尾空白。 */
-    #report-tab { padding-bottom:calc(76px + env(safe-area-inset-bottom, 0px)); }
+    /* v7.1.16 手機快速輸入：固定停靠於主分頁列正上方。
+       頁尾只依實際快速列高度補償，避免 sticky 在容器底部被推到分頁下方。 */
+    #report-tab { padding-bottom:calc(76px + var(--quick-input-dock-height, 58px) + env(safe-area-inset-bottom, 0px)); }
     #report-tab .quick-input-dock {
-      position:sticky;
-      left:auto;
-      right:auto;
-      bottom:auto;
-      top:calc(50px + env(safe-area-inset-top, 0px));
-      z-index:1020;
-      margin:8px 0 12px;
-      max-height:112px;
-      overflow:auto;
+      position:fixed;
+      left:8px;
+      right:8px;
+      bottom:calc(64px + env(safe-area-inset-bottom, 0px));
+      top:auto;
+      z-index:1090;
+      margin:0;
+      max-height:96px;
+      overflow-y:auto;
     }
-    #report-tab .bottom-action-bar { bottom:calc(64px + env(safe-area-inset-bottom, 0px)); }
+    #report-tab .bottom-action-bar { bottom:calc(64px + var(--quick-input-dock-height, 58px) + env(safe-area-inset-bottom, 0px)); }
   }
 </style>
 </head>
@@ -1162,7 +1184,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店勤務助手 v7.1.15
+      📦 蝦皮智取店勤務助手 v7.1.16
     </h1>
   </div>
   <div class="main-nav">
@@ -1789,7 +1811,7 @@
   <div class="card settings-section" data-settings-group="global">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v7.1.15（2026/08/12） Shopee Ops Pro</div>
+      <div><b>目前版本：</b> v7.1.16（2026/08/13） Shopee Ops Pro</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -2562,7 +2584,7 @@ function switchMainTab(tabId, btn) {
   document.getElementById(tabId).classList.add('active');
   if (btn) btn.classList.add('active');
   if (tabId === 'today-tab') renderTodayDashboard();
-  /* v7.1.15：回報頁每次開啟都主動建立快速輸入，避免首次載入或資料還原後維持空白。 */
+  /* v7.1.16：回報頁每次開啟都主動建立快速輸入，避免首次載入或資料還原後維持空白。 */
   if (tabId === 'report-tab') { renderQuickInputButtons(); initQuickInputDockLayout(); }
   if (tabId === 'knowledge-tab') renderKnowledgeBase();
   if (tabId === 'tools-tab') calculateToolSeconds();
@@ -4945,7 +4967,7 @@ window.onload = function() {
     buildReportGroups();
     initLiveClock();
     populateReportStoreDatalist();
-    /* v7.1.15：快速輸入屬回報頁啟動必要元件，不再等待使用者先進入更多設定。 */
+    /* v7.1.16：快速輸入屬回報頁啟動必要元件，不再等待使用者先進入更多設定。 */
     renderQuickInputButtons();
     initQuickInputDockLayout();
     
@@ -5003,7 +5025,7 @@ function renderQuickInputButtons(){
   box.innerHTML=getQuickInputItems().map(item=>`<button type="button" class="badge-btn" onclick="insertQuickValue(decodeURIComponent('${encodeURIComponent(item.value)}'))">${escapeStoreHTML(item.label)}</button>`).join(' ');
   requestAnimationFrame(syncQuickInputDockHeight);
 }
-/* v7.1.15：保留高度同步供舊環境相容；手機頁面不再用此高度撐出額外頁尾空白。 */
+/* v7.1.16：高度同步只用於快速列與完成列的準確避讓，不使用寫死的頁尾空白。 */
 function syncQuickInputDockHeight(){
   const dock=document.querySelector('#report-tab .quick-input-dock');
   if(!dock)return;
@@ -6636,10 +6658,10 @@ function buildScheduleCalendarHtml(f,rows){
   }).join('');
 }
 function buildFormalReportHtml(f,rows){
-  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v7.1.15</span></div></article>`;
+  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v7.1.16</span></div></article>`;
   const model=getFormalReportModel(f,rows);
   const records=model.records.map(record=>{const cells=[];for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];cells.push(`<b>${escapeStoreHTML(a[0])}</b><span>${escapeStoreHTML(String(a[1]??'—'))}</span>${b?`<b>${escapeStoreHTML(b[0])}</b><span>${escapeStoreHTML(String(b[1]??'—'))}</span>`:'<b></b><span></span>'}`);}return `<section><div class="formal-report-record-title">${escapeStoreHTML(record.title)}</div><div class="formal-report-detail-grid">${cells.join('')}</div></section>`;}).join('');
-  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${model.stores}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v7.1.15｜第 1 頁</span></div></article>`;
+  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${model.stores}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v7.1.16｜第 1 頁</span></div></article>`;
 }
 function initReportCenter(){const f=getReportFilters();if(!f.start||!f.end)setReportRange('today');previewAdvancedReport();}
 // v7.1.4 報表預覽可收合：只改變畫面顯示，不清除預覽或勤務資料。
@@ -6651,7 +6673,7 @@ function appendFormalExcelSheet(wb,name,rows,f){
   const model=getFormalReportModel(f,rows),aoa=[[model.title],['統計期間',`${f.start} 至 ${f.end}`,'門市範圍',model.scope],['資料筆數',rows.length,'涉及門市',model.stores],['勤務明細']],merges=[{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:3,c:0},e:{r:3,c:3}}];
   if(!model.records.length)aoa.push(['此條件沒有資料。']);
   model.records.forEach(record=>{const titleRow=aoa.length;aoa.push([record.title]);merges.push({s:{r:titleRow,c:0},e:{r:titleRow,c:3}});for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];aoa.push([a[0],a[1]??'',b?.[0]||'',b?.[1]??'']);}});
-  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v7.1.15']);
+  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v7.1.16']);
   const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=merges;ws['!cols']=[{wch:16},{wch:46},{wch:16},{wch:46}];ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:Math.max(22,18+String(aoa[r][1]||'').split('\n').length*12)}));ws['!freeze']={xSplit:0,ySplit:4};ws['!autofilter']=undefined;ws['!margins']={left:.35,right:.35,top:.5,bottom:.5,header:.2,footer:.2};ws['!pageSetup']={paperSize:9,orientation:'portrait',fitToWidth:1,fitToHeight:0};
   const border={top:{style:'thin',color:{rgb:'7F8FA6'}},bottom:{style:'thin',color:{rgb:'7F8FA6'}},left:{style:'thin',color:{rgb:'7F8FA6'}},right:{style:'thin',color:{rgb:'7F8FA6'}}};
   for(let r=0;r<aoa.length;r++)for(let c=0;c<4;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:10,bold:r===0},alignment:{vertical:'top',wrapText:true,horizontal:r===0?'center':'left'},border};if(r===0)cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'17365D'}};else if(r===3||model.records.some(record=>aoa[r]?.[0]===record.title)){cell.s.fill={fgColor:{rgb:r===3?'D9EAF7':'2F75B5'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:r===3?'17365D':'FFFFFF'}};}else if(r===1||r===2||((r>3)&&(c===0||c===2))){cell.s.fill={fgColor:{rgb:'EDF4FB'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'17365D'}};}}
@@ -6663,7 +6685,7 @@ function appendScheduleCalendarSheets(wb,f,rows){
     const aoa=[[`${model.year} 年 ${model.month} 月｜個人勤務班表`],[`統計範圍：${f.start} 至 ${f.end}`],weekdays];
     model.weeks.forEach(week=>aoa.push(week.map(scheduleDayText)));
     if(model.legend.length){aoa.push(['門市圖例',...model.legend.map(([short,full])=>`${short}＝${full}`)]);}
-    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v7.1.15']);
+    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v7.1.16']);
     const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}},{s:{r:1,c:0},e:{r:1,c:6}}];ws['!cols']=weekdays.map(()=>({wch:22}));ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:r===1||r===2?22:(r>=3&&r<3+model.weeks.length?88:26)}));ws['!margins']={left:.25,right:.25,top:.4,bottom:.4,header:.15,footer:.15};ws['!pageSetup']={paperSize:9,orientation:'landscape',fitToWidth:1,fitToHeight:1};ws['!freeze']={xSplit:0,ySplit:3};
     for(let r=0;r<aoa.length;r++)for(let c=0;c<7;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:r===2?10:9,bold:r===0||r===2},alignment:{vertical:'top',wrapText:true,horizontal:r<=2?'center':'left'},border};if(r===0){cell.s.fill={fgColor:{rgb:'EEF2FF'}};cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'312E81'}};}else if(r===2){cell.s.fill={fgColor:{rgb:'4338CA'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'FFFFFF'}};}else if(r>=3&&r<3+model.weeks.length){cell.s.fill={fgColor:{rgb:c>=5?'FAF7FF':'FFFFFF'}};}}
     XLSX.utils.book_append_sheet(wb,ws,`${model.year}-${String(model.month).padStart(2,'0')}班表`);
