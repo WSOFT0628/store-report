@@ -6769,15 +6769,16 @@ window.scheduleSupabaseSyncFromLocalChange=function(){
 };
 
 function readV81Queue(){try{return JSON.parse(localStorage.getItem(STORE_V81_QUEUE_KEY)||'null')}catch{return null}}
+function hasV81Pending(){return Boolean(readV81Queue()||appStorage.getItem('shopee_cloud_pending')==='true')}
 function setV81QueuePending(){if(!readV81Queue())localStorage.setItem(STORE_V81_QUEUE_KEY,JSON.stringify({count:1,since:new Date().toISOString()}));updateV81SyncCenter()}
 function clearV81Queue(){localStorage.removeItem(STORE_V81_QUEUE_KEY);localStorage.setItem(STORE_V81_LAST_SUCCESS_KEY,new Date().toISOString());updateV81SyncCenter()}
 function formatV81Time(value){if(!value)return'—';try{return new Date(value).toLocaleString('zh-TW',{hour12:false})}catch{return'—'}}
 function updateV81SyncCenter(){
   const queue=readV81Queue(),online=navigator.onLine;
   const network=document.getElementById('sync-network-state'),count=document.getElementById('sync-queue-count'),last=document.getElementById('sync-last-success'),since=document.getElementById('sync-pending-since');
-  if(network)network.textContent=online?'🟢 線上':'🟠 離線';if(count)count.textContent=String(queue?.count||0);if(last)last.textContent=formatV81Time(localStorage.getItem(STORE_V81_LAST_SUCCESS_KEY));if(since)since.textContent=formatV81Time(queue?.since);
+  if(network)network.textContent=online?'🟢 線上':'🟠 離線';if(count)count.textContent=hasV81Pending()?String(queue?.count||1):'0';if(last)last.textContent=formatV81Time(localStorage.getItem(STORE_V81_LAST_SUCCESS_KEY));if(since)since.textContent=formatV81Time(queue?.since||appStorage.getItem('shopee_last_local_save'));
 }
-async function retrySupabaseQueue(){if(!navigator.onLine)return showToast('📴 目前離線，資料已安全留在本機。',3500);if(!readV81Queue())return showToast('✅ 目前沒有待同步資料。');return syncSupabaseNow({manual:true})}
+async function retrySupabaseQueue(){if(!navigator.onLine)return showToast('📴 目前離線，資料已安全留在本機。',3500);if(!hasV81Pending())return showToast('✅ 目前沒有待同步資料。');setV81QueuePending();return syncSupabaseNow({manual:true})}
 
 function getSupabaseConfig(){
   const saved=JSON.parse(localStorage.getItem(STORE_V8_CONFIG_KEY)||'{}');
@@ -6890,12 +6891,12 @@ async function previewCloudSnapshot(snapshotId){
 async function initSupabaseV8(){
   const config=JSON.parse(localStorage.getItem(STORE_V8_CONFIG_KEY)||'{}');const url=document.getElementById('supabase-project-url'),key=document.getElementById('supabase-publishable-key');if(url)url.value=config.url||'';if(key)key.value=config.key||'';storeV8Session=JSON.parse(localStorage.getItem(STORE_V8_SESSION_KEY)||'null');
   if(storeV8Session&&config.url&&config.key){await refreshSupabaseSession();try{await registerSupabaseMember();await refreshCloudSnapshots()}catch(error){console.warn(error);updateSupabaseUI()}}else updateSupabaseUI();
-  updateV81SyncCenter();
+  if(appStorage.getItem('shopee_cloud_pending')==='true')setV81QueuePending();else updateV81SyncCenter();
   if('serviceWorker'in navigator)navigator.serviceWorker.register('./store-app-sw.js').catch(error=>console.warn('Service Worker',error));
 }
-window.addEventListener('online',()=>{updateV81SyncCenter();if(readV81Queue())setTimeout(()=>syncSupabaseNow(),500)});
+window.addEventListener('online',()=>{updateV81SyncCenter();if(hasV81Pending())setTimeout(()=>syncSupabaseNow(),500)});
 window.addEventListener('offline',updateV81SyncCenter);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&navigator.onLine&&readV81Queue())setTimeout(()=>syncSupabaseNow(),500)});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&navigator.onLine&&hasV81Pending())setTimeout(()=>syncSupabaseNow(),500)});
 window.addEventListener('DOMContentLoaded',initSupabaseV8);
 </script>
 </body>
