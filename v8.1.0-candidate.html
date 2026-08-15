@@ -1771,7 +1771,7 @@
       <button onclick="createTrialProfileLink()" style="grid-column:span 2;background:#6f42c1;color:#fff;">🧪 建立並複製獨立試用網址</button>
       <button id="copy-current-profile-btn" onclick="copyCurrentProfileLink()" style="display:none;background:#2878d0;color:#fff;">🔗 複製目前試用網址</button>
       <button id="exit-trial-profile-btn" onclick="exitTrialProfile()" style="display:none;background:#667085;color:#fff;">↩️ 返回正式空間</button>
-      <button id="clear-web-memory-btn" onclick="clearWebsiteMemory()" style="grid-column:span 2;background:#c62828;color:#fff;">🧪 清除本應用網頁記憶（測試重置）</button>
+      <button id="clear-web-memory-btn" onclick="clearWebsiteMemory()" style="grid-column:span 2;background:#c62828;color:#fff;">🧹 清除本應用網頁記憶</button>
     </div>
     <div id="cloud-location-info" style="margin-top:10px;padding:10px;border:1px solid var(--ops-border);border-radius:8px;background:var(--ops-bg);font-size:12px;line-height:1.65;color:var(--ops-text);">
       <b>Supabase 狀態：</b><span id="supabase-account-status">尚未登入</span><br><b>雲端版本：</b><span id="supabase-cloud-version">—</span><br><b>同步狀態：</b><span id="supabase-sync-status">本機模式</span>
@@ -6167,10 +6167,10 @@ function clearWebsiteMemory() {
   const button = document.getElementById('clear-web-memory-btn');
   if (!clearWebsiteMemoryTimer) {
     if (button) button.textContent = window.IS_TRIAL_PROFILE ? '⚠️ 再按一次，確認清除此試用空間' : '⚠️ 5 秒內再按一次，確認清除全部本機資料';
-    showToast(window.IS_TRIAL_PROFILE ? '⚠️ 只會清除此試用空間的班表、巡店紀錄與設定；正式資料不受影響。請再按一次確認。' : '⚠️ 將清除本應用的班表、巡店紀錄、門市設定與同步狀態；請再按一次確認。', 5000);
+    showToast(window.IS_TRIAL_PROFILE ? '⚠️ 只會清除此試用空間的班表、巡店紀錄與設定；正式資料不受影響。請再按一次確認。' : '⚠️ 將清除此瀏覽器內的應用資料；Supabase 雲端資料仍會保留。請再按一次確認。', 5000);
     clearWebsiteMemoryTimer = setTimeout(() => {
       clearWebsiteMemoryTimer = null;
-      if (button) button.textContent = window.IS_TRIAL_PROFILE ? '🧹 清除此試用空間資料' : '🧪 清除本應用網頁記憶（測試重置）';
+      if (button) button.textContent = window.IS_TRIAL_PROFILE ? '🧹 清除此試用空間資料' : '🧹 清除本應用網頁記憶';
     }, 5000);
     return;
   }
@@ -6889,6 +6889,9 @@ async function previewCloudSnapshot(snapshotId){
   }catch(error){showToast('⚠️ 快照處理失敗：'+error.message,4500)}
 }
 async function initSupabaseV8(){
+  // v8.1.0：正式化清除功能名稱；即使瀏覽器保留舊的按鈕狀態，載入時也強制校正。
+  const clearMemoryButton=document.getElementById('clear-web-memory-btn');
+  if(clearMemoryButton&&!window.IS_TRIAL_PROFILE)clearMemoryButton.textContent='🧹 清除本應用網頁記憶';
   const config=JSON.parse(localStorage.getItem(STORE_V8_CONFIG_KEY)||'{}');const url=document.getElementById('supabase-project-url'),key=document.getElementById('supabase-publishable-key');if(url)url.value=config.url||'';if(key)key.value=config.key||'';storeV8Session=JSON.parse(localStorage.getItem(STORE_V8_SESSION_KEY)||'null');
   if(storeV8Session&&config.url&&config.key){await refreshSupabaseSession();try{await registerSupabaseMember();await refreshCloudSnapshots()}catch(error){console.warn(error);updateSupabaseUI()}}else updateSupabaseUI();
   if(appStorage.getItem('shopee_cloud_pending')==='true')setV81QueuePending();else updateV81SyncCenter();
