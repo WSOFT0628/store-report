@@ -6750,6 +6750,7 @@ function showToast(message, duration = 2000) {
 'use strict';
 const STORE_V8_CONFIG_KEY='store_v8_supabase_config_v1';
 const STORE_V8_SESSION_KEY='store_v8_supabase_session_v1';
+const STORE_V8_RESOLVED_VERSION_KEY='store_v8_supabase_resolved_version_v1';
 const GOOGLE_BACKUP_SYNC=window.syncScheduleToDrive;
 let storeV8Session=null,storeV8Member=null,storeV8CloudVersion=null,storeV8PendingCloud=null,storeV8SyncTimer=null;
 const STORE_V8_LOCAL_META_KEYS=new Set([
@@ -6812,13 +6813,18 @@ function createSupabaseRecoverySnapshot(){const recovery=collectSupabaseSnapshot
 function applySupabaseSnapshot(remoteData){
   createSupabaseRecoverySnapshot();const keys=[];for(let i=0;i<appStorage.length;i++){const key=appStorage.key(i);if(key?.startsWith('shopee_')&&!STORE_V8_LOCAL_META_KEYS.has(key))keys.push(key)}keys.forEach(key=>appStorage.removeItem(key));
   Object.entries(normalizeSupabaseSnapshot(remoteData)).forEach(([key,value])=>appStorage.setItem(key,value));markCloudSynced();
+  if(Number.isFinite(storeV8CloudVersion))localStorage.setItem(STORE_V8_RESOLVED_VERSION_KEY,String(storeV8CloudVersion));
   handleDailyRollover();reloadStoresDataFromStorage();resetActiveViewsToTodayAfterRestore();updateHistoryDropdown();loadWeekSchedule();renderMonthView();renderDayView();loadData(false);updateDraftLabels();renderTodayDashboard();updateSupabaseUI();showToast('☁️ 已套用 Supabase 雲端資料；原本本機資料已建立安全快照。',4000);
 }
 async function loadSupabaseCloud(options={}){
   try{if(window.IS_TRIAL_PROFILE)throw new Error('試用空間不連接正式 Supabase');if(!storeV8Session)throw new Error('請先登入 Supabase');const rows=await supabaseRpc('store_app_load_state'),row=Array.isArray(rows)?rows[0]:rows;if(!row)throw new Error('找不到雲端狀態');storeV8CloudVersion=Number(row.version);updateSupabaseUI();
     const remote=normalizeSupabaseSnapshot(row.payload),local=collectSupabaseSnapshot(),[remoteHash,localHash]=await Promise.all([hashSupabaseSnapshot(remote),hashSupabaseSnapshot(local)]);
-    if(remoteHash===localHash){markCloudSynced();updateSupabaseUI();if(options.manual)showToast('✅ 本機與 Supabase 資料一致。');return row}
+    if(remoteHash===localHash){markCloudSynced();localStorage.setItem(STORE_V8_RESOLVED_VERSION_KEY,String(storeV8CloudVersion));updateSupabaseUI();if(options.manual)showToast('✅ 本機與 Supabase 資料一致。');return row}
     if(!Object.keys(local).length&&Object.keys(remote).length){applySupabaseSnapshot(remote);return row}
+    // v8.0.0 RC3：同一裝置已處理過相同雲端版本、且沒有本機待同步變更時，
+    // 重整直接恢復雲端快照，不再重複詢問。新無痕工作階段仍保留第一次安全確認。
+    const resolvedVersion=Number(localStorage.getItem(STORE_V8_RESOLVED_VERSION_KEY));
+    if(resolvedVersion===storeV8CloudVersion&&appStorage.getItem('shopee_cloud_pending')!=='true'){applySupabaseSnapshot(remote);return row}
     storeV8PendingCloud={remoteData:remote,version:storeV8CloudVersion,updatedAt:row.updated_at};openSupabaseChoice();return row;
   }catch(error){markCloudPending({schedule:false});updateSupabaseUI();if(options.manual)showToast('⚠️ 雲端下載失敗：'+error.message,4500);throw error}
 }
@@ -6835,7 +6841,7 @@ async function syncSupabaseNow(options={}){
   if(!storeV8Session||!storeV8Member?.approved){markCloudPending({schedule:false});if(manual)showToast('💾 本機已儲存；登入並核准後才能同步。',4000);return false}
   if(storeV8Member.role==='viewer'){if(manual)showToast('🔒 viewer 為唯讀帳號，不能上傳。',4000);return false}
   try{if(storeV8CloudVersion===null)await loadSupabaseCloud({source:'sync'});if(storeV8PendingCloud&&!Number.isFinite(options.expectedVersion)){if(manual)openSupabaseChoice();return false}
-    const expected=Number.isFinite(options.expectedVersion)?Number(options.expectedVersion):storeV8CloudVersion;const result=await supabaseRpc('store_app_save_state',{p_payload:collectSupabaseSnapshot(),p_expected_version:expected});const row=Array.isArray(result)?result[0]:result;storeV8CloudVersion=Number(row.version);storeV8PendingCloud=null;markCloudSynced();updateSupabaseUI();if(manual)showToast(`✅ Supabase 同步完成（v${storeV8CloudVersion}）。`);return true;
+    const expected=Number.isFinite(options.expectedVersion)?Number(options.expectedVersion):storeV8CloudVersion;const result=await supabaseRpc('store_app_save_state',{p_payload:collectSupabaseSnapshot(),p_expected_version:expected});const row=Array.isArray(result)?result[0]:result;storeV8CloudVersion=Number(row.version);storeV8PendingCloud=null;markCloudSynced();localStorage.setItem(STORE_V8_RESOLVED_VERSION_KEY,String(storeV8CloudVersion));updateSupabaseUI();if(manual)showToast(`✅ Supabase 同步完成（v${storeV8CloudVersion}）。`);return true;
   }catch(error){markCloudPending({schedule:false});updateSupabaseUI();if(String(error.message).includes('SYNC_CONFLICT')){await loadSupabaseCloud({source:'conflict'}).catch(()=>{});showToast('⚠️ 雲端已有新版，已阻止覆蓋。請選擇保留資料。',5000)}else if(manual)showToast('⚠️ 同步失敗：'+error.message,4500);return false}
 }
 function queueSupabaseSync(options={}){if(options.manual)return syncSupabaseNow(options);markCloudPending();return Promise.resolve(false)}
