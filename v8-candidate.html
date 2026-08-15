@@ -160,14 +160,14 @@
       return tokenRequestPromise;
   }
 
-  // v7.0.6：Drive 回傳 401 時清除舊權杖、嘗試續權一次，再重送原操作。
+  // v8.0.0 RC4：Google 只在使用者主動操作人工備份時要求登入；不再背景靜默續權。
   async function withGoogleAuthRetry(operation) {
       try {
           return await operation();
       } catch (err) {
           if (!isGoogleAuthError(err)) throw err;
           clearGoogleToken();
-          await requestGoogleToken({ interactive:false });
+          await requestGoogleToken({ interactive:true });
           return operation();
       }
   }
@@ -180,15 +180,8 @@
       try {
           await gapi.client.init({ discoveryDocs: [DISCOVERY_DOC] });
           gapiInited = true;
-          
-          if (restoreGoogleToken()) {
-              updateSyncUIConnected();
-              inspectCloudBackup({ source: 'resume' });
-          } else if (gsisInited && localStorage.getItem(GOOGLE_CONNECTED_KEY) === 'true') {
-              requestGoogleToken({ interactive:false })
-                  .then(() => inspectCloudBackup({ source:'resume' }))
-                  .catch(() => clearGoogleToken());
-          }
+          // RC4：刻意不還原權杖、不檢查 Drive，也不觸發帳號選擇視窗。
+          clearGoogleToken();
           maybeEnableSyncUI();
       } catch (err) {
           console.error("GAPI 初始化失敗:", err);
@@ -210,11 +203,7 @@
           });
           gsisInited = true;
           maybeEnableSyncUI();
-          if (gapiInited && !gapi.client?.getToken?.()?.access_token && localStorage.getItem(GOOGLE_CONNECTED_KEY) === 'true') {
-              requestGoogleToken({ interactive:false })
-                  .then(() => inspectCloudBackup({ source:'resume' }))
-                  .catch(() => clearGoogleToken());
-          }
+          // RC4：載入 GIS 只準備人工備份按鈕，不在背景要求或恢復 Google 帳號。
       } catch (err) {
           console.error("GIS 初始化失敗:", err);
       }
@@ -1776,7 +1765,7 @@
       <button onclick="restoreLastSafetySnapshot()">還原最近安全快照</button>
       <button onclick="exportBackupData()">下載本機備份檔</button>
       <button onclick="importBackupData()">還原 JSON 備份檔</button>
-      <button id="gdrive-login-btn" onclick="handleAuthClick()">連接 Google 備份</button>
+      <button id="gdrive-login-btn" onclick="handleAuthClick()">連接 Google 人工備份</button>
       <button id="gdrive-sync-btn" onclick="syncGoogleBackupManual()">手動備份至 Google Drive</button>
       <button onclick="document.getElementById('excel-file-input').click()" style="grid-column: span 2;">📊 匯入 Excel 班表 (.xlsx)</button>
       <button onclick="createTrialProfileLink()" style="grid-column:span 2;background:#6f42c1;color:#fff;">🧪 建立並複製獨立試用網址</button>
