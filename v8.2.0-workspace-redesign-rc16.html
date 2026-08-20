@@ -7445,7 +7445,7 @@ async function initSupabaseV8(){
   if(storeV8Session&&config.url&&config.key){await refreshSupabaseSession();try{await registerSupabaseMember();await refreshCloudSnapshots()}catch(error){console.warn(error);updateSupabaseUI()}}else updateSupabaseUI();
   if(appStorage.getItem('shopee_cloud_pending')==='true')setV81QueuePending();else updateV81SyncCenter();
   // RC16 手機輸入保護：照片區只在資料事件發生時更新；週期刷新不得搬動含焦點的科目卡，否則行動瀏覽器會關閉軟體鍵盤。
-  applyV82SidebarPreference();applyV82Appearance();renderV82ReminderCenter();renderV82ReportPhotos();setInterval(renderV82ReminderCenter,2500);
+  applyV82SidebarPreference();applyV82Appearance();renderV82ReminderCenter();renderV82ReportPhotos();
   if('serviceWorker'in navigator)navigator.serviceWorker.register('./store-app-sw.js').catch(error=>console.warn('Service Worker',error));
 }
 window.addEventListener('online',()=>{updateV81SyncCenter();if(hasV81Pending())setTimeout(()=>syncSupabaseNow(),500)});
