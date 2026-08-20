@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店勤務助手 v8.1.0</title>
+<title>蝦皮智取店勤務助手 v8.2.0 科目附圖 RC14</title>
 
 <!--
   v7.0.0 程式碼註解與維護規則
@@ -1171,6 +1171,282 @@
       overflow-y:auto;
     }
   }
+  /* v8.2.0 UI／UX 候選版：只調整資訊層級與操作體驗，不修改資料鍵或同步流程。 */
+  :root {
+    --ux-navy:#0b172a; --ux-navy-2:#132641; --ux-blue:#2878d0;
+    --ux-orange:#ee4d2d; --ux-radius:16px; --ux-shadow:0 8px 24px rgba(23,43,77,.08);
+  }
+  body { font-size:15px; line-height:1.55; background:#f4f7fb; }
+  .workspace { max-width:1040px; padding:18px 16px 104px; }
+  .main-header { background:linear-gradient(120deg,var(--ux-navy),var(--ux-navy-2)); box-shadow:0 4px 18px rgba(8,23,44,.22); }
+  .main-header h1 { font-size:18px !important; }
+  .main-nav { gap:5px; }
+  .nav-btn { min-height:44px; border-radius:10px 10px 0 0; opacity:.78; }
+  .nav-btn.active { opacity:1; background:rgba(255,255,255,.12); box-shadow:inset 0 -3px 0 var(--ux-orange); }
+  .card { border:1px solid rgba(137,156,185,.28); border-radius:var(--ux-radius); box-shadow:var(--ux-shadow); padding:18px; }
+  .card > h3 { font-size:16px; letter-spacing:.2px; }
+  button { min-height:40px; border-radius:10px !important; font-weight:800; }
+  input, select, textarea { min-height:44px; border-radius:10px !important; font-size:15px !important; }
+  label { font-size:13px; margin-bottom:5px; }
+
+  /* 首頁：以目前勤務與下一步為唯一視覺主角。 */
+  .today-hero { border-radius:20px; background:linear-gradient(125deg,#b93822 0%,#e65b32 72%,#f18b45 100%); box-shadow:0 12px 30px rgba(202,67,38,.23); }
+  .today-card { margin-top:14px; }
+  .today-loc { font-size:22px; line-height:1.25; margin:5px 0; }
+  .duty-command { border:1px solid rgba(40,120,208,.22); border-radius:14px; background:linear-gradient(145deg,rgba(40,120,208,.07),var(--ops-surface)); }
+  .duty-command-head h3 { font-size:19px; margin:3px 0; }
+  .duty-command-actions { grid-template-columns:minmax(160px,2fr) repeat(3,minmax(88px,1fr)); }
+  .duty-command-actions .main { background:linear-gradient(135deg,var(--ux-orange),#d83a20); box-shadow:0 6px 14px rgba(238,77,45,.22); }
+  .next-action-card { border-left:4px solid var(--ux-blue); padding-left:14px; }
+  .smart-dashboard { gap:10px; }
+  .smart-metric { padding:13px; border-radius:14px; background:var(--ops-surface); box-shadow:0 3px 10px rgba(23,43,77,.05); }
+  .smart-metric span { font-size:11px; }
+  .smart-metric b { font-size:22px; }
+  .home-overview-chip { min-height:42px; padding:9px 12px; font-size:13px; }
+  .home-quick-tools button { min-height:48px; font-size:13px; background:var(--ux-navy-2); }
+  #today-tab.active { display:flex; flex-direction:column; }
+  #today-tab .today-hero { order:1; }
+  #today-route-workspace { order:2; }
+  #v82-alert-panel { order:3; }
+  #today-tab .today-card { order:4; }
+  #today-tab > section:not(.today-hero):not(#today-route-workspace):not(#v82-alert-panel):not(.today-card) { order:5; }
+  #today-route-workspace { border:0; background:transparent; box-shadow:none; padding:2px 0 0; }
+  #today-route-workspace > h3 { display:flex; align-items:flex-end; justify-content:space-between; margin:0 2px 10px; border:0; }
+  #today-route-workspace > h3::after { content:'依班表順序'; color:var(--ops-muted); font-size:11px; font-weight:700; }
+  #today-route-workspace .duty-timeline { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
+  #today-route-workspace .duty-stop { position:relative; display:block; min-height:150px; padding:15px; border:1px solid var(--ops-border); border-radius:16px; background:var(--ops-surface); box-shadow:var(--ux-shadow); }
+  #today-route-workspace .duty-stop::before { content:''; position:absolute; top:0; left:18px; right:18px; height:4px; border-radius:0 0 6px 6px; background:#cbd5e1; }
+  #today-route-workspace .duty-stop.active::before { background:var(--ux-orange); }
+  #today-route-workspace .duty-stop.ready::before { background:var(--ux-blue); }
+  #today-route-workspace .stop-dot { width:32px; height:32px; margin-bottom:8px; border-radius:10px; background:var(--ux-navy-2); color:#fff; display:grid; place-items:center; font-size:13px; }
+  #today-route-workspace .stop-name { font-size:18px; }
+  #today-route-workspace .stop-action { position:absolute; top:16px; right:14px; }
+  #today-route-workspace .visit-actions { margin-top:12px; }
+  #v82-alert-panel { border:1px solid rgba(245,158,11,.3); background:linear-gradient(145deg,#fffbeb,var(--ops-surface)); }
+  [data-theme="dark"] #v82-alert-panel { background:linear-gradient(145deg,#322610,var(--ops-surface)); }
+  .v82-alert-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .v82-alert-list { display:grid; gap:7px; margin-top:10px; }
+  .v82-alert-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:11px; background:var(--ops-surface); border:1px solid var(--ops-border); font-size:13px; }
+  .v82-alert-item b { color:#b45309; }
+
+  /* 回報：危險操作退居次要，主要完成操作維持拇指可及。 */
+  #report-tab > h2 { text-align:left !important; font-size:20px !important; color:var(--ops-text) !important; }
+  .storage-btn-group { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+  .storage-btn-group button { min-width:0; min-height:46px; }
+  .storage-btn-group .btn-clear-form,.storage-btn-group .btn-clear-data { background:var(--ops-surface); border:1px solid currentColor; }
+  .storage-btn-group .btn-clear-form { color:#b45309; }
+  .storage-btn-group .btn-clear-data { color:var(--ops-danger); }
+  .report-save-status { border-radius:14px; padding:12px 14px; }
+  .bottom-action-bar { border-radius:16px 16px 0 0; box-shadow:0 -8px 24px rgba(10,25,48,.14); }
+  .bottom-action-main button { min-height:48px; }
+
+  /* 同步中心：健康狀態先讀，歷程與維護其次。 */
+  #sync-safety-center { border:0 !important; border-radius:16px !important; background:linear-gradient(145deg,#eef6ff,#fff) !important; box-shadow:0 7px 22px rgba(40,120,208,.10); }
+  [data-theme="dark"] #sync-safety-center { background:linear-gradient(145deg,#142b46,#111d2e) !important; }
+  .ux-sync-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .ux-sync-health { display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:999px; background:rgba(18,161,80,.11); color:var(--ops-success); font-size:11px; font-weight:900; }
+  .ux-sync-health::before { content:''; width:8px; height:8px; border-radius:50%; background:currentColor; }
+  .ux-sync-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-top:12px; }
+  .ux-sync-metric { min-width:0; padding:11px; border:1px solid rgba(147,197,253,.38); border-radius:12px; background:var(--ops-card); }
+  .ux-sync-metric small { color:var(--ops-muted); font-weight:800; }
+  .ux-sync-metric b { display:block; margin-top:4px; font-size:14px; overflow-wrap:anywhere; }
+  .ux-advanced { margin-top:10px; border-top:1px solid var(--ops-border); }
+  .ux-advanced summary { padding:11px 2px 2px; cursor:pointer; color:var(--ux-blue); font-size:13px; font-weight:900; }
+  #sync-snapshot-list > div { border-radius:10px; padding:9px 0 !important; }
+  #supabase-members { margin-top:14px !important; }
+  #supabase-members > b { display:block; margin-bottom:7px; font-size:15px !important; }
+  #supabase-members > div { grid-template-columns:minmax(0,1fr) 110px 74px 72px !important; min-height:54px; padding:9px !important; border:1px solid var(--ops-border) !important; border-radius:12px; margin-top:7px; background:var(--ops-surface); }
+
+  @media (max-width:700px) {
+    body { font-size:15px; }
+    .workspace { padding:12px 10px 118px; }
+    .main-header > div:first-child { padding-left:12px !important; }
+    .main-header h1 { font-size:15px !important; }
+    .main-nav { position:fixed; left:0; right:0; bottom:0; z-index:80; padding:6px 5px calc(6px + env(safe-area-inset-bottom)); background:rgba(11,23,42,.97); box-shadow:0 -6px 22px rgba(6,18,35,.22); overflow-x:auto; }
+    .nav-btn { flex:0 0 58px; min-width:58px; min-height:54px; border-radius:10px !important; font-size:10px; }
+    .nav-btn.active { background:rgba(238,77,45,.18); box-shadow:inset 0 0 0 1px rgba(238,77,45,.45); }
+    .today-hero { margin:10px 0 12px; padding:18px; }
+    .today-title { font-size:21px; }
+    .live-clock-time { font-size:23px; }
+    .card { padding:14px; border-radius:14px; margin-bottom:12px; }
+    .duty-command-actions { grid-template-columns:repeat(3,1fr); }
+    .duty-command-actions .main { grid-column:1/-1; }
+    .smart-dashboard { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .storage-btn-group { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .storage-btn-group .btn-save-sync { grid-column:1/-1; }
+    #today-route-workspace .duty-timeline { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; padding:1px 2px 10px; }
+    #today-route-workspace .duty-stop { flex:0 0 84vw; max-width:360px; scroll-snap-align:start; }
+    .ux-sync-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    #supabase-members > div { grid-template-columns:minmax(0,1fr) 94px !important; }
+    #supabase-members > div > input,#supabase-members > div > button { justify-self:start; }
+    .report-jump-controls { bottom:78px; }
+  }
+  /* v8.2.0 RC2：改變整個應用骨架，而非延續原版頂欄與橘色大橫幅。 */
+  @media (min-width:901px) {
+    body { padding-left:176px; background:#f5f7fa; transition:padding-left .2s ease; }
+    .main-header { position:fixed; inset:0 auto 0 0; z-index:90; width:176px; padding:18px 10px; display:flex; flex-direction:column; align-items:stretch; background:#101d31; box-shadow:8px 0 30px rgba(15,29,49,.12); transition:width .2s ease; }
+    .main-header > div:first-child { max-width:none; margin:0 !important; padding:0 6px 16px !important; text-align:left !important; }
+    .main-header h1 { display:block; font-size:15px !important; line-height:1.45; }
+    .main-header h1::after { display:inline-block; margin-left:5px; vertical-align:middle; }
+    .main-nav { position:static; inset:auto; width:auto; height:auto; padding:0; display:flex; flex-direction:column; gap:5px; overflow:visible; background:transparent; border:0; box-shadow:none; backdrop-filter:none; }
+    .nav-btn { width:100%; min-height:44px; padding:7px 10px; flex:0 0 auto; flex-direction:row; justify-content:flex-start; gap:10px; border-radius:11px !important; opacity:.72; color:#d3dbea; }
+    .nav-btn .nav-icon { width:24px; font-size:18px; }
+    .nav-btn.active { opacity:1; background:#233a5e; box-shadow:inset 3px 0 0 #48c6b0; }
+    #v82-sidebar-toggle { display:flex; align-items:center; justify-content:center; width:100%; min-height:36px; margin:auto 0 0; border:1px solid rgba(255,255,255,.18); background:transparent; color:#d3dbea; font-size:12px; }
+    body.v82-sidebar-collapsed { padding-left:64px; }
+    body.v82-sidebar-collapsed .main-header { width:64px; padding-inline:7px; }
+    body.v82-sidebar-collapsed .main-header > div:first-child { padding:4px 0 14px !important; text-align:center !important; }
+    body.v82-sidebar-collapsed .main-header h1 { font-size:0 !important; }
+    body.v82-sidebar-collapsed .main-header h1::first-letter { font-size:18px; }
+    body.v82-sidebar-collapsed .main-header h1::after { content:'OPS'; display:block; margin:6px 0 0; font-size:8px; }
+    body.v82-sidebar-collapsed .nav-btn { justify-content:center; padding-inline:0; font-size:0; }
+    body.v82-sidebar-collapsed .nav-btn .nav-icon { width:auto; font-size:20px; }
+    body.v82-sidebar-collapsed #v82-sidebar-toggle { font-size:0; }
+    body.v82-sidebar-collapsed #v82-sidebar-toggle::after { content:'›'; font-size:20px; }
+    .workspace { max-width:1180px; margin:0 auto; padding:22px 28px 70px; }
+    #trial-profile-banner { margin-left:0; }
+    #v82-candidate-banner { max-width:1180px !important; margin:14px auto 0 !important; padding:0 28px !important; }
+  }
+  body { --ops-orange:#ef5b3f; --ops-info:#2563a9; }
+  .today-hero { min-height:116px; align-items:center; padding:22px 24px; color:var(--ops-text); border:1px solid var(--ops-border); background:var(--ops-surface); box-shadow:0 8px 28px rgba(15,29,49,.07); }
+  .today-hero::before { content:'今日工作台'; position:absolute; top:18px; right:132px; color:#2b6a8f; font-size:11px; font-weight:900; letter-spacing:1px; }
+  .today-date { color:var(--ops-muted) !important; }
+  .today-title { color:var(--ops-text) !important; font-size:26px; }
+  .today-hero .status-badge { background:#eaf7f3; color:#167565; }
+  .live-clock-box { min-width:132px; border:0; background:#11233d; color:#fff; box-shadow:none; backdrop-filter:none; -webkit-backdrop-filter:none; }
+  .live-clock-box:hover,.live-clock-box:active,.live-clock-box:focus,.live-clock-box:focus-visible { background:#11233d; color:#fff; outline:2px solid transparent; transform:none; }
+  .live-clock-time,.live-clock-meta { color:#fff !important; }
+  @media (hover:hover) and (pointer:fine) { .live-clock-box:hover { background:#193455; transform:scale(1.01); } }
+  #today-route-workspace > h3 { font-size:20px; }
+  #today-route-workspace .duty-stop { border:0; box-shadow:0 8px 25px rgba(15,29,49,.08); }
+  #today-route-workspace .duty-stop::before { left:0; right:auto; bottom:0; width:5px; height:auto; border-radius:16px 0 0 16px; background:#9aa9bb; }
+  #today-route-workspace .duty-stop.active::before { background:#48b6a3; }
+  #today-route-workspace .duty-stop.ready::before { background:#3478b8; }
+  #v82-alert-panel { border:0; background:#fff; box-shadow:0 8px 25px rgba(15,29,49,.07); }
+  .v82-alert-head small { color:#2b6a8f !important; }
+  .v82-alert-item b { color:#2563a9; }
+  .today-card { border:0; background:#fff; }
+  .duty-command { border:0; background:#f4f7fb; box-shadow:none; }
+  .duty-command-actions .main { background:#ef5b3f; }
+  .primary-action,.btn-save-sync { background:#2563a9 !important; }
+  .card { border-color:#e1e7ef; }
+  .card > h3 { color:#12233d; }
+  .smart-metric { border:0; background:#f4f7fb; box-shadow:none; }
+  .home-quick-tools button { background:#183253; }
+  #sync-safety-center { background:#f3f8fb !important; box-shadow:none; }
+  .ux-sync-health { background:#dff5ee; color:#167565; }
+  .ux-sync-metric { border:0; background:#fff; }
+  .more-tile { border:0; box-shadow:0 6px 18px rgba(15,29,49,.07); }
+  body.v82-rest-day #today-route-workspace { display:none; }
+  body.v82-rest-day #v82-alert-panel { background:linear-gradient(135deg,#eef7f4,#fff); }
+  body.v82-rest-day .today-card .duty-command,
+  body.v82-rest-day .today-card .primary-action,
+  body.v82-rest-day .today-card .smart-dashboard,
+  body.v82-rest-day .today-card .home-overview-panel { display:none !important; }
+  body.v82-rest-day .today-card { padding:22px; background:linear-gradient(135deg,#fff,#f2f7fb); }
+  body.v82-rest-day .today-card::after { content:'今日沒有勤務安排，班表與資料仍可由左側工作區開啟。'; display:block; margin-top:10px; padding:12px 14px; border-radius:12px; background:#eef3f8; color:#52647a; font-size:13px; }
+  @media (max-width:900px) {
+    #v82-sidebar-toggle { display:none; }
+    .today-hero::before { display:none; }
+    .today-hero { min-height:110px; padding:18px; }
+  }
+  /* v8.2.0 RC4：主題可自訂；勤務狀態色只影響辨識區，不覆蓋危險／成功等功能語意色。 */
+  body { --v82-status-accent:#15947d; --v82-status-soft:#e4f6f1; --v82-sidebar:#101d31; --v82-sidebar-active:#233a5e; }
+  .main-header { background:var(--v82-sidebar) !important; }
+  .nav-btn.active { background:var(--v82-sidebar-active) !important; }
+  .today-hero { border-left:6px solid var(--v82-status-accent); background:linear-gradient(110deg,var(--v82-status-soft),var(--ops-surface) 38%) !important; }
+  .today-hero .status-badge { background:var(--v82-status-soft); color:var(--v82-status-accent); }
+  body.v82-work-day #today-route-workspace > h3::after { content:'上班日・依班表順序'; color:var(--v82-status-accent); }
+  body.v82-rest-day #v82-alert-panel { border-left:5px solid var(--v82-status-accent); background:linear-gradient(135deg,var(--v82-status-soft),var(--ops-surface)); }
+  .v82-appearance-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+  .v82-theme-options { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-top:8px; }
+  .v82-theme-option { min-height:54px; padding:8px; border:2px solid transparent; background:var(--ops-bg); color:var(--ops-text); }
+  .v82-theme-option.active { border-color:var(--ops-info); background:rgba(40,120,208,.08); }
+  .v82-theme-swatch { display:block; width:100%; height:12px; margin-bottom:5px; border-radius:999px; }
+  .v82-color-field { display:flex; align-items:center; gap:8px; padding:10px; border:1px solid var(--ops-border); border-radius:12px; background:var(--ops-bg); }
+  .v82-color-field input[type="color"] { width:44px !important; min-width:44px; height:38px; min-height:38px; margin:0; padding:2px; }
+  @media(max-width:700px){.v82-appearance-grid{grid-template-columns:1fr}.v82-theme-options{grid-template-columns:repeat(2,minmax(0,1fr));}}
+  /* RC9：Samsung Chrome 觸控後可能不重繪深色時鐘背景；手機改用整行淺色時鐘列，避免白字白底。 */
+  @media (max-width:700px) {
+    .today-hero { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; align-items:stretch; }
+    .today-hero > div:first-child { min-width:0; }
+    .live-clock-box,
+    .live-clock-box:hover,
+    .live-clock-box:active,
+    .live-clock-box:focus,
+    .live-clock-box:focus-visible {
+      width:100%; min-width:0; box-sizing:border-box; padding:12px 14px;
+      text-align:center; background:#e7eef7 !important; color:#12233d !important;
+      border:1px solid #cbd8e8; border-radius:12px; box-shadow:none;
+      transform:none !important; opacity:1 !important;
+    }
+    .live-clock-time { display:block !important; min-height:28px; color:#12233d !important; font-size:25px; line-height:1.15; opacity:1 !important; visibility:visible !important; }
+    .live-clock-meta { display:flex !important; justify-content:center; min-height:18px; color:#43546b !important; opacity:1 !important; visibility:visible !important; }
+    .clock-mode-badge { background:#c8d3e1; color:#12233d; }
+  }
+  .v82-photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:9px; margin-top:10px; }
+  .v82-photo-item { position:relative; overflow:hidden; min-height:120px; border:1px solid var(--ops-border); border-radius:12px; background:var(--ops-bg); }
+  .v82-photo-item img { width:100%; height:118px; display:block; object-fit:cover; cursor:pointer; }
+  .v82-photo-item small { display:block; padding:6px 8px; color:var(--ops-muted); }
+  .v82-photo-delete { position:absolute; top:6px; right:6px; min-height:30px; padding:4px 8px; border:0; background:rgba(174,35,35,.92); color:#fff; }
+  .v82-photo-subject-picker { display:grid; grid-template-columns:minmax(180px,1fr) auto; gap:8px; align-items:end; margin-top:12px; padding:10px; border:1px solid var(--ops-border); border-radius:11px; background:var(--ops-bg); }
+  .v82-photo-subject-picker label { margin:0; }
+  .v82-photo-subject-picker select { margin:5px 0 0; }
+  .v82-photo-subject-summary { display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
+  .v82-photo-subject-chip { padding:5px 8px; border-radius:999px; background:var(--ops-bg); color:var(--ops-muted); font-size:11px; font-weight:800; }
+  .v82-photo-subject-chip.has-photo { background:#e9f8ef; color:#16834c; }
+  .v82-photo-subject-label { display:block; color:var(--ops-text); font-weight:900; }
+  .rule-center { display:grid; grid-template-columns:230px minmax(0,1fr); gap:14px; margin-bottom:18px; }
+  .rule-categories,.rule-workspace { border:1px solid var(--ops-border); border-radius:14px; background:var(--ops-surface); overflow:hidden; }
+  .rule-center-head { padding:14px 16px; border-bottom:1px solid var(--ops-border); background:linear-gradient(135deg,var(--v82-status-soft),var(--ops-surface)); }
+  .rule-center-head h3 { margin:0; border:0; color:var(--ops-text); }
+  .rule-category-list { display:grid; gap:6px; padding:10px; }
+  .rule-category { display:grid; grid-template-columns:32px minmax(0,1fr) auto; align-items:center; gap:8px; width:100%; padding:11px; border:1px solid transparent; background:transparent; color:var(--ops-text); text-align:left; }
+  .rule-category.active { border-color:var(--v82-status-accent); background:var(--v82-status-soft); }
+  .rule-category small { color:var(--ops-muted); }
+  .rule-toolbar { display:flex; align-items:center; gap:8px; padding:12px; border-bottom:1px solid var(--ops-border); }
+  .rule-toolbar input { flex:1; margin:0; }
+  .rule-table-wrap { overflow:auto; max-height:340px; }
+  .rule-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .rule-table th,.rule-table td { padding:10px 9px; border-bottom:1px solid var(--ops-border); text-align:left; white-space:nowrap; }
+  .rule-table th { position:sticky; top:0; z-index:1; background:var(--ops-bg); color:var(--ops-muted); }
+  .rule-table tr { cursor:pointer; }
+  .rule-table tr.selected { background:var(--v82-status-soft); box-shadow:inset 4px 0 var(--v82-status-accent); }
+  .rule-status { display:inline-flex; padding:3px 8px; border-radius:999px; background:#e9f8ef; color:#16834c; font-weight:900; }
+  .rule-status.off { background:#f1f2f4; color:#7b8493; }
+  .rule-editor { padding:14px; border-top:8px solid var(--ops-bg); }
+  .rule-editor-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+  .rule-editor-actions { display:flex; gap:8px; margin-top:12px; }
+  .rule-editor-actions button { flex:1; }
+  .context-tabs { display:flex; gap:4px; margin:0 0 14px; padding:5px; border:1px solid var(--ops-border); border-radius:12px; background:var(--ops-bg); overflow-x:auto; }
+  .context-tabs button { flex:1 0 auto; min-height:38px; border:0; background:transparent; color:var(--ops-muted); font-weight:900; }
+  .context-tabs button.active { background:var(--ops-surface); color:var(--v82-status-accent); box-shadow:0 2px 8px rgba(15,29,49,.09); }
+  .nav-order-list { display:grid; gap:7px; }
+  .nav-order-item { display:grid; grid-template-columns:34px minmax(0,1fr) auto auto; align-items:center; gap:7px; padding:9px 10px; border:1px solid var(--ops-border); border-radius:10px; background:var(--ops-bg); }
+  .nav-order-item button { min-width:42px; padding:7px; }
+  @media(max-width:700px){
+    .v82-photo-subject-picker { grid-template-columns:1fr; }
+    .v82-photo-subject-picker button { width:100%; }
+    .rule-center { grid-template-columns:1fr; }
+    .rule-category-list { display:flex; overflow-x:auto; }
+    .rule-category { flex:0 0 150px; }
+    .rule-toolbar { flex-wrap:wrap; }
+    .rule-toolbar input { flex-basis:100%; }
+    .rule-table-wrap { max-height:300px; }
+    .rule-editor-grid { grid-template-columns:1fr; }
+    .rule-editor-actions { display:grid; grid-template-columns:1fr 1fr; }
+  }
+  #knowledge-image-status,#v82-report-photo-status { overflow-wrap:anywhere; white-space:normal; line-height:1.55; }
+  .v82-upload-error { margin-top:7px; padding:9px 10px; border:1px solid rgba(198,40,40,.35); border-radius:9px; background:#fff1f1; color:#a92323; }
+  .v82-upload-error summary { cursor:pointer; font-weight:900; }
+  .v82-upload-error code { display:block; margin-top:6px; white-space:pre-wrap; overflow-wrap:anywhere; font-size:10px; }
+  #toast-container .toast { max-width:min(520px,calc(100vw - 24px)); white-space:normal; overflow-wrap:anywhere; }
+  @media(max-width:700px){
+    .workspace { padding-bottom:180px !important; }
+    .site-footer { min-height:170px; padding-bottom:calc(112px + env(safe-area-inset-bottom,0px)) !important; }
+    .report-jump-controls { bottom:150px !important; }
+    body:has(.modal-overlay.active) .report-jump-controls,body:has(.knowledge-modal.active) .report-jump-controls { display:none !important; }
+  }
 </style>
 </head>
 <body>
@@ -1186,21 +1462,23 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 蝦皮智取店勤務助手 v8.1.0
+      📦 智取店勤務助手<br>v8.2.0 工作區
     </h1>
   </div>
   <div class="main-nav">
-    <button class="nav-btn active" onclick="switchMainTab('today-tab', this)"><span class="nav-icon">⌂</span><span>今日</span></button>
-    <button class="nav-btn" onclick="switchMainTab('report-tab', this)"><span class="nav-icon">▣</span><span>回報</span></button>
-    <button class="nav-btn" onclick="switchMainTab('schedule-tab', this)"><span class="nav-icon">▦</span><span>班表</span></button>
-    <button class="nav-btn" onclick="switchMainTab('reports-tab', this)"><span class="nav-icon">▤</span><span>報表</span></button>
-    <button class="nav-btn" onclick="switchMainTab('knowledge-tab', this)"><span class="nav-icon">☷</span><span>資料庫</span></button>
-    <button class="nav-btn" onclick="switchMainTab('tools-tab', this)"><span class="nav-icon">⌗</span><span>工具</span></button>
-    <button class="nav-btn" onclick="switchMainTab('settings-tab', this)"><span class="nav-icon">⚙</span><span>更多</span></button>
+    <button class="nav-btn active" data-nav-tab="today-tab" onclick="switchMainTab('today-tab', this)"><span class="nav-icon">⌂</span><span>今日</span></button>
+    <button class="nav-btn" data-nav-tab="report-tab" onclick="openReportContext('report')"><span class="nav-icon">▣</span><span>回報</span></button>
+    <button class="nav-btn" data-nav-tab="tools-tab" onclick="switchMainTab('tools-tab', this)"><span class="nav-icon">⚒</span><span>小工具</span></button>
+    <button class="nav-btn" data-nav-tab="schedule-tab" onclick="switchMainTab('schedule-tab', this)"><span class="nav-icon">▦</span><span>班表</span></button>
+    <button class="nav-btn" data-nav-tab="reports-tab" onclick="switchMainTab('reports-tab', this)"><span class="nav-icon">▤</span><span>報表</span></button>
+    <button class="nav-btn" data-nav-tab="knowledge-tab" onclick="switchMainTab('knowledge-tab', this)"><span class="nav-icon">☷</span><span>資料庫</span></button>
+    <button class="nav-btn" data-nav-tab="settings-tab" onclick="openMoreContext('overview')"><span class="nav-icon">⚙</span><span>更多</span></button>
   </div>
+  <button id="v82-sidebar-toggle" type="button" onclick="toggleV82Sidebar()" aria-label="收合或展開側邊工作區">收合工具列 ‹</button>
 </div>
 
 <div id="trial-profile-banner" class="trial-profile-banner" role="status"></div>
+<div id="v82-candidate-banner" style="max-width:1040px;margin:10px auto 0;padding:0 16px;"><div style="padding:9px 12px;border:1px solid #93c5fd;border-radius:12px;background:#eff6ff;color:#175fa8;font-size:12px;font-weight:800;">📷 v8.2.0 RC14｜照片改為綁定附圖科目</div></div>
 
 <main class="workspace">
 <div id="today-tab" class="tab-content active" style="padding-top:0;">
@@ -1213,7 +1491,7 @@
         <span id="today-sync-text">檢查中...</span>
       </div>
     </div>
-    <div class="live-clock-box" onclick="toggleClockFormat()" title="點擊切換 12H / 24H 制">
+    <div class="live-clock-box" role="button" tabindex="0" onclick="toggleClockFormat(event)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleClockFormat(event)}" title="點擊切換 12H / 24H 制">
       <div class="live-clock-time" id="live-clock-time">--:--:--</div>
       <div class="live-clock-meta">
         <span id="live-clock-ampm">上午</span>
@@ -1244,9 +1522,14 @@
     </div>
   </section>
 
-  <section class="card">
+  <section class="card" id="today-route-workspace">
     <h3>今日勤務路線</h3>
     <div id="today-reminders" style="font-size:13px;line-height:1.8;color:var(--ops-muted);">完成排班後，系統會在這裡整理今日門市與勤務提醒。</div>
+  </section>
+
+  <section class="card" id="v82-alert-panel">
+    <div class="v82-alert-head"><div><small style="color:#b45309;font-weight:900;">提醒中心</small><h3 style="margin:2px 0 0;border:0;">🔔 漏填與勤務提醒</h3></div><button id="v82-notify-btn" onclick="enableV82Notifications()">開啟通知</button></div>
+    <div id="v82-alert-list" class="v82-alert-list"><div class="v82-alert-item">完成排班後會自動檢查漏填項目。</div></div>
   </section>
 
   <section class="card priority-workbench" id="priority-workbench" style="display:none;">
@@ -1272,6 +1555,7 @@
      【頁籤一：巡店回報系統】
      ========================================================================== -->
 <div id="report-tab" class="tab-content">
+  <div class="context-tabs"><button class="active" onclick="openReportContext('report')">📋 勤務回報</button><button onclick="openReportContext('tools')">🧰 快速工具</button></div>
 
   <h2 style="color: #ee4d2d; font-size: 16px; text-align: center; margin: 5px 0 15px 0;">📋 巡店門市填表與回報區</h2>
   <button id="report-quick-support-btn" class="quick-support-btn" onclick="openQuickSupportDuty()">🤝 新增臨時支援</button>
@@ -1332,7 +1616,7 @@
     <div style="margin-top: 4px;">
       <label>門市 (可選/可輸入)</label>
       <div style="display: flex; gap: 8px; align-items: center;">
-        <input type="text" id="shopName" list="shopList" placeholder="選擇或輸入店名 (如: 福興)" oninput="updateStoreInfo(); autoSave(); updateDraftLabels();" style="flex: 1;">
+        <input type="text" id="shopName" list="shopList" placeholder="選擇或輸入店名 (如: 福興)" oninput="updateStoreInfo(); autoSave(); updateDraftLabels(); renderV82ReportPhotos();" style="flex: 1;">
         <button class="btn-add-support" onclick="addCurrentStoreToScheduleSupport()">+ 追加至今日班表</button>
       </div>
       <datalist id="shopList"></datalist>
@@ -1364,6 +1648,15 @@
         <div id="paper-qr-tools"></div>
       </div>
     </div>
+  </div>
+
+  <div class="card" id="v82-report-photo-card">
+    <div><h3 style="margin:0;border:0;">📷 附圖科目</h3><div style="font-size:11px;color:var(--ops-muted);margin-top:3px;">純附圖勤務只保存「日期、班別、門市、科目與照片」；有文字格式的科目仍使用下方回報表單。</div></div>
+    <div class="v82-photo-subject-picker"><label>這次照片屬於哪個科目？<select id="v82-report-photo-subject" onchange="renderV82ReportPhotos()"><option value="c1">科目1・進店</option><option value="c2">科目2・設備檢查</option><option value="c7">科目7・夜間上架異常</option><option value="c13">科目13・包裹重新整理</option><option value="c16">科目16・離店</option><option value="c17">科目17・關門照</option><option value="c18">科目18・指定門市勤務</option></select></label><button onclick="document.getElementById('v82-report-photo-input').click()">＋ 拍照／選擇照片</button></div>
+    <input id="v82-report-photo-input" type="file" accept="image/*,.heic,.heif" multiple hidden onchange="handleV82ReportPhotos(event)">
+    <div id="v82-report-photo-status" style="font-size:12px;color:var(--ops-muted);margin-top:8px;"></div>
+    <div id="v82-report-photo-summary" class="v82-photo-subject-summary"></div>
+    <div id="v82-report-photo-grid" class="v82-photo-grid"></div>
   </div>
 
   <!-- 📍 科目卡片 (科目 3 ➡️ 15) -->
@@ -1709,8 +2002,39 @@
   </div>
 </div>
 
-<!-- v7.1.7 小工具：基本計算機與獨立秒數計算器，不寫入勤務草稿。 -->
+<!-- RC11：勤務規則屬於管理功能，獨立於小工具頁，避免兩種用途互相占用版面。 -->
+<div id="rules-tab" class="tab-content">
+  <div class="context-tabs"><button onclick="openMoreContext('overview')">功能總覽</button><button class="active" onclick="openMoreContext('rules')">勤務規則</button><button onclick="openMoreContext('settings')">系統設定</button></div>
+  <h2 style="color:#2563a9;font-size:18px;text-align:center;">⚙️ 勤務規則</h2>
+  <section id="duty-rule-center" class="rule-center" aria-label="勤務規則中心">
+    <aside class="rule-categories">
+      <div class="rule-center-head"><h3>⚙️ 勤務規則中心</h3><small>獨立試作資料，不影響現行班表</small></div>
+      <div id="rule-category-list" class="rule-category-list"></div>
+    </aside>
+    <div class="rule-workspace">
+      <div class="rule-toolbar"><input id="rule-search" placeholder="搜尋名稱、代碼或備註" oninput="renderDutyRuleCenter()"><button onclick="newDutyRule()" style="background:var(--ops-info);color:#fff;">＋ 新增</button><button onclick="moveDutyRule(-1)">上移</button><button onclick="moveDutyRule(1)">下移</button></div>
+      <div class="rule-table-wrap"><table class="rule-table"><thead><tr><th>排序</th><th>名稱</th><th>代碼</th><th>時間／週期</th><th>狀態</th></tr></thead><tbody id="rule-table-body"></tbody></table></div>
+      <form class="rule-editor" onsubmit="saveDutyRule(event)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h3 id="rule-editor-title" style="margin:0;border:0;">新增規則</h3><label style="display:flex;align-items:center;gap:6px;margin:0;"><input id="rule-enabled" type="checkbox" style="width:auto;margin:0;" checked> 啟用</label></div>
+        <input id="rule-id" type="hidden">
+        <div class="rule-editor-grid">
+          <div><label>名稱</label><input id="rule-name" required placeholder="例：早班"></div>
+          <div><label>代碼</label><input id="rule-code" placeholder="例：SHIFT-EARLY"></div>
+          <div><label>開始／提醒時間</label><input id="rule-time" type="time"></div>
+          <div><label>週期</label><input id="rule-cycle" placeholder="例：每週四／每日"></div>
+          <div><label>適用班別</label><select id="rule-shift"><option>全天</option><option>早班</option><option>晚班</option></select></div>
+          <div><label>排序</label><input id="rule-order" type="number" min="1" value="1"></div>
+        </div>
+        <label>說明／備註</label><textarea id="rule-note" rows="2" placeholder="規則用途或執行重點"></textarea>
+        <div class="rule-editor-actions"><button type="submit" style="background:var(--ops-success);color:#fff;">儲存規則</button><button type="button" onclick="duplicateDutyRule()">複製</button><button type="button" onclick="deleteDutyRule()" style="background:var(--ops-danger);color:#fff;">刪除</button><button type="button" onclick="resetDutyRuleDraft()">清空</button></div>
+      </form>
+    </div>
+  </section>
+</div>
+
+<!-- v7.1.7 小工具：只保留基本計算機與獨立秒數計算器，不寫入勤務草稿。 -->
 <div id="tools-tab" class="tab-content">
+  <div class="context-tabs"><button onclick="openReportContext('report')">📋 勤務回報</button><button class="active" onclick="openReportContext('tools')">🧰 快速工具</button></div>
   <h2 style="color:#7c3aed;font-size:18px;text-align:center;">🧰 小工具</h2>
   <div class="tool-grid">
     <section class="card">
@@ -1737,18 +2061,44 @@
 
 <!-- 📍 設定頁面 -->
 <div id="settings-tab" class="tab-content">
+  <div class="context-tabs"><button class="active" onclick="openMoreContext('overview')">功能總覽</button><button onclick="openMoreContext('rules')">勤務規則</button><button onclick="openMoreContext('settings')">系統設定</button></div>
   <!-- v7.0.0 更多中心：把日常工具、基礎資料、備份與設定分流，避免所有功能堆成單一長頁。 -->
   <div class="more-hero"><h2>更多</h2><p>管理門市、設備、QR、備份與各項功能設定</p></div>
   <div class="more-grid">
+    <button class="more-tile" onclick="openDutyRuleCenter()">⚙️<b>勤務規則中心</b><small>班別、週期勤務與提醒規則</small></button>
     <button class="more-tile" onclick="openDeviceVaultManager()">🔐<b>設備資料</b><small>新增、編輯、刪除與門市共用</small></button>
     <button class="more-tile" onclick="focusMoreSection('arrival-tools-card')">▣<b>QR 管理</b><small>到離店條碼與紙捲蓋綁定</small></button>
     <button class="more-tile" onclick="switchMainTab('knowledge-tab',navButtonFor('knowledge-tab'))">☷<b>勤務資料庫</b><small>SOP、注意事項與異常排除</small></button>
     <button class="more-tile" onclick="openIncidentList()">⚠<b>異常與交接</b><small>未排除事件與下班交接</small></button>
     <button class="more-tile" onclick="selectSettingsGroup('global')">🌐<b>應用程式全域</b><small>同步、外觀、安全與儲存</small></button>
     <button class="more-tile" onclick="selectSettingsGroup('feature')">🧩<b>各項功能設定</b><small>門市、QR 與勤務規則</small></button>
+    <button class="more-tile" onclick="openNavigationOrderManager()">↕<b>導覽排序</b><small>調整左側與手機主頁簽順序</small></button>
   </div>
+  <section id="navigation-order-card" class="card" style="display:none;">
+    <h3>↕ 主導覽排序</h3><p style="font-size:12px;color:var(--ops-muted);">可調整七個主要頁簽的顯示順序；小工具維持獨立頁簽，勤務規則整併於更多。</p>
+    <div id="navigation-order-list" class="nav-order-list"></div>
+    <button onclick="resetNavigationOrder()" style="margin-top:10px;">恢復預設順序</button>
+  </section>
   <div class="settings-center-tabs"><button id="settings-global-btn" class="active" onclick="selectSettingsGroup('global')">🌐 全域設定</button><button id="settings-feature-btn" onclick="selectSettingsGroup('feature')">🧩 功能設定</button></div>
   <div id="settings-search-wrap" class="card" style="padding:10px;"><input id="settings-search" placeholder="搜尋設定，例如：雲端、門市、QR…" oninput="filterSettingsCards()" style="margin:0;"></div>
+
+  <div class="card settings-section" data-settings-group="global">
+    <h3>🎨 介面外觀與勤務狀態色</h3>
+    <p style="font-size:12px;color:var(--ops-muted);">主題控制側欄與工作區風格；狀態色會依今日班表自動套用，讓上班與休假一眼可辨識。</p>
+    <label>工作區主題</label>
+    <div class="v82-theme-options" id="v82-theme-options">
+      <button class="v82-theme-option" data-theme-id="ocean" onclick="setV82Theme('ocean')"><span class="v82-theme-swatch" style="background:linear-gradient(90deg,#101d31,#2878d0)"></span>深海藍</button>
+      <button class="v82-theme-option" data-theme-id="sky" onclick="setV82Theme('sky')"><span class="v82-theme-swatch" style="background:linear-gradient(90deg,#1e4d6b,#61a9d6)"></span>晴空藍</button>
+      <button class="v82-theme-option" data-theme-id="forest" onclick="setV82Theme('forest')"><span class="v82-theme-swatch" style="background:linear-gradient(90deg,#173b35,#42a58b)"></span>森林綠</button>
+      <button class="v82-theme-option" data-theme-id="violet" onclick="setV82Theme('violet')"><span class="v82-theme-swatch" style="background:linear-gradient(90deg,#2e2448,#8367c7)"></span>紫灰</button>
+    </div>
+    <div class="v82-appearance-grid" style="margin-top:12px;">
+      <label class="v82-color-field"><input id="v82-work-color" type="color" value="#15947d" onchange="saveV82Appearance()"><span><b>上班日顏色</b><br><small>預設藍綠色</small></span></label>
+      <label class="v82-color-field"><input id="v82-rest-color" type="color" value="#7764b5" onchange="saveV82Appearance()"><span><b>休假日顏色</b><br><small>預設柔和紫色</small></span></label>
+      <label class="v82-color-field"><input id="v82-auto-status" type="checkbox" checked onchange="saveV82Appearance()"><span><b>依班表自動切換</b><br><small>關閉後固定使用上班色</small></span></label>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"><button onclick="saveV82Appearance()" style="background:#2563a9;color:#fff;">套用外觀</button><button onclick="resetV82Appearance()">恢復預設</button></div>
+  </div>
   
   <div class="card settings-section" data-settings-group="global">
     <h3>☁️ Supabase 帳號與同步</h3>
@@ -1776,16 +2126,19 @@
     <div id="cloud-location-info" style="margin-top:10px;padding:10px;border:1px solid var(--ops-border);border-radius:8px;background:var(--ops-bg);font-size:12px;line-height:1.65;color:var(--ops-text);">
       <b>Supabase 狀態：</b><span id="supabase-account-status">尚未登入</span><br><b>雲端版本：</b><span id="supabase-cloud-version">—</span><br><b>同步狀態：</b><span id="supabase-sync-status">本機模式</span>
     </div>
-    <div id="sync-safety-center" style="margin-top:10px;padding:12px;border:1px solid #93c5fd;border-radius:10px;background:linear-gradient(135deg,#eff6ff,#fff);">
-      <b style="color:#175fa8;">🛡️ 同步與資料安全中心</b>
-      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px;font-size:12px;">
-        <div style="padding:8px;background:var(--ops-card);border-radius:8px"><small>網路狀態</small><br><b id="sync-network-state">檢查中</b></div>
-        <div style="padding:8px;background:var(--ops-card);border-radius:8px"><small>待同步項目</small><br><b id="sync-queue-count">0</b></div>
-        <div style="padding:8px;background:var(--ops-card);border-radius:8px"><small>最後成功同步</small><br><b id="sync-last-success">—</b></div>
-        <div style="padding:8px;background:var(--ops-card);border-radius:8px"><small>待同步起始</small><br><b id="sync-pending-since">—</b></div>
+    <div id="sync-safety-center" style="margin-top:10px;padding:14px;">
+      <div class="ux-sync-head"><b style="color:#175fa8;">🛡️ 同步與資料安全中心</b><span class="ux-sync-health">自動保護中</span></div>
+      <div class="ux-sync-grid" aria-label="同步健康摘要">
+        <div class="ux-sync-metric"><small>網路狀態</small><b id="sync-network-state">檢查中</b></div>
+        <div class="ux-sync-metric"><small>待同步</small><b id="sync-queue-count">0</b></div>
+        <div class="ux-sync-metric"><small>最後同步</small><b id="sync-last-success">—</b></div>
+        <div class="ux-sync-metric"><small>等待起始</small><b id="sync-pending-since">—</b></div>
       </div>
-      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px"><button onclick="retrySupabaseQueue()">重試待同步</button><button onclick="refreshCloudSnapshots()">重新整理雲端快照</button></div>
-      <div id="sync-snapshot-list" style="margin-top:9px;font-size:12px;color:var(--ops-muted);">登入後可查看最近 20 份雲端快照。</div>
+      <details class="ux-advanced">
+        <summary>快照與進階同步管理</summary>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px"><button onclick="retrySupabaseQueue()">重試待同步</button><button onclick="refreshCloudSnapshots()">重新整理雲端快照</button></div>
+        <div id="sync-snapshot-list" style="margin-top:9px;font-size:12px;color:var(--ops-muted);">登入後可查看最近 20 份雲端快照。</div>
+      </details>
     </div>
     <div id="supabase-members" style="margin-top:10px;"></div>
     <p style="font-size:11px;color:#b45309;background:#fff7ed;padding:8px;border-radius:7px;">Google Drive 自 v8.0.0 起只作人工備份；日常跨裝置同步以 Supabase 為準。</p>
@@ -1835,7 +2188,7 @@
   <div class="card settings-section" data-settings-group="global">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v8.1.0（2026/08/16） Sync Safety Center</div>
+      <div><b>目前版本：</b> v8.2.0 科目附圖 RC14（2026/08/21）</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -1971,7 +2324,7 @@
     <div id="knowledge-steps-fields"><label>作業步驟</label><div id="knowledge-step-editor"></div><button onclick="addKnowledgeStep()" style="margin-top:7px;">＋ 新增步驟</button></div>
     <div id="knowledge-layout-fields" hidden><label>配置圖重點（每行一點，可被搜尋）</label><textarea id="knowledge-layout-points" rows="5" placeholder="例：司機進貨處保留 2～3 落空間&#10;宅配滯留區依圖示位置擺放"></textarea><p style="font-size:11px;color:var(--ops-muted);margin:5px 0 0;">請先在手機或圖片工具完成框線與文字標註，再上傳整張配置圖。</p></div>
     <label id="knowledge-image-label" style="margin-top:10px;">原始照片（選填，收合保存）</label>
-    <input id="knowledge-image-file" type="file" accept="image/*" onchange="handleKnowledgeImage(event)">
+    <input id="knowledge-image-file" type="file" accept="image/*,.heic,.heif" onchange="handleKnowledgeImage(event)">
     <div id="knowledge-image-status" style="font-size:11px;color:var(--ops-muted);"></div>
     <div style="display:flex;gap:8px;margin-top:14px;">
       <button onclick="saveKnowledgeEntry()" style="flex:1;background:#7c3aed;color:#fff;">儲存資料</button>
@@ -2644,9 +2997,8 @@ function filterSettingsCards() {
 function focusMoreSection(id) { selectSettingsGroup('feature'); setTimeout(() => document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'}), 80); }
 
 function navButtonFor(tabId) {
-  return Array.from(document.querySelectorAll('.nav-btn')).find(btn =>
-    btn.getAttribute('onclick')?.includes(`'${tabId}'`)
-  );
+  return Array.from(document.querySelectorAll('.nav-btn')).find(btn => btn.dataset.navTab===tabId) ||
+    Array.from(document.querySelectorAll('.nav-btn')).find(btn => btn.getAttribute('onclick')?.includes(`'${tabId}'`));
 }
 
 function initLiveClock() {
@@ -2682,9 +3034,16 @@ function initLiveClock() {
   setInterval(updateClock, 1000);
 }
 
-function toggleClockFormat() {
+function toggleClockFormat(event) {
   is12HourFormat = !is12HourFormat;
   appStorage.setItem('clock_format_12h', is12HourFormat);
+  const clockBox=event?.currentTarget;
+  if(clockBox){clockBox.style.background='#11233d';requestAnimationFrame(()=>clockBox.blur?.());}
+  const now=new Date(),hours=now.getHours(),minutes=String(now.getMinutes()).padStart(2,'0'),seconds=String(now.getSeconds()).padStart(2,'0');
+  const timeEl=document.getElementById('live-clock-time'),ampmEl=document.getElementById('live-clock-ampm'),modeEl=document.getElementById('live-clock-mode');
+  if(timeEl)timeEl.textContent=is12HourFormat?`${String(hours%12||12).padStart(2,'0')}:${minutes}:${seconds} ${hours>=12?'PM':'AM'}`:`${String(hours).padStart(2,'0')}:${minutes}:${seconds}`;
+  if(ampmEl)ampmEl.textContent=is12HourFormat?(hours>=12?'下午':'上午'):((hours>=6&&hours<18)?'日間':'夜間');
+  if(modeEl)modeEl.textContent=is12HourFormat?'12H':'24H';
   showToast(`⏰ 已切換為 ${is12HourFormat ? '12 小時制' : '24 小時制'}`);
 }
 
@@ -3131,6 +3490,10 @@ function renderTodayDashboard() {
   const weekNames = ['日','一','二','三','四','五','六'];
   const schedule = JSON.parse(appStorage.getItem('shopee_user_schedule') || '{}');
   const dayData = schedule[todayKey];
+  // v8.2.0 RC2：休假日切換為精簡休息模式，不顯示無意義的勤務操作區。
+  const isRestDay=Boolean(dayData&&(dayData.isOff||String(dayData.loc||'').toUpperCase()==='X'));
+  document.body.classList.toggle('v82-rest-day',isRestDay);document.body.classList.toggle('v82-work-day',Boolean(dayData&&!isRestDay));
+  applyV82Appearance();
   const dateLabel = document.getElementById('today-date-label');
   const locLabel = document.getElementById('today-location-label');
   const shiftLabel = document.getElementById('today-shift-label');
@@ -6427,7 +6790,8 @@ let activeKnowledgeCategory='全部',editingKnowledgeImage='',editingKnowledgeIm
 const DEFAULT_KNOWLEDGE_ENTRY={id:'default-priority-sop',title:'上架／打包優先順序',category:'SOP 作業流程',shift:'全天',stores:[],priority:'重要',versionDate:'2026-02-02',keywords:['SCS','NDD','FBS','HD','上架','打包'],note:'依現場公告整理；早、晚班請依標示時效優先處理。',pinned:true,image:'',imageRef:'default-sop',steps:[
   {text:'黑箱上架',timing:'早班 12:00 前／晚班 21:00 前'},{text:'SCS HD 包裝',timing:'早班 10:00 前／晚班 21:00 前'},{text:'SCS HD 上架 HD 櫃',timing:'早班 11:00–12:00'},{text:'NDD 上架',timing:'晚班 21:30 前'},{text:'標準配送上架',timing:'依當日到貨'},{text:'NDD／FBS 打包',timing:'晚班 19:00–20:00'},{text:'標準配送打包',timing:'依現場作業'},{text:'一般 HD 上架 HD 櫃',timing:'晚班 21:00–23:00'},{text:'包裹重新分配',timing:'早晚班皆適用'},{text:'標準配送上架',timing:'上架至滿櫃'}]};
 // v7.0.0 用途：內建 SOP 公告以代號引用 HTML 圖片；舊版重複保存的同圖 Base64 會自動移除。
-function resolveKnowledgeImage(entry){return entry?.image||(entry?.imageRef==='default-sop'?DEFAULT_SOP_IMAGE:'');}
+const V82_PHOTO_BUCKET='store-app-photos',V82_PHOTO_URL_CACHE=new Map(),V82_PHOTO_SIGNING=new Set();
+function resolveKnowledgeImage(entry){if(entry?.image)return entry.image;if(entry?.imageRef==='default-sop')return DEFAULT_SOP_IMAGE;if(String(entry?.imageRef||'').startsWith('storage:')){const path=entry.imageRef.slice(8),cached=V82_PHOTO_URL_CACHE.get(path);if(cached)return cached;hydrateV82PhotoUrl(path,()=>renderKnowledgeBase());}return'';}
 function getKnowledgeEntries(){let items=[];try{items=JSON.parse(appStorage.getItem(KNOWLEDGE_KEY)||'[]');}catch(_){}if(!Array.isArray(items))items=[];const oldDefault=items.find(x=>x.id===DEFAULT_KNOWLEDGE_ENTRY.id);if(oldDefault&&oldDefault.image===DEFAULT_SOP_IMAGE){oldDefault.image='';oldDefault.imageRef='default-sop';saveKnowledgeEntries(items);}if(!oldDefault){items.unshift({...DEFAULT_KNOWLEDGE_ENTRY,stores:[],keywords:[...DEFAULT_KNOWLEDGE_ENTRY.keywords],steps:DEFAULT_KNOWLEDGE_ENTRY.steps.map(x=>({...x}))});saveKnowledgeEntries(items);}return items;}
 function saveKnowledgeEntries(items){appStorage.setItem(KNOWLEDGE_KEY,JSON.stringify(items));markCloudPending();}
 // v7.0.0 分類設定：使用 shopee_ 前綴跟隨一般備份；首次使用以內建分類初始化，之後完全依使用者清單呈現。
@@ -6476,8 +6840,8 @@ function filterKnowledgeStores(){const q=(document.getElementById('knowledge-sto
 function renderKnowledgeStepEditor(){document.getElementById('knowledge-step-editor').innerHTML=knowledgeStepDraft.map((s,i)=>`<div class="sop-step-editor"><b>${i+1}</b><div><input value="${escapeStoreHTML(s.text)}" placeholder="步驟內容" oninput="knowledgeStepDraft[${i}].text=this.value"><input value="${escapeStoreHTML(s.timing||'')}" placeholder="時效（選填）" oninput="knowledgeStepDraft[${i}].timing=this.value" style="margin-top:4px;"></div><button onclick="removeKnowledgeStep(${i})">✕</button></div>`).join('');}
 function addKnowledgeStep(){knowledgeStepDraft.push({text:'',timing:''});renderKnowledgeStepEditor();}
 function removeKnowledgeStep(i){knowledgeStepDraft.splice(i,1);if(!knowledgeStepDraft.length)knowledgeStepDraft.push({text:'',timing:''});renderKnowledgeStepEditor();}
-function handleKnowledgeImage(event){const f=event.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=()=>{const img=new Image();img.onload=()=>{const scale=Math.min(1,1400/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);editingKnowledgeImage=c.toDataURL('image/jpeg',.82);editingKnowledgeImageRef='';updateKnowledgeImageStatus();};img.src=r.result;};r.readAsDataURL(f);}
-function updateKnowledgeImageStatus(){const e=document.getElementById('knowledge-image-status'),has=editingKnowledgeImage||editingKnowledgeImageRef;if(e)e.innerHTML=has?`已附加${editingKnowledgeContentType==='layout-map'?'位置配置圖':'原始照片'} <button onclick="editingKnowledgeImage='';editingKnowledgeImageRef='';updateKnowledgeImageStatus()">移除照片</button>`:`尚未附加${editingKnowledgeContentType==='layout-map'?'配置圖':'照片'}`;}
+function handleKnowledgeImage(event){const f=event.target.files?.[0];if(!f)return;const status=document.getElementById('knowledge-image-status');if(status)status.textContent=isV82HeicFile(f)?'HEIC 轉換 JPEG 中…':'圖片壓縮中…';compressV82Photo(f,1400,.82).then(async({blob,preview})=>{editingKnowledgeImage=preview;editingKnowledgeImageRef='';updateKnowledgeImageStatus('uploading');try{const path=await uploadV82PhotoBlob(blob,'sop');V82_PHOTO_URL_CACHE.set(path,preview);editingKnowledgeImage='';editingKnowledgeImageRef=`storage:${path}`;updateKnowledgeImageStatus('cloud')}catch(error){console.warn(error);const message=formatV82PhotoError(error);updateKnowledgeImageStatus('local',message);showToast('⚠️ 雲端上傳失敗，已保留本機 JPEG。',5000)}}).catch(error=>{if(status)status.textContent='照片處理失敗：'+error.message;showToast('無法處理這張圖片：'+error.message,5000)});}
+function updateKnowledgeImageStatus(mode='',detail=''){const e=document.getElementById('knowledge-image-status'),has=editingKnowledgeImage||editingKnowledgeImageRef;if(!e)return;const cloud=String(editingKnowledgeImageRef).startsWith('storage:'),errorHtml=detail?`<details class="v82-upload-error" open><summary>雲端上傳失敗，照片目前只在本機</summary><code>${escapeStoreHTML(detail)}</code></details>`:'';e.innerHTML=has?`${mode==='uploading'?'JPEG 上傳私有雲端中…':cloud?'☁️ 已轉為 JPEG 並存入私有雲端':'💾 已轉為 JPEG，暫存本機'} <button onclick="editingKnowledgeImage='';editingKnowledgeImageRef='';updateKnowledgeImageStatus()">移除照片</button>${errorHtml}`:`尚未附加${editingKnowledgeContentType==='layout-map'?'配置圖':'照片'}`;}
 function saveKnowledgeEntry(){const title=document.getElementById('knowledge-title').value.trim();if(!title)return showToast('請輸入標題。');if(editingKnowledgeContentType==='layout-map'&&!editingKnowledgeImage&&!editingKnowledgeImageRef)return showToast('位置配置圖模式必須附加圖片。');const id=document.getElementById('knowledge-edit-id').value||`kb-${Date.now()}`,items=getKnowledgeEntries(),old=items.find(x=>x.id===id),entry={id,title,contentType:editingKnowledgeContentType,category:document.getElementById('knowledge-category').value,shift:document.getElementById('knowledge-shift').value,stores:[...document.querySelectorAll('#knowledge-store-options input:checked')].map(x=>x.value),priority:document.getElementById('knowledge-priority').value,versionDate:document.getElementById('knowledge-version-date').value,keywords:document.getElementById('knowledge-keywords').value.split(/[,，]/).map(x=>x.trim()).filter(Boolean),note:document.getElementById('knowledge-note').value.trim(),points:document.getElementById('knowledge-layout-points').value.split(/\n/).map(x=>x.trim()).filter(Boolean),pinned:old?.pinned||false,image:editingKnowledgeImage,imageRef:editingKnowledgeImageRef,steps:knowledgeStepDraft.map(x=>({text:x.text.trim(),timing:(x.timing||'').trim()})).filter(x=>x.text),updatedAt:new Date().toISOString()};const index=items.findIndex(x=>x.id===id);index>=0?items.splice(index,1,entry):items.unshift(entry);try{saveKnowledgeEntries(items);}catch(_){return showToast('圖片容量過大，請移除或改用較小圖片。',3500);}closeKnowledgeEditor();renderKnowledgeBase();showToast('✅ 勤務資料已儲存。');}
 let knowledgeViewerState={scale:1,x:0,y:0,startX:0,startY:0,dragging:false,pinchDistance:0,pinchScale:1};
 function applyKnowledgeViewerTransform(){const img=document.getElementById('knowledge-viewer-image'),s=knowledgeViewerState;if(img)img.style.transform=`translate(calc(-50% + ${s.x}px),calc(-50% + ${s.y}px)) scale(${s.scale})`;}
@@ -6488,7 +6852,7 @@ function closeKnowledgeImageViewer(){document.getElementById('knowledge-image-vi
 (()=>{const stage=document.getElementById('knowledge-viewer-stage');if(!stage)return;stage.addEventListener('wheel',e=>{e.preventDefault();changeKnowledgeViewerZoom(e.deltaY<0?.2:-.2);},{passive:false});stage.addEventListener('pointerdown',e=>{knowledgeViewerState.dragging=true;knowledgeViewerState.startX=e.clientX-knowledgeViewerState.x;knowledgeViewerState.startY=e.clientY-knowledgeViewerState.y;stage.setPointerCapture(e.pointerId);stage.classList.add('dragging');});stage.addEventListener('pointermove',e=>{if(!knowledgeViewerState.dragging)return;knowledgeViewerState.x=e.clientX-knowledgeViewerState.startX;knowledgeViewerState.y=e.clientY-knowledgeViewerState.startY;applyKnowledgeViewerTransform();});stage.addEventListener('pointerup',()=>{knowledgeViewerState.dragging=false;stage.classList.remove('dragging');});stage.addEventListener('touchstart',e=>{if(e.touches.length===2){knowledgeViewerState.pinchDistance=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);knowledgeViewerState.pinchScale=knowledgeViewerState.scale;}},{passive:true});stage.addEventListener('touchmove',e=>{if(e.touches.length===2&&knowledgeViewerState.pinchDistance){const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);knowledgeViewerState.scale=Math.max(.5,Math.min(5,knowledgeViewerState.pinchScale*d/knowledgeViewerState.pinchDistance));applyKnowledgeViewerTransform();}},{passive:true});})();
 function toggleKnowledgePin(id){const items=getKnowledgeEntries(),e=items.find(x=>x.id===id);if(!e)return;e.pinned=!e.pinned;saveKnowledgeEntries(items);renderKnowledgeBase();}
 function duplicateKnowledgeEntry(id){const items=getKnowledgeEntries(),e=items.find(x=>x.id===id);if(!e)return;items.unshift({...e,id:`kb-${Date.now()}`,title:`${e.title}（副本）`,pinned:false,steps:(e.steps||[]).map(x=>({...x}))});saveKnowledgeEntries(items);renderKnowledgeBase();showToast('已建立 SOP 副本。');}
-async function deleteKnowledgeEntry(id){if(!await showAppConfirm({title:'刪除勤務資料',message:'此筆勤務資料將被刪除。',confirmText:'確定刪除',danger:true,icon:'⚠️'}))return;saveKnowledgeEntries(getKnowledgeEntries().filter(x=>x.id!==id));renderKnowledgeBase();showToast('已刪除勤務資料。');}
+async function deleteKnowledgeEntry(id){const items=getKnowledgeEntries(),entry=items.find(x=>x.id===id);if(!await showAppConfirm({title:'刪除勤務資料',message:'此筆勤務資料及其私有雲端照片將被刪除。',confirmText:'確定刪除',danger:true,icon:'⚠️'}))return;const ref=String(entry?.imageRef||'');if(ref.startsWith('storage:')){try{await deleteV82PhotoObject(ref.slice(8))}catch(error){return showToast('雲端照片刪除失敗，已停止刪除資料：'+error.message,4500)}}saveKnowledgeEntries(items.filter(x=>x.id!==id));renderKnowledgeBase();showToast('已刪除勤務資料。');}
 
 // v7.1.5：批次貼上固定任務，支援全形／半形分隔符；有錯誤列時不允許建立。
 let knowledgeBulkDraft=[];
@@ -6776,7 +7140,8 @@ function formatV81Time(value){if(!value)return'—';try{return new Date(value).t
 function updateV81SyncCenter(){
   const queue=readV81Queue(),online=navigator.onLine;
   const network=document.getElementById('sync-network-state'),count=document.getElementById('sync-queue-count'),last=document.getElementById('sync-last-success'),since=document.getElementById('sync-pending-since');
-  if(network)network.textContent=online?'🟢 線上':'🟠 離線';if(count)count.textContent=hasV81Pending()?String(queue?.count||1):'0';if(last)last.textContent=formatV81Time(localStorage.getItem(STORE_V81_LAST_SUCCESS_KEY));if(since)since.textContent=formatV81Time(queue?.since||appStorage.getItem('shopee_last_local_save'));
+  const pending=hasV81Pending();
+  if(network)network.textContent=online?'🟢 線上':'🟠 離線';if(count)count.textContent=pending?String(queue?.count||1):'0';if(last)last.textContent=formatV81Time(localStorage.getItem(STORE_V81_LAST_SUCCESS_KEY));if(since)since.textContent=pending?formatV81Time(queue?.since||appStorage.getItem('shopee_last_local_save')):'—';
 }
 async function retrySupabaseQueue(){if(!navigator.onLine)return showToast('📴 目前離線，資料已安全留在本機。',3500);if(!hasV81Pending())return showToast('✅ 目前沒有待同步資料。');setV81QueuePending();return syncSupabaseNow({manual:true})}
 
@@ -6888,6 +7253,139 @@ async function previewCloudSnapshot(snapshotId){
   try{const rows=await supabaseRpc('store_app_load_snapshot',{p_snapshot_id:snapshotId}),item=Array.isArray(rows)?rows[0]:rows;if(!item)throw new Error('找不到快照');const data=normalizeSupabaseSnapshot(item.payload),diff=describeSupabaseDifference(collectSupabaseSnapshot(),data);const ok=await showAppConfirm({title:`套用雲端快照 v${item.source_version}`,message:`${diff}\n\n套用後只會先還原到本機；editor／admin 可再按「立即同步」更新雲端。`,confirmText:'套用至本機',cancelText:'取消',icon:'🛡️'});if(!ok)return;storeV8CloudVersion=null;applySupabaseSnapshot(data);setV81QueuePending();markCloudPending({schedule:false});showToast('🛡️ 快照已套用至本機，尚未覆蓋雲端。',4500)
   }catch(error){showToast('⚠️ 快照處理失敗：'+error.message,4500)}
 }
+// v8.2.0：首頁提醒中心。只讀取既有班表與回報完成度，不建立新的勤務資料格式。
+function getV82ReminderSummary(){
+  const locations=typeof getTodayLocationsForV7==='function'?getTodayLocationsForV7():[];
+  const items=[];
+  locations.forEach((store,index)=>{const c=getDraftCompletion(index);if(!c.exists)items.push({store,text:'尚未建立巡店回報',kind:'missing'});else if(c.total&&c.confirmed<c.total)items.push({store,text:`尚有 ${c.total-c.confirmed} 個科目未確認`,kind:'partial'});});
+  return{locations,items};
+}
+function renderV82ReminderCenter(){
+  const list=document.getElementById('v82-alert-list'),button=document.getElementById('v82-notify-btn');if(!list)return;
+  const {locations,items}=getV82ReminderSummary();
+  if(button){const supported='Notification'in window;button.disabled=!supported;button.textContent=!supported?'瀏覽器不支援':Notification.permission==='granted'?'通知已開啟':Notification.permission==='denied'?'通知已封鎖':'開啟通知';}
+  if(!locations.length){list.innerHTML='<div class="v82-alert-item">今日尚未排班；建立班表後會自動檢查。</div>';return}
+  if(!items.length){list.innerHTML='<div class="v82-alert-item"><span>✅ 今日門市回報目前沒有漏填</span><b>狀態良好</b></div>';return}
+  list.innerHTML=items.slice(0,5).map((item,index)=>`<button class="v82-alert-item" onclick="openDutyStop(${locations.indexOf(item.store)})"><span><b>${escapeStoreHTML(getShortStoreName(item.store))}</b><br>${escapeStoreHTML(item.text)}</span><span>前往填寫 ›</span></button>`).join('');
+}
+async function enableV82Notifications(){
+  if(!('Notification'in window))return showToast('此瀏覽器不支援系統通知。');
+  const permission=await Notification.requestPermission();renderV82ReminderCenter();
+  if(permission!=='granted')return showToast('通知尚未開啟，可至瀏覽器網站權限調整。',4000);
+  const {items}=getV82ReminderSummary(),body=items.length?`目前有 ${items.length} 間／項回報需要確認。`:'今日巡店回報目前沒有漏填。';
+  new Notification('智取店勤務助手',{body,icon:'./icons/icon-192.png'});showToast('🔔 通知與漏填提醒已開啟。');
+}
+function applyV82SidebarPreference(){
+  const collapsed=localStorage.getItem('shopee_v82_sidebar_collapsed')==='true';
+  document.body.classList.toggle('v82-sidebar-collapsed',collapsed);
+  const button=document.getElementById('v82-sidebar-toggle');if(button)button.textContent=collapsed?'展開工具列 ›':'收合工具列 ‹';
+}
+function toggleV82Sidebar(){
+  const collapsed=!document.body.classList.contains('v82-sidebar-collapsed');
+  localStorage.setItem('shopee_v82_sidebar_collapsed',String(collapsed));applyV82SidebarPreference();
+}
+const V82_APPEARANCE_KEY='shopee_v82_appearance';
+const V82_THEME_PRESETS={
+  ocean:{sidebar:'#101d31',active:'#233a5e'},sky:{sidebar:'#173c56',active:'#28698f'},
+  forest:{sidebar:'#173b35',active:'#286457'},violet:{sidebar:'#2e2448',active:'#4c3d72'}
+};
+function readV82Appearance(){try{return{theme:'ocean',workColor:'#15947d',restColor:'#7764b5',autoStatus:true,...JSON.parse(appStorage.getItem(V82_APPEARANCE_KEY)||'{}')}}catch{return{theme:'ocean',workColor:'#15947d',restColor:'#7764b5',autoStatus:true}}}
+function v82HexToSoft(hex){const clean=String(hex||'').replace('#','');if(!/^[0-9a-f]{6}$/i.test(clean))return'#e4f6f1';const n=parseInt(clean,16),r=(n>>16)&255,g=(n>>8)&255,b=n&255;return`rgba(${r},${g},${b},.12)`}
+function applyV82Appearance(){
+  const value=readV82Appearance(),preset=V82_THEME_PRESETS[value.theme]||V82_THEME_PRESETS.ocean;
+  const isRest=document.body.classList.contains('v82-rest-day'),accent=value.autoStatus&&isRest?value.restColor:value.workColor;
+  document.body.style.setProperty('--v82-sidebar',preset.sidebar);document.body.style.setProperty('--v82-sidebar-active',preset.active);document.body.style.setProperty('--v82-status-accent',accent);document.body.style.setProperty('--v82-status-soft',v82HexToSoft(accent));
+  document.querySelectorAll('.v82-theme-option').forEach(x=>x.classList.toggle('active',x.dataset.themeId===value.theme));
+  const work=document.getElementById('v82-work-color'),rest=document.getElementById('v82-rest-color'),auto=document.getElementById('v82-auto-status');if(work)work.value=value.workColor;if(rest)rest.value=value.restColor;if(auto)auto.checked=value.autoStatus;
+}
+function setV82Theme(theme){const value=readV82Appearance();value.theme=V82_THEME_PRESETS[theme]?theme:'ocean';appStorage.setItem(V82_APPEARANCE_KEY,JSON.stringify(value));markCloudPending();applyV82Appearance();}
+function saveV82Appearance(){const value=readV82Appearance(),work=document.getElementById('v82-work-color'),rest=document.getElementById('v82-rest-color'),auto=document.getElementById('v82-auto-status');if(work)value.workColor=work.value;if(rest)value.restColor=rest.value;if(auto)value.autoStatus=auto.checked;appStorage.setItem(V82_APPEARANCE_KEY,JSON.stringify(value));markCloudPending();applyV82Appearance();showToast('🎨 外觀與勤務狀態色已套用。');}
+async function resetV82Appearance(){if(!await showAppConfirm({title:'恢復預設外觀',message:'將工作區主題、上班色與休假色恢復預設值。',confirmText:'恢復預設',icon:'🎨'}))return;appStorage.removeItem(V82_APPEARANCE_KEY);markCloudPending();applyV82Appearance();showToast('已恢復預設外觀。');}
+let V82_HEIC_LOADER=null;
+function formatV82PhotoError(error){const raw=String(error?.message||error||'未知錯誤');let detail=raw;try{const data=JSON.parse(raw);detail=data.message||data.error||raw}catch{}if(/permission denied for table store_app_members/i.test(raw))return'照片權限尚未升級完成：請在 Supabase 執行「RC7照片權限修正.sql」。';if(/403|unauthorized|accessdenied/i.test(raw))return`照片權限遭拒絕：${detail}`;return detail}
+function isV82HeicFile(file){return /\.(heic|heif)$/i.test(file?.name||'')||/image\/(heic|heif)/i.test(file?.type||'')}
+function loadV82HeicConverter(){if(window.heic2any)return Promise.resolve(window.heic2any);if(V82_HEIC_LOADER)return V82_HEIC_LOADER;V82_HEIC_LOADER=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';script.onload=()=>window.heic2any?resolve(window.heic2any):reject(new Error('HEIC 轉檔元件未載入'));script.onerror=()=>reject(new Error('無法下載 HEIC 轉檔元件，請確認網路'));document.head.appendChild(script)});return V82_HEIC_LOADER}
+function canvasCompressV82Photo(source,maxSide,quality){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=()=>reject(new Error('無法讀取圖片'));reader.onload=()=>{const image=new Image();image.onerror=()=>reject(new Error('瀏覽器無法解碼圖片'));image.onload=()=>{const scale=Math.min(1,maxSide/Math.max(image.width,image.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);canvas.toBlob(blob=>blob?resolve({blob,preview:canvas.toDataURL('image/jpeg',quality)}):reject(new Error('圖片壓縮失敗')),'image/jpeg',quality)};image.src=reader.result};reader.readAsDataURL(source)})}
+async function compressV82Photo(file,maxSide=1600,quality=.82){try{return await canvasCompressV82Photo(file,maxSide,quality)}catch(nativeError){if(!isV82HeicFile(file))throw nativeError;const converter=await loadV82HeicConverter(),result=await converter({blob:file,toType:'image/jpeg',quality:.92}),jpeg=Array.isArray(result)?result[0]:result;if(!(jpeg instanceof Blob))throw new Error('HEIC 轉檔失敗');return canvasCompressV82Photo(jpeg,maxSide,quality)}}
+function v82StorageObjectUrl(path,action='object'){const config=getSupabaseConfig(),encoded=String(path).split('/').map(encodeURIComponent).join('/');return`${config.url}/storage/v1/${action}/${V82_PHOTO_BUCKET}/${encoded}`}
+async function uploadV82PhotoBlob(blob,scope){if(!navigator.onLine)throw new Error('目前離線');if(!storeV8Session?.user?.id||!storeV8Member?.approved)throw new Error('請先登入並取得核准');if(storeV8Member.role==='viewer')throw new Error('viewer 不可上傳');const id=crypto.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2)}`,path=`${storeV8Session.user.id}/${scope}/${Date.now()}-${id}.jpg`,response=await fetch(v82StorageObjectUrl(path),{method:'POST',headers:{...supabaseHeaders(),'Content-Type':'image/jpeg','x-upsert':'false'},body:blob});if(!response.ok)throw new Error((await response.text())||`Storage ${response.status}`);return path}
+async function hydrateV82PhotoUrl(path,callback){if(!path||V82_PHOTO_URL_CACHE.has(path)||V82_PHOTO_SIGNING.has(path)||!storeV8Session)return;V82_PHOTO_SIGNING.add(path);try{const response=await fetch(v82StorageObjectUrl(path,'object/sign'),{method:'POST',headers:supabaseHeaders(),body:JSON.stringify({expiresIn:3600})});if(!response.ok)throw new Error(await response.text());const data=await response.json(),signed=data.signedURL||data.signedUrl;if(signed){const config=getSupabaseConfig();V82_PHOTO_URL_CACHE.set(path,signed.startsWith('http')?signed:`${config.url}${signed}`);callback?.()}}catch(error){console.warn('照片簽署失敗',error)}finally{V82_PHOTO_SIGNING.delete(path)}}
+async function deleteV82PhotoObject(path){if(!path)throw new Error('缺少照片路徑');const cleanPath=String(path).replace(/^\/+|\/+$/g,'');if(!cleanPath)throw new Error('照片路徑無效');const config=getSupabaseConfig(),url=`${config.url}/storage/v1/object/${V82_PHOTO_BUCKET}`;const response=await fetch(url,{method:'DELETE',headers:{...supabaseHeaders(),'Content-Type':'application/json'},body:JSON.stringify({prefixes:[cleanPath]})});if(!response.ok)throw new Error((await response.text())||`Storage ${response.status}`);V82_PHOTO_URL_CACHE.delete(path)}
+const V82_REPORT_PHOTOS_KEY='shopee_v82_report_photo_refs_v1';
+const V82_PHOTO_SUBJECTS={c1:'科目1・進店',c2:'科目2・設備檢查',c7:'科目7・夜間上架異常',c13:'科目13・包裹重新整理',c16:'科目16・離店',c17:'科目17・關門照',c18:'科目18・指定門市勤務'};
+function readV82ReportPhotos(){try{return JSON.parse(appStorage.getItem(V82_REPORT_PHOTOS_KEY)||'{}')}catch{return{}}}
+function getV82ReportPhotoGroup(){const date=document.getElementById('report-date-picker')?.value||currentViewingReportDateKey||formatDateISO(new Date()),store=getStoreNameIdentity(document.getElementById('shopName')?.value||'');return store?`${date}|${store}`:''}
+function getV82PhotoSubject(){return document.getElementById('v82-report-photo-subject')?.value||'c1'}
+function renderV82ReportPhotos(){
+  const grid=document.getElementById('v82-report-photo-grid'),status=document.getElementById('v82-report-photo-status'),summary=document.getElementById('v82-report-photo-summary'),input=document.getElementById('v82-report-photo-input');
+  if(!grid||!status)return;
+  const group=getV82ReportPhotoGroup(),selected=getV82PhotoSubject();
+  if(input)input.disabled=storeV8Member?.role==='viewer';
+  if(!group){grid.innerHTML='';if(summary)summary.innerHTML='';if(!status.dataset.error)status.textContent='請先選擇門市，再選擇附圖科目。';return}
+  const items=readV82ReportPhotos()[group]||[],selectedItems=items.filter(item=>(item.subjectId||'legacy')===selected);
+  if(status.dataset.error)status.innerHTML=`<details class="v82-upload-error" open><summary>照片處理／上傳失敗</summary><code>${escapeStoreHTML(status.dataset.error)}</code></details>`;
+  else status.textContent=selectedItems.length?`${V82_PHOTO_SUBJECTS[selected]}：已附 ${selectedItems.length} 張照片`:`${V82_PHOTO_SUBJECTS[selected]}：尚未附圖`;
+  if(summary)summary.innerHTML=Object.entries(V82_PHOTO_SUBJECTS).map(([id,label])=>{const count=items.filter(item=>item.subjectId===id).length;return`<span class="v82-photo-subject-chip ${count?'has-photo':''}">${escapeStoreHTML(label)} ${count?`✓ ${count}`:'—'}</span>`}).join('')+(items.some(item=>!item.subjectId)?`<span class="v82-photo-subject-chip">舊版未分類 ${items.filter(item=>!item.subjectId).length}</span>`:'');
+  grid.innerHTML=items.map(item=>{const url=V82_PHOTO_URL_CACHE.get(item.path),label=V82_PHOTO_SUBJECTS[item.subjectId]||'舊版未分類照片',store=item.storeName||group.split('|').slice(1).join('|');if(!url)hydrateV82PhotoUrl(item.path,renderV82ReportPhotos);return`<div class="v82-photo-item">${url?`<img src="${escapeStoreHTML(url)}" alt="${escapeStoreHTML(label)}" onclick="openV82Photo('${encodeURIComponent(item.path)}')">`:'<div style="padding:34px 10px;text-align:center;color:var(--ops-muted);">讀取照片中…</div>'}<small><span class="v82-photo-subject-label">${escapeStoreHTML(label)}</span>${escapeStoreHTML(store)}・${escapeStoreHTML(formatV81Time(item.createdAt))}</small>${storeV8Member?.role!=='viewer'?`<button class="v82-photo-delete" onclick="deleteV82ReportPhoto('${item.id}')">刪除</button>`:''}</div>`}).join('');
+}
+async function handleV82ReportPhotos(event){const files=[...(event.target.files||[])];event.target.value='';const group=getV82ReportPhotoGroup(),subjectId=getV82PhotoSubject(),storeName=getStoreNameIdentity(document.getElementById('shopName')?.value||''),date=document.getElementById('report-date-picker')?.value||currentViewingReportDateKey||formatDateISO(new Date()),shift=document.getElementById('shift')?.value||'';if(!group)return showToast('請先選擇門市。');if(!V82_PHOTO_SUBJECTS[subjectId])return showToast('請先選擇附圖科目。');if(storeV8Member?.role==='viewer')return showToast('viewer 為唯讀帳號。');const status=document.getElementById('v82-report-photo-status');if(status)delete status.dataset.error;for(let i=0;i<files.length;i++){if(status)status.textContent=`${isV82HeicFile(files[i])?'HEIC 轉換 JPEG':'圖片壓縮'} ${i+1}/${files.length}…`;try{const {blob,preview}=await compressV82Photo(files[i]);if(status)status.textContent=`${V82_PHOTO_SUBJECTS[subjectId]}：JPEG 上傳私有雲端 ${i+1}/${files.length}…`;const path=await uploadV82PhotoBlob(blob,'report'),data=readV82ReportPhotos(),item={id:crypto.randomUUID?.()||String(Date.now()),path,subjectId,subjectLabel:V82_PHOTO_SUBJECTS[subjectId],storeName,date,shift,createdAt:new Date().toISOString(),by:storeV8Member?.email||''};if(!Array.isArray(data[group]))data[group]=[];data[group].push(item);appStorage.setItem(V82_REPORT_PHOTOS_KEY,JSON.stringify(data));V82_PHOTO_URL_CACHE.set(path,preview);markCloudPending()}catch(error){const message=formatV82PhotoError(error);if(status)status.dataset.error=message;showToast('⚠️ 照片上傳失敗，請查看附圖區錯誤。',5000);break}}renderV82ReportPhotos()}
+function openV82Photo(encodedPath){const path=decodeURIComponent(encodedPath),url=V82_PHOTO_URL_CACHE.get(path);if(url)window.open(url,'_blank','noopener')}
+async function deleteV82ReportPhoto(id){const group=getV82ReportPhotoGroup(),data=readV82ReportPhotos(),items=data[group]||[],item=items.find(x=>x.id===id);if(!item)return;if(!await showAppConfirm({title:'刪除雲端照片',message:'照片將從私有 Storage 永久刪除。',confirmText:'確定刪除',danger:true,icon:'📷'}))return;try{await deleteV82PhotoObject(item.path);data[group]=items.filter(x=>x.id!==id);appStorage.setItem(V82_REPORT_PHOTOS_KEY,JSON.stringify(data));markCloudPending();renderV82ReportPhotos();showToast('照片已刪除。')}catch(error){showToast('刪除失敗：'+error.message,4200)}}
+// RC13 導覽修正：恢復小工具獨立主頁簽並保留回報內快捷入口；勤務規則維持整併於更多。
+const V82_NAV_ORDER_KEY='shopee_v82_main_nav_order_v1';
+const V82_NAV_DEFAULT=['today-tab','report-tab','tools-tab','schedule-tab','reports-tab','knowledge-tab','settings-tab'];
+const V82_NAV_META={'today-tab':['⌂','今日'],'report-tab':['▣','回報'],'tools-tab':['⚒','小工具'],'schedule-tab':['▦','班表'],'reports-tab':['▤','報表'],'knowledge-tab':['☷','資料庫'],'settings-tab':['⚙','更多']};
+function setContextTabActive(tabId,index){document.querySelectorAll(`#${tabId} .context-tabs button`).forEach((button,i)=>button.classList.toggle('active',i===index));}
+function openReportContext(view='report'){const tab=view==='tools'?'tools-tab':'report-tab';switchMainTab(tab,navButtonFor(tab));setContextTabActive(tab,view==='tools'?1:0);}
+function openMoreContext(view='overview'){
+  if(view==='rules'){
+    switchMainTab('rules-tab',navButtonFor('settings-tab'));
+    setContextTabActive('rules-tab',1);
+    setTimeout(renderDutyRuleCenter,0);
+    return;
+  }
+  switchMainTab('settings-tab',navButtonFor('settings-tab'));
+  setContextTabActive('settings-tab',view==='settings'?2:0);
+  setTimeout(()=>{if(view==='settings')document.querySelector('.settings-center-tabs')?.scrollIntoView({behavior:'smooth',block:'start'});else document.querySelector('#settings-tab .more-hero')?.scrollIntoView({behavior:'smooth',block:'start'});},30);
+}
+function readNavigationOrder(){let order=[];try{order=JSON.parse(appStorage.getItem(V82_NAV_ORDER_KEY)||'[]')}catch{}order=Array.isArray(order)?order.filter(x=>V82_NAV_DEFAULT.includes(x)):[];return[...order,...V82_NAV_DEFAULT.filter(x=>!order.includes(x))];}
+function applyNavigationOrder(){const nav=document.querySelector('.main-nav');if(!nav)return;readNavigationOrder().forEach(id=>{const button=navButtonFor(id);if(button)nav.appendChild(button);});}
+function renderNavigationOrder(){const box=document.getElementById('navigation-order-list');if(!box)return;const order=readNavigationOrder();box.innerHTML=order.map((id,index)=>{const [icon,label]=V82_NAV_META[id];return`<div class="nav-order-item"><span>${icon}</span><b>${label}</b><button onclick="moveNavigationItem('${id}',-1)" ${index===0?'disabled':''}>↑</button><button onclick="moveNavigationItem('${id}',1)" ${index===order.length-1?'disabled':''}>↓</button></div>`}).join('');}
+function openNavigationOrderManager(){openMoreContext('overview');setTimeout(()=>{const card=document.getElementById('navigation-order-card');if(card){card.style.display='block';renderNavigationOrder();card.scrollIntoView({behavior:'smooth',block:'start'});}},60);}
+function moveNavigationItem(id,direction){const order=readNavigationOrder(),index=order.indexOf(id),target=index+direction;if(index<0||target<0||target>=order.length)return;[order[index],order[target]]=[order[target],order[index]];appStorage.setItem(V82_NAV_ORDER_KEY,JSON.stringify(order));markCloudPending();applyNavigationOrder();renderNavigationOrder();showToast('主導覽順序已更新。');}
+async function resetNavigationOrder(){if(!await showAppConfirm({title:'恢復導覽順序',message:'將七個主要頁簽恢復為：今日、回報、小工具、班表、報表、資料庫、更多。',confirmText:'恢復預設',icon:'↕'}))return;appStorage.removeItem(V82_NAV_ORDER_KEY);markCloudPending();applyNavigationOrder();renderNavigationOrder();showToast('已恢復預設導覽順序。');}
+document.addEventListener('DOMContentLoaded',applyNavigationOrder);
+
+// RC10 勤務規則中心：先使用獨立資料鍵驗證主從式管理介面，不直接改寫現行班表與勤務資料庫。
+const V82_RULE_CENTER_KEY='shopee_v82_rule_center_candidate_v1';
+const V82_RULE_CATEGORIES={
+  shifts:{icon:'🕒',label:'班別',description:'開始時間與班別代碼'},
+  weekly:{icon:'📅',label:'每週固定勤務',description:'依星期重複的工作'},
+  monthly:{icon:'🗓️',label:'每月固定勤務',description:'依月週次重複的工作'},
+  reminders:{icon:'🔔',label:'提醒規則',description:'時間與漏填提示'}
+};
+const V82_RULE_DEFAULTS={
+  shifts:[['白班','CSNU01','08:00','每日','全天'],['早班','SHIFT-EARLY','06:00','每日','早班'],['中班','SHIFT-MID','12:00','每日','全天'],['午班','SHIFT-PM','12:00','每日','全天'],['小夜','SHIFT-EVE','20:00','每日','晚班'],['大夜','SHIFT-NIGHT','00:00','每日','晚班']],
+  weekly:[['繳費機','W-MON-PAY','','每週一','早班'],['掃地拖地','W-TUE-CLEAN','','每週二','晚班'],['清潔門框','W-WED-DOOR','','每週三','晚班'],['倒垃圾','W-THU-TRASH','','每週四','早班'],['盤點空箱','W-THU-BOX','','每週四','晚班']],
+  monthly:[['清潔玻璃','M-W1-GLASS','','每月第一週','全天'],['清潔智取櫃上方','M-W2-TOP','','每月第二週','全天'],['清潔操作桌與招牌燈點檢','M-W3-DESK','','每月第三週','全天'],['蜘蛛網清潔與紙箱回收','M-W4-WALL','','每月第四週','全天']],
+  reminders:[['勤務開始提醒','R-START','18:30','上班日','全天'],['漏填檢查','R-MISSING','22:15','上班日','全天'],['照片上傳確認','R-PHOTO','22:20','上班日','全天']]
+};
+let activeDutyRuleCategory='shifts',selectedDutyRuleId='';
+function makeDutyRule(category,row,index){return{id:`rule-${category}-${index+1}`,category,name:row[0],code:row[1],time:row[2],cycle:row[3],shift:row[4],order:index+1,note:'',enabled:true};}
+function getDutyRules(){let items=[];try{items=JSON.parse(appStorage.getItem(V82_RULE_CENTER_KEY)||'[]')}catch{}if(!Array.isArray(items)||!items.length){items=Object.entries(V82_RULE_DEFAULTS).flatMap(([category,rows])=>rows.map((row,index)=>makeDutyRule(category,row,index)));appStorage.setItem(V82_RULE_CENTER_KEY,JSON.stringify(items));}return items;}
+function saveDutyRules(items){appStorage.setItem(V82_RULE_CENTER_KEY,JSON.stringify(items));markCloudPending();}
+function openDutyRuleCenter(){openMoreContext('rules');setTimeout(()=>document.getElementById('duty-rule-center')?.scrollIntoView({behavior:'smooth',block:'start'}),80);}
+function selectDutyRuleCategory(category){if(!V82_RULE_CATEGORIES[category])return;activeDutyRuleCategory=category;selectedDutyRuleId='';resetDutyRuleDraft(false);renderDutyRuleCenter();}
+function dutyRuleSummary(rule){return [rule.time,rule.cycle,rule.shift].filter(Boolean).join('・')||'尚未設定';}
+function renderDutyRuleCenter(){const categoryBox=document.getElementById('rule-category-list'),body=document.getElementById('rule-table-body');if(!categoryBox||!body)return;const all=getDutyRules();categoryBox.innerHTML=Object.entries(V82_RULE_CATEGORIES).map(([id,item])=>{const count=all.filter(x=>x.category===id).length;return`<button class="rule-category ${id===activeDutyRuleCategory?'active':''}" onclick="selectDutyRuleCategory('${id}')"><span>${item.icon}</span><span><b>${item.label}</b><small style="display:block;">${item.description}</small></span><small>${count}</small></button>`}).join('');const q=(document.getElementById('rule-search')?.value||'').trim().toLowerCase(),items=all.filter(x=>x.category===activeDutyRuleCategory&&(!q||[x.name,x.code,x.cycle,x.shift,x.note].join(' ').toLowerCase().includes(q))).sort((a,b)=>(a.order||0)-(b.order||0));body.innerHTML=items.length?items.map(x=>`<tr class="${x.id===selectedDutyRuleId?'selected':''}" onclick="selectDutyRule('${x.id}')"><td>${x.order||'—'}</td><td><b>${escapeStoreHTML(x.name)}</b></td><td>${escapeStoreHTML(x.code||'—')}</td><td>${escapeStoreHTML(dutyRuleSummary(x))}</td><td><span class="rule-status ${x.enabled?'':'off'}">${x.enabled?'啟用':'停用'}</span></td></tr>`).join(''):`<tr><td colspan="5" style="padding:22px;text-align:center;color:var(--ops-muted);">此分類尚無規則</td></tr>`;}
+function selectDutyRule(id){const rule=getDutyRules().find(x=>x.id===id);if(!rule)return;selectedDutyRuleId=id;document.getElementById('rule-id').value=rule.id;document.getElementById('rule-name').value=rule.name||'';document.getElementById('rule-code').value=rule.code||'';document.getElementById('rule-time').value=rule.time||'';document.getElementById('rule-cycle').value=rule.cycle||'';document.getElementById('rule-shift').value=rule.shift||'全天';document.getElementById('rule-order').value=rule.order||1;document.getElementById('rule-note').value=rule.note||'';document.getElementById('rule-enabled').checked=rule.enabled!==false;document.getElementById('rule-editor-title').textContent=`編輯：${rule.name}`;renderDutyRuleCenter();if(matchMedia('(max-width:700px)').matches)document.querySelector('.rule-editor')?.scrollIntoView({behavior:'smooth',block:'start'});}
+function resetDutyRuleDraft(render=true){selectedDutyRuleId='';['rule-id','rule-name','rule-code','rule-time','rule-cycle','rule-note'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});const order=document.getElementById('rule-order'),shift=document.getElementById('rule-shift'),enabled=document.getElementById('rule-enabled'),title=document.getElementById('rule-editor-title');if(order)order.value=getDutyRules().filter(x=>x.category===activeDutyRuleCategory).length+1;if(shift)shift.value='全天';if(enabled)enabled.checked=true;if(title)title.textContent=`新增：${V82_RULE_CATEGORIES[activeDutyRuleCategory].label}`;if(render)renderDutyRuleCenter();}
+function newDutyRule(){resetDutyRuleDraft();document.getElementById('rule-name')?.focus();if(matchMedia('(max-width:700px)').matches)document.querySelector('.rule-editor')?.scrollIntoView({behavior:'smooth',block:'start'});}
+function saveDutyRule(event){event?.preventDefault();const name=document.getElementById('rule-name').value.trim();if(!name)return showToast('請輸入規則名稱。');const items=getDutyRules(),id=document.getElementById('rule-id').value||`rule-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,rule={id,category:activeDutyRuleCategory,name,code:document.getElementById('rule-code').value.trim(),time:document.getElementById('rule-time').value,cycle:document.getElementById('rule-cycle').value.trim(),shift:document.getElementById('rule-shift').value,order:Math.max(1,Number(document.getElementById('rule-order').value)||1),note:document.getElementById('rule-note').value.trim(),enabled:document.getElementById('rule-enabled').checked};const index=items.findIndex(x=>x.id===id);if(index>=0)items[index]=rule;else items.push(rule);saveDutyRules(items);selectedDutyRuleId=id;renderDutyRuleCenter();selectDutyRule(id);showToast(index>=0?'勤務規則已更新。':'勤務規則已新增。');}
+async function deleteDutyRule(){if(!selectedDutyRuleId)return showToast('請先選擇要刪除的規則。');const items=getDutyRules(),rule=items.find(x=>x.id===selectedDutyRuleId);if(!rule)return;if(!await showAppConfirm({title:'刪除勤務規則',message:`確定刪除「${rule.name}」？目前仍是獨立試作資料，不會刪除正式班表。`,confirmText:'確定刪除',danger:true,icon:'⚙️'}))return;saveDutyRules(items.filter(x=>x.id!==selectedDutyRuleId));resetDutyRuleDraft();showToast('勤務規則已刪除。');}
+function duplicateDutyRule(){if(!selectedDutyRuleId)return showToast('請先選擇要複製的規則。');const items=getDutyRules(),source=items.find(x=>x.id===selectedDutyRuleId);if(!source)return;const copy={...source,id:`rule-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,name:`${source.name}（複製）`,code:source.code?`${source.code}-COPY`:'',order:items.filter(x=>x.category===source.category).length+1};items.push(copy);saveDutyRules(items);selectDutyRule(copy.id);showToast('已複製勤務規則。');}
+function moveDutyRule(direction){if(!selectedDutyRuleId)return showToast('請先選擇要移動的規則。');const items=getDutyRules(),group=items.filter(x=>x.category===activeDutyRuleCategory).sort((a,b)=>(a.order||0)-(b.order||0)),index=group.findIndex(x=>x.id===selectedDutyRuleId),target=index+direction;if(index<0||target<0||target>=group.length)return showToast('已經到最前或最後。');[group[index].order,group[target].order]=[group[target].order,group[index].order];saveDutyRules(items);renderDutyRuleCenter();}
+document.addEventListener('DOMContentLoaded',()=>{renderDutyRuleCenter();resetDutyRuleDraft(false);});
 async function initSupabaseV8(){
   // v8.1.0：正式化清除功能名稱；即使瀏覽器保留舊的按鈕狀態，載入時也強制校正。
   const clearMemoryButton=document.getElementById('clear-web-memory-btn');
@@ -6895,6 +7393,7 @@ async function initSupabaseV8(){
   const config=JSON.parse(localStorage.getItem(STORE_V8_CONFIG_KEY)||'{}');const url=document.getElementById('supabase-project-url'),key=document.getElementById('supabase-publishable-key');if(url)url.value=config.url||'';if(key)key.value=config.key||'';storeV8Session=JSON.parse(localStorage.getItem(STORE_V8_SESSION_KEY)||'null');
   if(storeV8Session&&config.url&&config.key){await refreshSupabaseSession();try{await registerSupabaseMember();await refreshCloudSnapshots()}catch(error){console.warn(error);updateSupabaseUI()}}else updateSupabaseUI();
   if(appStorage.getItem('shopee_cloud_pending')==='true')setV81QueuePending();else updateV81SyncCenter();
+  applyV82SidebarPreference();applyV82Appearance();renderV82ReminderCenter();renderV82ReportPhotos();setInterval(()=>{renderV82ReminderCenter();renderV82ReportPhotos()},2500);
   if('serviceWorker'in navigator)navigator.serviceWorker.register('./store-app-sw.js').catch(error=>console.warn('Service Worker',error));
 }
 window.addEventListener('online',()=>{updateV81SyncCenter();if(hasV81Pending())setTimeout(()=>syncSupabaseNow(),500)});
