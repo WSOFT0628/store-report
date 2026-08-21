@@ -4023,6 +4023,13 @@ function markSubjectUnconfirmed(subjectId) {
 }
 
 function handleSubjectMutation(event) {
+  // RC18：切換門市、班別或回報日期後，照片群組鍵也會跟著改變。
+  // 必須立即重繪照片區，否則索引雖已存在，畫面仍會停在前一個群組的 0 張，
+  // 直到下一次上傳才因上傳流程重繪而「突然」把舊照片帶回來。
+  if (['shopName', 'shift', 'report-date-picker'].includes(event.target?.id)) {
+    renderV82ReportPhotos?.();
+    renderV82OptionalDuties?.();
+  }
   const card = event.target.closest?.('.card[data-shift]');
   if (card) markSubjectUnconfirmed(card.id.replace('card_', ''));
   updateSubjectConfirmationUI();
@@ -5936,6 +5943,10 @@ function loadData(showAlert) {
     if (showAlert) showToast('此巡店位置尚無儲存紀錄！');
   }
   renderPaperQrTools();
+  // RC18：loadData 會在照片索引載入之後才把門市／班別寫回表單。
+  // 寫入完成後需再依正確的「日期｜門市」群組重繪，避免進入草稿仍顯示 0 張。
+  renderV82ReportPhotos?.();
+  renderV82OptionalDuties?.();
   updateSubjectConfirmationUI();
   updateReportProgress();
   updateReportSaveStatus();
@@ -7559,14 +7570,3 @@ async function initSupabaseV8(){
   const config=JSON.parse(localStorage.getItem(STORE_V8_CONFIG_KEY)||'{}');const url=document.getElementById('supabase-project-url'),key=document.getElementById('supabase-publishable-key');if(url)url.value=config.url||'';if(key)key.value=config.key||'';storeV8Session=JSON.parse(localStorage.getItem(STORE_V8_SESSION_KEY)||'null');
   if(storeV8Session&&config.url&&config.key){await refreshSupabaseSession();try{await registerSupabaseMember();await refreshCloudSnapshots()}catch(error){console.warn(error);updateSupabaseUI()}}else updateSupabaseUI();
   if(appStorage.getItem('shopee_cloud_pending')==='true')setV81QueuePending();else updateV81SyncCenter();
-  // RC16 手機輸入保護：回報頁使用期間不得有 2.5 秒全域 DOM 輪詢；提醒與照片改由載入、儲存、切店及資料增刪事件更新。
-  applyV82SidebarPreference();applyV82Appearance();renderV82ReminderCenter();renderV82ReportPhotos();
-  if('serviceWorker'in navigator)navigator.serviceWorker.register('./store-app-sw.js').catch(error=>console.warn('Service Worker',error));
-}
-window.addEventListener('online',()=>{updateV81SyncCenter();if(hasV81Pending())setTimeout(()=>syncSupabaseNow(),500)});
-window.addEventListener('offline',updateV81SyncCenter);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&navigator.onLine&&hasV81Pending())setTimeout(()=>syncSupabaseNow(),500)});
-window.addEventListener('DOMContentLoaded',initSupabaseV8);
-</script>
-</body>
-</html>
