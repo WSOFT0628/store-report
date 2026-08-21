@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>蝦皮智取店勤務助手 v8.2.0 科目附圖 RC14</title>
+<title>智取店勤務助手 v8.2.0</title>
 
 <!--
   v7.0.0 程式碼註解與維護規則
@@ -485,7 +485,7 @@
     if (file?.modifiedTime) appStorage.setItem('shopee_cloud_modified_time', file.modifiedTime);
     markCloudSynced();
     handleDailyRollover(); reloadStoresDataFromStorage(); resetActiveViewsToTodayAfterRestore(); updateHistoryDropdown();
-    loadWeekSchedule(); renderMonthView(); renderDayView(); loadData(false); updateDraftLabels(); renderTodayDashboard();
+    loadWeekSchedule(); renderMonthView(); renderDayView(); loadData(false); updateDraftLabels(); renderTodayDashboard(); renderV82ReportPhotos(); updateSubjectConfirmationUI(); updateReportProgress();
     updateCloudLocationUI(file, '已套用雲端資料；套用前本機資料已建立復原快照');
     showToast('☁️ 已依你的選擇套用雲端備份。', 3500);
   }
@@ -684,6 +684,9 @@
   .subject-confirm-row.confirmed { border-color:rgba(18,161,80,.38); background:rgba(18,161,80,.08); }
   .subject-confirm-row.confirmed .subject-confirm-state { color:var(--ops-success); }
   .subject-confirm-row.confirmed .subject-confirm-state::before { background:var(--ops-success); box-shadow:0 0 0 3px rgba(18,161,80,.12); }
+  .subject-confirm-row.missing-photo { border-color:rgba(245,158,11,.48); background:rgba(245,158,11,.10); }
+  .subject-confirm-row.missing-photo .subject-confirm-state { color:#b45309; }
+  .subject-confirm-row.missing-photo .subject-confirm-state::before { background:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.14); }
   .subject-confirm-btn { border:1px solid var(--ops-orange); background:var(--ops-surface); color:var(--ops-orange); border-radius:8px; padding:7px 10px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap; }
   .confirmed .subject-confirm-btn { border-color:var(--ops-danger); color:var(--ops-danger); }
   .card.subject-confirmed { border-color:rgba(18,161,80,.45) !important; }
@@ -1094,9 +1097,6 @@
   .next-action-card { margin-top:10px;padding:12px;border:1px solid var(--ops-border);border-radius:12px;background:var(--ops-surface);display:flex;align-items:center;justify-content:space-between;gap:10px; }
   .next-action-card strong { display:block;margin-bottom:3px; }
   .next-action-card button { flex:0 0 auto;background:#7c3aed;color:#fff; }
-  .more-hero { padding:16px;border-radius:16px;background:linear-gradient(135deg,#312e81,#7c3aed);color:#fff;margin-bottom:12px; }
-  .more-hero h2 { margin:0 0 5px;font-size:20px; }
-  .more-hero p { margin:0;opacity:.85;font-size:12px; }
   .more-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-bottom:14px; }
   .more-tile { text-align:left;min-height:96px;padding:13px;border:1px solid var(--ops-border);border-radius:13px;background:var(--ops-surface);color:var(--ops-text);box-shadow:0 2px 8px rgba(16,24,40,.05); }
   .more-tile b,.more-tile small { display:block; }.more-tile b { font-size:14px;margin:7px 0 3px; }.more-tile small { color:var(--ops-muted);line-height:1.4; }
@@ -1104,6 +1104,32 @@
   .settings-center-tabs button { min-height:50px;background:var(--ops-surface);border:1px solid var(--ops-border);color:var(--ops-text); }
   .settings-center-tabs button.active { background:#7c3aed;color:#fff;border-color:#7c3aed; }
   .settings-section[hidden] { display:none !important; }
+  /* RC20 設定工作台候選：只重組既有設定卡片，不變更任何資料鍵或儲存事件。 */
+  .v82-settings-workbench { display:grid;grid-template-columns:230px minmax(0,1fr);gap:14px;align-items:start;margin-top:12px; }
+  .v82-settings-rail { position:sticky;top:14px;border:1px solid var(--ops-border);border-radius:14px;background:var(--ops-surface);padding:10px;box-shadow:var(--ops-shadow); }
+  .v82-settings-rail-head { padding:6px 8px 10px;border-bottom:1px solid var(--ops-border);margin-bottom:7px; }
+  .v82-settings-rail-head b { display:block;color:var(--ops-text);font-size:14px; }
+  .v82-settings-rail-head small { color:var(--ops-muted);font-size:10px;line-height:1.45; }
+  .v82-settings-category { width:100%;display:grid;grid-template-columns:28px minmax(0,1fr);gap:7px;align-items:center;text-align:left;padding:10px 9px;margin:4px 0;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--ops-text);box-shadow:none; }
+  .v82-settings-category span { font-size:17px;text-align:center; }
+  .v82-settings-category b { font-size:12px; }
+  .v82-settings-category small { display:block;color:var(--ops-muted);font-size:9px;font-weight:500;margin-top:2px; }
+  .v82-settings-category.active { border-color:#8b5cf6;background:rgba(124,58,237,.10);color:#6d28d9; }
+  .v82-settings-detail { min-width:0; }
+  .v82-settings-detail-head { display:flex;justify-content:space-between;gap:10px;align-items:center;padding:13px 15px;margin-bottom:10px;border:1px solid var(--ops-border);border-radius:14px;background:var(--ops-surface);box-shadow:var(--ops-shadow); }
+  .v82-settings-detail-head h2 { margin:0;color:var(--ops-text);font-size:17px; }
+  .v82-settings-detail-head p { margin:3px 0 0;color:var(--ops-muted);font-size:11px; }
+  .v82-settings-detail .settings-section { margin:0 0 11px; }
+  .v82-settings-detail #settings-search-wrap { margin:0 0 10px; }
+  .settings-center-tabs.v82-settings-legacy-tabs { display:none !important; }
+  @media(max-width:760px){
+    .v82-settings-workbench { display:block;margin-top:9px; }
+    .v82-settings-rail { position:static;display:flex;gap:7px;overflow-x:auto;padding:8px;margin-bottom:10px;scrollbar-width:thin; }
+    .v82-settings-rail-head { display:none; }
+    .v82-settings-category { flex:0 0 142px;min-height:58px;margin:0;padding:8px; }
+    .v82-settings-category small { white-space:normal; }
+    .v82-settings-detail-head { padding:11px 12px; }
+  }
   .incident-item { padding:11px;border:1px solid var(--ops-border);border-radius:10px;margin:8px 0;background:var(--ops-bg); }.incident-item.open { border-left:4px solid #dc2626; }
   .health-list { display:grid;gap:8px; }.health-row { display:flex;gap:8px;align-items:flex-start;padding:10px;border-radius:9px;background:var(--ops-bg);border:1px solid var(--ops-border);font-size:12px; }
   .multi-picker { border:1px solid var(--ops-border);border-radius:8px;padding:8px;background:var(--ops-bg);max-height:190px;overflow:auto; }
@@ -1152,10 +1178,15 @@
     #report-tab { padding-bottom:calc(76px + var(--report-action-dock-height, 112px) + env(safe-area-inset-bottom, 0px)); }
     #report-tab .bottom-action-bar {
       position:fixed;
-      left:8px;
-      right:8px;
+      left:0;
+      right:0;
       bottom:calc(72px + env(safe-area-inset-bottom, 0px));
       z-index:1090;
+      width:auto;
+      max-width:none;
+      border-left:0;
+      border-right:0;
+      border-radius:16px 16px 0 0;
       max-height:176px;
       overflow-y:auto;
     }
@@ -1305,11 +1336,9 @@
     body.v82-sidebar-collapsed #v82-sidebar-toggle::after { content:'›'; font-size:20px; }
     .workspace { max-width:1180px; margin:0 auto; padding:22px 28px 70px; }
     #trial-profile-banner { margin-left:0; }
-    #v82-candidate-banner { max-width:1180px !important; margin:14px auto 0 !important; padding:0 28px !important; }
   }
   body { --ops-orange:#ef5b3f; --ops-info:#2563a9; }
   .today-hero { min-height:116px; align-items:center; padding:22px 24px; color:var(--ops-text); border:1px solid var(--ops-border); background:var(--ops-surface); box-shadow:0 8px 28px rgba(15,29,49,.07); }
-  .today-hero::before { content:'今日工作台'; position:absolute; top:18px; right:132px; color:#2b6a8f; font-size:11px; font-weight:900; letter-spacing:1px; }
   .today-date { color:var(--ops-muted) !important; }
   .today-title { color:var(--ops-text) !important; font-size:26px; }
   .today-hero .status-badge { background:#eaf7f3; color:#167565; }
@@ -1389,13 +1418,19 @@
   .v82-photo-item img { width:100%; height:118px; display:block; object-fit:cover; cursor:pointer; }
   .v82-photo-item small { display:block; padding:6px 8px; color:var(--ops-muted); }
   .v82-photo-delete { position:absolute; top:6px; right:6px; min-height:30px; padding:4px 8px; border:0; background:rgba(174,35,35,.92); color:#fff; }
-  .v82-photo-subject-picker { display:grid; grid-template-columns:minmax(180px,1fr) auto; gap:8px; align-items:end; margin-top:12px; padding:10px; border:1px solid var(--ops-border); border-radius:11px; background:var(--ops-bg); }
-  .v82-photo-subject-picker label { margin:0; }
-  .v82-photo-subject-picker select { margin:5px 0 0; }
-  .v82-photo-subject-summary { display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
-  .v82-photo-subject-chip { padding:5px 8px; border-radius:999px; background:var(--ops-bg); color:var(--ops-muted); font-size:11px; font-weight:800; }
-  .v82-photo-subject-chip.has-photo { background:#e9f8ef; color:#16834c; }
-  .v82-photo-subject-label { display:block; color:var(--ops-text); font-weight:900; }
+  .v82-subject-photo-panel { margin-top:12px; padding:10px; border:1px dashed var(--ops-border); border-radius:11px; background:var(--ops-bg); }
+  .v82-subject-photo-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .v82-subject-photo-head b { color:var(--ops-text); }
+  .v82-subject-photo-head small { color:var(--ops-muted); }
+  .v82-subject-photo-head button { min-height:34px; padding:6px 10px; background:#1677c8; color:#fff; border:0; }
+  .v82-subject-photo-status { margin-top:6px; color:var(--ops-muted); font-size:11px; }
+  .v82-photo-only-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+  .v82-photo-only-card { margin:0 !important; }
+  .v82-optional-duty-list { display:grid; gap:9px; margin-top:10px; }
+  .v82-optional-duty-item { padding:10px; border:1px solid var(--ops-border); border-radius:11px; background:var(--ops-bg); }
+  .v82-optional-duty-row { display:flex; align-items:center; gap:7px; }
+  .v82-optional-duty-row b { flex:1; }
+  .v82-optional-duty-row button { min-height:32px; padding:5px 9px; }
   .rule-center { display:grid; grid-template-columns:230px minmax(0,1fr); gap:14px; margin-bottom:18px; }
   .rule-categories,.rule-workspace { border:1px solid var(--ops-border); border-radius:14px; background:var(--ops-surface); overflow:hidden; }
   .rule-center-head { padding:14px 16px; border-bottom:1px solid var(--ops-border); background:linear-gradient(135deg,var(--v82-status-soft),var(--ops-surface)); }
@@ -1425,8 +1460,7 @@
   .nav-order-item { display:grid; grid-template-columns:34px minmax(0,1fr) auto auto; align-items:center; gap:7px; padding:9px 10px; border:1px solid var(--ops-border); border-radius:10px; background:var(--ops-bg); }
   .nav-order-item button { min-width:42px; padding:7px; }
   @media(max-width:700px){
-    .v82-photo-subject-picker { grid-template-columns:1fr; }
-    .v82-photo-subject-picker button { width:100%; }
+    .v82-photo-only-grid { grid-template-columns:1fr; }
     .rule-center { grid-template-columns:1fr; }
     .rule-category-list { display:flex; overflow-x:auto; }
     .rule-category { flex:0 0 150px; }
@@ -1447,6 +1481,139 @@
     .report-jump-controls { bottom:150px !important; }
     body:has(.modal-overlay.active) .report-jump-controls,body:has(.knowledge-modal.active) .report-jump-controls { display:none !important; }
   }
+  /* RC17：桌面回報操作改為右側工作欄；手機仍使用底部拇指操作列。 */
+  .report-workspace-layout { min-width:0; }
+  .report-main-column { min-width:0; }
+  .report-action-column { min-width:0; }
+  @media (min-width:901px) {
+    #report-tab .report-workspace-layout {
+      display:grid;
+      grid-template-columns:minmax(0,1fr) 232px;
+      align-items:start;
+      gap:18px;
+    }
+    #report-tab .report-action-column {
+      position:sticky;
+      top:18px;
+      z-index:24;
+    }
+    #report-tab .report-action-column .bottom-action-bar {
+      position:static;
+      bottom:auto;
+      width:100%;
+      overflow:hidden;
+      border-radius:16px;
+      box-shadow:0 8px 24px rgba(10,25,48,.12);
+    }
+    #report-tab .report-action-column .bottom-action-main {
+      display:grid;
+      grid-template-columns:1fr;
+      align-items:stretch;
+      gap:8px;
+      padding:12px;
+    }
+    #report-tab .report-action-column .progress-label {
+      min-width:0;
+      padding:9px 10px;
+      border-radius:10px;
+      background:var(--ops-bg);
+      color:var(--ops-text);
+      text-align:center;
+      font-size:13px;
+    }
+    #report-tab .report-action-column .bottom-action-main button {
+      width:100%;
+      min-height:44px;
+      flex:none;
+    }
+    #report-tab .report-action-column .quick-input-dock {
+      display:block;
+      padding:10px 12px 12px;
+    }
+    #report-tab .report-action-column .quick-input-dock > b {
+      display:block;
+      margin-bottom:8px;
+    }
+    #report-tab .report-action-column #quick-input-buttons {
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:6px;
+    }
+    #report-tab .report-action-column #quick-input-buttons .badge-btn {
+      min-width:0;
+      margin:0;
+      padding:8px 4px;
+    }
+  }
+  @media (max-width:900px) {
+    #report-tab .report-workspace-layout { display:block; }
+    #report-tab .report-action-column { position:static; }
+  }
+  /* RC23：深色模式必須最後覆寫候選版後期加入的固定淺色背景。 */
+  [data-theme="dark"] body {
+    background:#0b1220 !important;
+    color:var(--ops-text);
+  }
+  [data-theme="dark"] .workspace,
+  [data-theme="dark"] .tab-content,
+  [data-theme="dark"] #more-overview-panel,
+  [data-theme="dark"] #more-settings-panel,
+  [data-theme="dark"] .v82-settings-detail {
+    background:transparent;
+  }
+  [data-theme="dark"] .card,
+  [data-theme="dark"] .today-card,
+  [data-theme="dark"] #v82-alert-panel,
+  [data-theme="dark"] .more-tile,
+  [data-theme="dark"] .v82-settings-rail,
+  [data-theme="dark"] .v82-settings-detail-head,
+  [data-theme="dark"] #settings-search-wrap {
+    background:var(--ops-surface) !important;
+    border-color:var(--ops-border) !important;
+    color:var(--ops-text);
+    box-shadow:0 8px 24px rgba(0,0,0,.22);
+  }
+  [data-theme="dark"] .card > h3,
+  [data-theme="dark"] .today-card h2,
+  [data-theme="dark"] .today-card h3,
+  [data-theme="dark"] .more-tile b {
+    color:var(--ops-text);
+  }
+  [data-theme="dark"] .duty-command,
+  [data-theme="dark"] .smart-metric,
+  [data-theme="dark"] .health-row,
+  [data-theme="dark"] .incident-item,
+  [data-theme="dark"] .multi-picker,
+  [data-theme="dark"] .recurring-duty-item,
+  [data-theme="dark"] #sync-safety-center,
+  [data-theme="dark"] .ux-sync-metric {
+    background:#111c2e !important;
+    border-color:var(--ops-border) !important;
+    color:var(--ops-text);
+  }
+  [data-theme="dark"] input,
+  [data-theme="dark"] select,
+  [data-theme="dark"] textarea {
+    background:#0f1929;
+    border-color:#3b4a60;
+    color:var(--ops-text);
+  }
+  [data-theme="dark"] input::placeholder,
+  [data-theme="dark"] textarea::placeholder { color:#7f8da3; }
+  [data-theme="dark"] .context-tabs { background:#0f1929; }
+  [data-theme="dark"] .context-tabs button.active { background:#263449; }
+  [data-theme="dark"] .v82-settings-category.active {
+    background:rgba(139,92,246,.22);
+    color:#c4b5fd;
+  }
+  [data-theme="dark"] body.v82-rest-day #v82-alert-panel,
+  [data-theme="dark"] body.v82-rest-day .today-card {
+    background:linear-gradient(135deg,#1d2939,#152235) !important;
+  }
+  [data-theme="dark"] body.v82-rest-day .today-card::after {
+    background:#111c2e;
+    color:var(--ops-muted);
+  }
 </style>
 </head>
 <body>
@@ -1462,7 +1629,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 智取店勤務助手<br>v8.2.0 工作區
+      📦 智取店勤務助手<br>v8.2.0
     </h1>
   </div>
   <div class="main-nav">
@@ -1478,8 +1645,6 @@
 </div>
 
 <div id="trial-profile-banner" class="trial-profile-banner" role="status"></div>
-<div id="v82-candidate-banner" style="max-width:1040px;margin:10px auto 0;padding:0 16px;"><div style="padding:9px 12px;border:1px solid #93c5fd;border-radius:12px;background:#eff6ff;color:#175fa8;font-size:12px;font-weight:800;">📷 v8.2.0 RC14｜照片改為綁定附圖科目</div></div>
-
 <main class="workspace">
 <div id="today-tab" class="tab-content active" style="padding-top:0;">
   <section class="today-hero">
@@ -1589,8 +1754,10 @@
     <span class="report-save-status-badge">本機暫存</span>
   </div>
 
+  <input id="v82-report-photo-input" type="file" accept="image/*,.heic,.heif" multiple hidden onchange="handleV82ReportPhotos(event)">
+
   <!-- v7.1.19：啟動時由 buildReportGroups() 移入底部回報操作停靠區。 -->
-  <div class="quick-input-dock"><b style="color:var(--ops-muted);">手機快速輸入：</b><span id="quick-input-buttons"></span></div>
+  <div class="quick-input-dock"><b style="color:var(--ops-muted);">快捷輸入：</b><span id="quick-input-buttons"></span></div>
 
   <div class="card" style="background: var(--ops-surface); border: 1px solid var(--ops-border);">
     <h3 style="color: var(--ops-orange); border-bottom-color: var(--ops-border);">基本資訊</h3>
@@ -1650,14 +1817,8 @@
     </div>
   </div>
 
-  <div class="card" id="v82-report-photo-card">
-    <div><h3 style="margin:0;border:0;">📷 附圖科目</h3><div style="font-size:11px;color:var(--ops-muted);margin-top:3px;">純附圖勤務只保存「日期、班別、門市、科目與照片」；有文字格式的科目仍使用下方回報表單。</div></div>
-    <div class="v82-photo-subject-picker"><label>這次照片屬於哪個科目？<select id="v82-report-photo-subject" onchange="renderV82ReportPhotos()"><option value="c1">科目1・進店</option><option value="c2">科目2・設備檢查</option><option value="c7">科目7・夜間上架異常</option><option value="c13">科目13・包裹重新整理</option><option value="c16">科目16・離店</option><option value="c17">科目17・關門照</option><option value="c18">科目18・指定門市勤務</option></select></label><button onclick="document.getElementById('v82-report-photo-input').click()">＋ 拍照／選擇照片</button></div>
-    <input id="v82-report-photo-input" type="file" accept="image/*,.heic,.heif" multiple hidden onchange="handleV82ReportPhotos(event)">
-    <div id="v82-report-photo-status" style="font-size:12px;color:var(--ops-muted);margin-top:8px;"></div>
-    <div id="v82-report-photo-summary" class="v82-photo-subject-summary"></div>
-    <div id="v82-report-photo-grid" class="v82-photo-grid"></div>
-  </div>
+  <div id="v82-photo-only-subjects" class="v82-photo-only-grid"></div>
+  <div id="v82-optional-duty-card" class="card" style="display:none;"><h3>➕ 今日臨時勤務 <span class="shift-tag tag-both">非必要</span></h3><p style="font-size:12px;color:var(--ops-muted);">只屬於目前日期、班別與門市；不列入必填進度或漏填提醒。</p><div style="display:flex;gap:8px;"><input id="v82-optional-duty-name" placeholder="輸入臨時任務名稱" style="margin:0;flex:1;"><button type="button" onclick="addV82OptionalDuty()">新增任務</button></div><div id="v82-optional-duty-list" class="v82-optional-duty-list"></div></div>
 
   <!-- 📍 科目卡片 (科目 3 ➡️ 15) -->
   <div class="card" id="card_c3" data-shift="早">
@@ -1965,7 +2126,7 @@
       </div></div>
       <div class="filter-row"><div class="filter-title">報表類型</div><div class="filter-content"><select id="report-kind" onchange="previewAdvancedReport(true)"><option value="daily">每日工作日報</option><option value="support">支援勤務報表</option><option value="schedule">班表報表</option><option value="incident">異常與交接</option></select></div></div>
       <div class="filter-row"><div class="filter-title">門市範圍</div><div class="filter-content"><label><input type="radio" name="reportScope" value="all" checked onchange="toggleScopeInput(false)"> 全部門市</label><label style="margin-left:12px;"><input type="radio" name="reportScope" value="specific" onchange="toggleScopeInput(true)"> 指定門市</label><input type="text" id="report-specific-store" list="reportStoreList" placeholder="選擇或輸入店名" style="display:none;width:180px;padding:4px;margin-left:8px;"><datalist id="reportStoreList"></datalist></div></div>
-      <div class="filter-row"><div class="filter-title">勤務條件</div><div class="filter-content"><select id="report-shift"><option value="">全部班別</option><option value="早">早班</option><option value="晚">晚班</option></select><select id="report-role"><option value="">主要與支援</option><option value="主要門市">主要門市</option><option value="支援門市">支援門市</option></select><select id="report-state"><option value="">全部狀態</option><option value="進行中">進行中</option><option value="已完成">已完成</option><option value="部分完成">部分完成</option><option value="支援至下班">支援至下班</option><option value="未排除">未排除異常</option><option value="已排除">已排除異常</option></select><label><input id="report-remaining-only" type="checkbox" style="width:auto;"> 僅含滯留</label><label><input id="report-handover-only" type="checkbox" style="width:auto;"> 僅需交接</label></div></div>
+      <div class="filter-row"><div class="filter-title">勤務條件</div><div class="filter-content"><select id="report-shift"><option value="">全部班別</option><option value="早">早班</option><option value="晚">晚班</option><option value="夜">夜班</option></select><select id="report-role"><option value="">主要與支援</option><option value="主要門市">主要門市</option><option value="支援門市">支援門市</option></select><select id="report-state"><option value="">全部狀態</option><option value="進行中">進行中</option><option value="已完成">已完成</option><option value="部分完成">部分完成</option><option value="支援至下班">支援至下班</option><option value="未排除">未排除異常</option><option value="已排除">已排除異常</option></select><label><input id="report-remaining-only" type="checkbox" style="width:auto;"> 僅含滯留</label><label><input id="report-handover-only" type="checkbox" style="width:auto;"> 僅需交接</label></div></div>
     </div>
     <div id="report-center-stats" class="report-center-grid"></div>
     <div class="report-preview-heading"><label for="report-center-preview"><b>正式報表預覽</b></label><button id="report-preview-toggle" class="report-preview-toggle" type="button" onclick="toggleReportPreview()" aria-controls="report-center-preview" aria-expanded="true">▴ 收合預覽</button></div>
@@ -2062,16 +2223,15 @@
 <!-- 📍 設定頁面 -->
 <div id="settings-tab" class="tab-content">
   <div class="context-tabs"><button class="active" onclick="openMoreContext('overview')">功能總覽</button><button onclick="openMoreContext('rules')">勤務規則</button><button onclick="openMoreContext('settings')">系統設定</button></div>
+  <div id="more-overview-panel">
   <!-- v7.0.0 更多中心：把日常工具、基礎資料、備份與設定分流，避免所有功能堆成單一長頁。 -->
-  <div class="more-hero"><h2>更多</h2><p>管理門市、設備、QR、備份與各項功能設定</p></div>
   <div class="more-grid">
     <button class="more-tile" onclick="openDutyRuleCenter()">⚙️<b>勤務規則中心</b><small>班別、週期勤務與提醒規則</small></button>
     <button class="more-tile" onclick="openDeviceVaultManager()">🔐<b>設備資料</b><small>新增、編輯、刪除與門市共用</small></button>
     <button class="more-tile" onclick="focusMoreSection('arrival-tools-card')">▣<b>QR 管理</b><small>到離店條碼與紙捲蓋綁定</small></button>
     <button class="more-tile" onclick="switchMainTab('knowledge-tab',navButtonFor('knowledge-tab'))">☷<b>勤務資料庫</b><small>SOP、注意事項與異常排除</small></button>
     <button class="more-tile" onclick="openIncidentList()">⚠<b>異常與交接</b><small>未排除事件與下班交接</small></button>
-    <button class="more-tile" onclick="selectSettingsGroup('global')">🌐<b>應用程式全域</b><small>同步、外觀、安全與儲存</small></button>
-    <button class="more-tile" onclick="selectSettingsGroup('feature')">🧩<b>各項功能設定</b><small>門市、QR 與勤務規則</small></button>
+    <button class="more-tile" onclick="openMoreContext('settings')">🧩<b>系統設定</b><small>外觀、同步、門市、QR 與資料維護</small></button>
     <button class="more-tile" onclick="openNavigationOrderManager()">↕<b>導覽排序</b><small>調整左側與手機主頁簽順序</small></button>
   </div>
   <section id="navigation-order-card" class="card" style="display:none;">
@@ -2079,8 +2239,22 @@
     <div id="navigation-order-list" class="nav-order-list"></div>
     <button onclick="resetNavigationOrder()" style="margin-top:10px;">恢復預設順序</button>
   </section>
-  <div class="settings-center-tabs"><button id="settings-global-btn" class="active" onclick="selectSettingsGroup('global')">🌐 全域設定</button><button id="settings-feature-btn" onclick="selectSettingsGroup('feature')">🧩 功能設定</button></div>
-  <div id="settings-search-wrap" class="card" style="padding:10px;"><input id="settings-search" placeholder="搜尋設定，例如：雲端、門市、QR…" oninput="filterSettingsCards()" style="margin:0;"></div>
+  </div>
+  <section id="more-settings-panel" hidden>
+    <div class="settings-center-tabs v82-settings-legacy-tabs"><button id="settings-global-btn" class="active" onclick="selectSettingsGroup('global')">🌐 全域設定</button><button id="settings-feature-btn" onclick="selectSettingsGroup('feature')">🧩 功能設定</button></div>
+    <div id="v82-settings-workbench" class="v82-settings-workbench">
+      <aside class="v82-settings-rail">
+        <div class="v82-settings-rail-head"><b>設定分類</b><small>選擇項目，右側只顯示相關設定</small></div>
+        <button type="button" class="v82-settings-category" data-settings-category="appearance" onclick="selectV82SettingsCategory('appearance')"><span>🎨</span><div><b>外觀與導覽</b><small>主題、狀態色與顯示方式</small></div></button>
+        <button type="button" class="v82-settings-category" data-settings-category="sync" onclick="selectV82SettingsCategory('sync')"><span>☁️</span><div><b>帳號與同步</b><small>Supabase、備份與權限</small></div></button>
+        <button type="button" class="v82-settings-category" data-settings-category="stores" onclick="selectV82SettingsCategory('stores')"><span>🏪</span><div><b>門市管理</b><small>門市資料與勤務標籤</small></div></button>
+        <button type="button" class="v82-settings-category" data-settings-category="tools" onclick="selectV82SettingsCategory('tools')"><span>▣</span><div><b>QR 與快捷</b><small>條碼、QR 與快速輸入</small></div></button>
+        <button type="button" class="v82-settings-category" data-settings-category="support" onclick="selectV82SettingsCategory('support')"><span>🤝</span><div><b>支援勤務</b><small>臨時支援新增與維護</small></div></button>
+        <button type="button" class="v82-settings-category" data-settings-category="safety" onclick="selectV82SettingsCategory('safety')"><span>🛡️</span><div><b>系統維護</b><small>狀態、進階與資料健康</small></div></button>
+      </aside>
+      <main class="v82-settings-detail">
+        <div class="v82-settings-detail-head"><div><h2 id="v82-settings-detail-title">設定</h2><p id="v82-settings-detail-note">選擇分類以管理設定</p></div></div>
+        <div id="settings-search-wrap" class="card" style="padding:10px;"><input id="settings-search" placeholder="搜尋目前分類，例如：門市、QR、同步…" oninput="filterSettingsCards()" style="margin:0;"></div>
 
   <div class="card settings-section" data-settings-group="global">
     <h3>🎨 介面外觀與勤務狀態色</h3>
@@ -2188,7 +2362,7 @@
   <div class="card settings-section" data-settings-group="global">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v8.2.0 科目附圖 RC14（2026/08/21）</div>
+      <div><b>目前版本：</b> v8.2.0 正式版（2026/08/21）</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -2209,6 +2383,9 @@
   <div class="card settings-section" data-settings-group="global">
     <h3>🩺 資料健康檢查</h3><div id="health-check-list" class="health-list"></div><button onclick="runDataHealthCheck()" style="width:100%;margin-top:8px;background:#1677c8;color:#fff;">重新檢查</button>
   </div>
+      </main>
+    </div>
+  </section>
 </div>
 
 <!-- v7.0.5 共用確認視窗：Promise 僅回傳使用者選擇；取消時不執行呼叫端的任何資料寫入。 -->
@@ -2439,6 +2616,7 @@
       <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="包裹重新分配" style="width:auto;"> 包裹重新分配</label>
       <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="夜間上架" style="width:auto;"> 夜間上架</label>
       <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="中正速配倉" style="width:auto;"> 中正速配倉</label>
+      <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="指定門市勤務" style="width:auto;"> 指定門市勤務</label>
       <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="⭐重點店" style="width:auto;"> ⭐重點店</label>
       <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="👤有人店" style="width:auto;"> 👤有人店</label>
     </div>
@@ -2962,7 +3140,7 @@ function switchMainTab(tabId, btn) {
   if (btn) btn.classList.add('active');
   if (tabId === 'today-tab') renderTodayDashboard();
   /* v7.1.19：回報頁每次開啟都主動建立快速輸入，避免首次載入或資料還原後維持空白。 */
-  if (tabId === 'report-tab') { renderQuickInputButtons(); initQuickInputDockLayout(); }
+  if (tabId === 'report-tab') { renderQuickInputButtons(); initQuickInputDockLayout(); renderV82ReportPhotos(); updateSubjectConfirmationUI(); updateReportProgress(); refreshV82PhotoIndexFromSupabase?.(); }
   if (tabId === 'knowledge-tab') renderKnowledgeBase();
   if (tabId === 'tools-tab') calculateToolSeconds();
   if (tabId === 'reports-tab') { populateReportStoreDatalist(); initReportCenter(); renderSupportDutyList(); }
@@ -2973,28 +3151,59 @@ function switchMainTab(tabId, btn) {
     renderQuickInputSettings();
     renderStoreManageList();
     renderSupportDutyList();
+    initV82SettingsWorkbench();
     selectSettingsGroup(appStorage.getItem('shopee_v7_settings_group') || 'global');
     runDataHealthCheck();
   }
 }
 
-/* v7.0.0 設定中心：只切換既有設定卡片的可見性；原控制項、儲存鍵與事件函式保持不變。 */
+const V82_SETTINGS_CATEGORIES=[
+  {id:'appearance',icon:'🎨',title:'外觀與導覽',note:'主題、狀態色與顯示方式'},
+  {id:'sync',icon:'☁️',title:'帳號與同步',note:'Supabase、備份與權限'},
+  {id:'stores',icon:'🏪',title:'門市管理',note:'門市資料與勤務標籤'},
+  {id:'tools',icon:'▣',title:'QR 與快捷',note:'條碼、QR 與快速輸入'},
+  {id:'support',icon:'🤝',title:'支援勤務',note:'臨時支援新增與維護'},
+  {id:'safety',icon:'🛡️',title:'系統維護',note:'狀態、進階與資料健康'}
+];
+function classifyV82SettingsCard(card){
+  const text=card.textContent||'';
+  if(/介面外觀|勤務狀態色/.test(text))return'appearance';
+  if(/Supabase 帳號|同步與資料安全/.test(text))return'sync';
+  if(/門市資料與回報任務/.test(text))return'stores';
+  if(/到店工具箱|手機快捷輸入/.test(text))return'tools';
+  if(/支援勤務管理/.test(text))return'support';
+  return'safety';
+}
+function initV82SettingsWorkbench(){
+  const tab=document.getElementById('settings-tab');if(!tab)return;
+  /* RC22：工作台已直接寫入靜態 HTML，不在載入後搬動任何既有設定節點。 */
+  tab.querySelectorAll('.settings-section').forEach(card=>{card.dataset.v82SettingsCategory=classifyV82SettingsCard(card);});
+}
+function selectV82SettingsCategory(category='appearance'){
+  initV82SettingsWorkbench();if(!V82_SETTINGS_CATEGORIES.some(item=>item.id===category))category='appearance';
+  appStorage.setItem('shopee_v82_settings_category',category);
+  document.querySelectorAll('.v82-settings-category').forEach(button=>button.classList.toggle('active',button.dataset.settingsCategory===category));
+  const meta=V82_SETTINGS_CATEGORIES.find(item=>item.id===category),title=document.getElementById('v82-settings-detail-title'),note=document.getElementById('v82-settings-detail-note');if(title)title.textContent=`${meta.icon} ${meta.title}`;if(note)note.textContent=meta.note;
+  filterSettingsCards();
+}
+/* RC20 相容入口：舊的 global／feature 捷徑導向新的工作台分類，原控制項與資料鍵不變。 */
 function selectSettingsGroup(group = 'global') {
   appStorage.setItem('shopee_v7_settings_group', group);
-  document.querySelectorAll('.settings-section').forEach(card => { card.hidden = card.dataset.settingsGroup !== group; card.style.display = card.hidden ? 'none' : ''; });
+  initV82SettingsWorkbench();
+  setMorePanelView('settings');
   document.getElementById('settings-global-btn')?.classList.toggle('active', group === 'global');
   document.getElementById('settings-feature-btn')?.classList.toggle('active', group === 'feature');
-  filterSettingsCards();
+  const saved=appStorage.getItem('shopee_v82_settings_category'),allowed=V82_SETTINGS_CATEGORIES.some(item=>item.id===saved);selectV82SettingsCategory(allowed?saved:(group==='feature'?'stores':'appearance'));
 }
 function filterSettingsCards() {
   const q = (document.getElementById('settings-search')?.value || '').trim().toLowerCase();
-  const group = appStorage.getItem('shopee_v7_settings_group') || 'global';
+  const category=appStorage.getItem('shopee_v82_settings_category')||'appearance';
   document.querySelectorAll('.settings-section').forEach(card => {
-    const visible = card.dataset.settingsGroup === group && (!q || card.textContent.toLowerCase().includes(q));
+    const visible = card.dataset.v82SettingsCategory === category && (!q || card.textContent.toLowerCase().includes(q));
     card.hidden = !visible; card.style.display = visible ? '' : 'none';
   });
 }
-function focusMoreSection(id) { selectSettingsGroup('feature'); setTimeout(() => document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'}), 80); }
+function focusMoreSection(id) { openMoreContext('settings');selectV82SettingsCategory(id==='arrival-tools-card'?'tools':'stores');setTimeout(() => document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'}),80); }
 
 function navButtonFor(tabId) {
   return Array.from(document.querySelectorAll('.nav-btn')).find(btn => btn.dataset.navTab===tabId) ||
@@ -3130,6 +3339,7 @@ const scheduleAnnotationRules = [
   { pattern:/夜間\s*上架/iu, tag:'夜間上架' },
   { pattern:/包裹\s*重新分配|重新分配/iu, tag:'包裹重新分配' },
   { pattern:/中正\s*速配倉|速配倉/iu, tag:'中正速配倉' },
+  { pattern:/指定\s*門市勤務/iu, tag:'指定門市勤務' },
   { pattern:/純取店|純取/iu, tag:'純取店' },
   { pattern:/支援/iu, tag:'支援' },
   { pattern:/優先|先去|先巡/iu, tag:'優先巡店' }
@@ -3818,6 +4028,9 @@ function buildReportGroups() {
   const report = document.getElementById('report-tab');
   if (!report) return;
 
+  let layout = report.querySelector(':scope > .report-workspace-layout');
+  let flow = layout?.querySelector(':scope > .report-main-column') || report;
+
   const oldAnchor = document.getElementById('report-groups-anchor');
   if (oldAnchor) oldAnchor.remove();
 
@@ -3828,9 +4041,9 @@ function buildReportGroups() {
   // 科目卡之前；手機上再受到黏附列影響，會誤以為全部表單消失。
   standardOrder.forEach(id => {
     const card = document.getElementById(id);
-    if (card) report.appendChild(card);
+    if (card) flow.appendChild(card);
   });
-  if (supportCopyCard) report.appendChild(supportCopyCard);
+  if (supportCopyCard) flow.appendChild(supportCopyCard);
 
   setupSubjectConfirmationControls();
 
@@ -3849,8 +4062,24 @@ function buildReportGroups() {
   // v7.1.19：快速輸入成為同一停靠區的下排，不再獨立 fixed／sticky。
   const quickDock = report.querySelector('.quick-input-dock');
   if (quickDock) bar.appendChild(quickDock);
-  // 合併後的停靠區必須永遠是回報頁最後一個內容節點。
-  report.appendChild(bar);
+
+  // RC17：表單與操作拆成兩欄。桌面顯示右側操作欄，手機由 CSS 將同一操作欄固定於底部。
+  if (!layout) {
+    layout = document.createElement('div');
+    layout.className = 'report-workspace-layout';
+    flow = document.createElement('div');
+    flow.className = 'report-main-column';
+    const rail = document.createElement('aside');
+    rail.className = 'report-action-column';
+    rail.setAttribute('aria-label', '回報操作');
+    Array.from(report.children).filter(child => child !== bar).forEach(child => flow.appendChild(child));
+    rail.appendChild(bar);
+    layout.append(flow, rail);
+    report.appendChild(layout);
+  } else {
+    const rail = layout.querySelector(':scope > .report-action-column');
+    if (rail && bar.parentElement !== rail) rail.appendChild(bar);
+  }
 
   report.addEventListener('input', handleSubjectMutation);
   report.addEventListener('change', handleSubjectMutation);
@@ -3925,6 +4154,13 @@ function markSubjectUnconfirmed(subjectId) {
 }
 
 function handleSubjectMutation(event) {
+  // RC18：切換門市、班別或回報日期後，照片群組鍵也會跟著改變。
+  // 必須立即重繪照片區，否則索引雖已存在，畫面仍會停在前一個群組的 0 張，
+  // 直到下一次上傳才因上傳流程重繪而「突然」把舊照片帶回來。
+  if (window.V82_PHOTO_MODULE_READY && ['shopName', 'shift', 'report-date-picker'].includes(event.target?.id)) {
+    renderV82ReportPhotos?.();
+    renderV82OptionalDuties?.();
+  }
   const card = event.target.closest?.('.card[data-shift]');
   if (card) markSubjectUnconfirmed(card.id.replace('card_', ''));
   updateSubjectConfirmationUI();
@@ -3951,13 +4187,15 @@ function updateSubjectConfirmationUI() {
     }
 
     const confirmed = isSubjectConfirmed(subjectId, data);
+    const photosReady = hasRequiredSubjectPhotos(subjectId, data);
     const row = card.querySelector('.subject-confirm-row');
     if (!row) return;
     row.classList.toggle('confirmed', confirmed);
-    card.classList.toggle('subject-confirmed', confirmed);
+    row.classList.toggle('missing-photo', confirmed && !photosReady);
+    card.classList.toggle('subject-confirmed', confirmed && photosReady);
     const state = row.querySelector('.subject-confirm-state');
     const button = row.querySelector('.subject-confirm-btn');
-    if (state) state.textContent = confirmed ? '本項已確認' : '尚未確認';
+    if (state) state.textContent = confirmed ? (photosReady ? '本項已確認' : '本項已確認・尚缺照片') : '尚未確認';
     if (button) button.textContent = confirmed ? '取消確認' : (subjectConfirmLabels[subjectId] || '確認本項資料');
   });
 }
@@ -4007,7 +4245,7 @@ function openReportOverview() {
     .filter(card => card.style.display !== 'none')
     .filter(card => override || applicable.includes(card.id.replace('card_', '')));
 
-  const confirmedCount = cards.filter(card => isSubjectConfirmed(card.id.replace('card_', ''), data)).length;
+  const confirmedCount = cards.filter(card => isSubjectReadyForArchive(card.id.replace('card_', ''), data)).length;
   let modal = document.getElementById('report-overview-modal');
   if (!modal) {
     modal = document.createElement('div');
@@ -4018,8 +4256,8 @@ function openReportOverview() {
   const inner = document.getElementById('overview-modal-inner') || modal;
   inner.innerHTML = `<div class="overview-head"><div><h3>${escapeOverviewHTML(data.shopName || '本店')}・回報總覽</h3><div style="font-size:12px;color:var(--ops-muted);margin-top:5px;">已確認 ${confirmedCount}/${cards.length} 個適用科目</div></div><button class="overview-close" onclick="closeReportOverview()">×</button></div><div class="overview-list">${cards.map(card => {
     const id = card.id.replace('card_', '');
-    const confirmed = isSubjectConfirmed(id, data);
-    return `<div class="overview-item ${confirmed ? 'confirmed' : ''}"><div><div class="overview-title"><span class="overview-dot"></span>${subjectOverviewNames[id] || id}</div><div class="overview-summary">${getSubjectOverviewSummary(id, data)}</div><div class="overview-status">${confirmed ? '✓ 已確認' : '○ 尚未確認'}</div></div><button class="overview-go" onclick="focusSubjectFromOverview('${id}')">${confirmed ? '查看' : '前往確認'}</button></div>`;
+    const confirmed = isSubjectConfirmed(id, data), ready = isSubjectReadyForArchive(id, data), missingPhoto = confirmed && !hasRequiredSubjectPhotos(id, data);
+    return `<div class="overview-item ${ready ? 'confirmed' : ''}"><div><div class="overview-title"><span class="overview-dot"></span>${subjectOverviewNames[id] || id}</div><div class="overview-summary">${getSubjectOverviewSummary(id, data)}</div><div class="overview-status">${ready ? '✓ 可封存' : (missingPhoto ? '△ 已確認・尚缺照片' : '○ 尚未確認')}</div></div><button class="overview-go" onclick="focusSubjectFromOverview('${id}')">${ready ? '查看' : (missingPhoto ? '前往補照片' : '前往確認')}</button></div>`;
   }).join('')}</div>`;
   modal.classList.add('active');
 }
@@ -4046,7 +4284,7 @@ function updateReportProgress() {
     .filter(card => card.style.display !== 'none')
     .filter(card => override || applicable.includes(card.id.replace('card_', '')));
 
-  const complete = cards.filter(card => isSubjectConfirmed(card.id.replace('card_', ''), data)).length;
+  const complete = cards.filter(card => isSubjectReadyForArchive(card.id.replace('card_', ''), data)).length;
   const label = document.getElementById('report-progress-label');
   if (label) label.textContent = `完成 ${complete}/${cards.length}`;
 }
@@ -4060,13 +4298,15 @@ function previewReport() {
   const text = buildFormalSupportReport();
   const data = readCurrentDraftObject();
   const applicable = getApplicableSubjects(data.shopName || getCleanShopName(), data.shift || document.getElementById('shift')?.value || '早', data);
-  const pending = applicable.filter(id => !isSubjectConfirmed(id, data));
+  const pending = applicable.filter(id => !isSubjectReadyForArchive(id, data));
+  const missingPhotos = pending.filter(id => isSubjectConfirmed(id, data) && !hasRequiredSubjectPhotos(id, data));
+  const unconfirmed = pending.filter(id => !isSubjectConfirmed(id, data));
   const modal = document.getElementById('formal-report-preview-modal');
   const textarea = document.getElementById('formal-report-preview-text');
   const status = document.getElementById('formal-preview-status');
   if (textarea) textarea.value = text;
   if (status) {
-    status.textContent = pending.length ? `⚠️ 尚有 ${pending.length} 個適用科目未確認，仍可先檢視或複製。` : `✅ ${applicable.length} 個適用科目皆已確認。`;
+    status.textContent = pending.length ? `⚠️ ${unconfirmed.length ? `${unconfirmed.length} 個科目尚未確認` : ''}${unconfirmed.length && missingPhotos.length ? '；' : ''}${missingPhotos.length ? `${missingPhotos.length} 個科目尚缺照片` : ''}，仍可先檢視或複製。` : `✅ ${applicable.length} 個適用科目皆可封存。`;
     status.style.color = pending.length ? 'var(--ops-orange)' : 'var(--ops-success)';
   }
   modal?.classList.add('active');
@@ -4099,11 +4339,17 @@ function finishReport() {
   const pendingCards = Array.from(document.querySelectorAll('#report-tab .card[data-shift]'))
     .filter(card => card.style.display !== 'none')
     .filter(card => override || applicable.includes(card.id.replace('card_', '')))
-    .filter(card => !isSubjectConfirmed(card.id.replace('card_', ''), data));
+    .filter(card => !isSubjectReadyForArchive(card.id.replace('card_', ''), data));
 
   if (pendingCards.length) {
     pendingCards[0].scrollIntoView({ behavior:'smooth', block:'center' });
-    showToast(`⚠️ 尚有 ${pendingCards.length} 個適用科目未確認`);
+    const pendingIds = pendingCards.map(card => card.id.replace('card_', ''));
+    const unconfirmed = pendingIds.filter(id => !isSubjectConfirmed(id, data));
+    const missingPhotos = pendingIds.filter(id => isSubjectConfirmed(id, data) && !hasRequiredSubjectPhotos(id, data));
+    const parts = [];
+    if (unconfirmed.length) parts.push(`${unconfirmed.length} 個科目尚未確認`);
+    if (missingPhotos.length) parts.push(`${missingPhotos.map(id => subjectOverviewNames[id] || id).join('、')}尚缺照片`);
+    showToast(`⚠️ ${parts.join('；')}`, 5200);
     return false;
   }
   saveDataAndSyncToSchedule(false);
@@ -5828,6 +6074,15 @@ function loadData(showAlert) {
     if (showAlert) showToast('此巡店位置尚無儲存紀錄！');
   }
   renderPaperQrTools();
+  // RC18：loadData 會在照片索引載入之後才把門市／班別寫回表單。
+  // 寫入完成後需再依正確的「日期｜門市」群組重繪，避免進入草稿仍顯示 0 張。
+  // 首次啟動時 loadData 早於照片模組常數初始化；延後至整段腳本完成，
+  // 避免觸發 temporal dead zone 而讓後續按鈕事件全部失效。
+  setTimeout(() => {
+    if (!window.V82_PHOTO_MODULE_READY) return;
+    renderV82ReportPhotos?.();
+    renderV82OptionalDuties?.();
+  }, 0);
   updateSubjectConfirmationUI();
   updateReportProgress();
   updateReportSaveStatus();
@@ -6994,13 +7249,34 @@ function renderActiveSupportDuty(){
 function getReportFilters(){const start=document.getElementById('report-start-date')?.value,end=document.getElementById('report-end-date')?.value,kind=document.getElementById('report-kind')?.value||'daily',scope=document.querySelector('input[name="reportScope"]:checked')?.value||'all',store=(document.getElementById('report-specific-store')?.value||'').trim(),shift=document.getElementById('report-shift')?.value||'',role=document.getElementById('report-role')?.value||'',state=document.getElementById('report-state')?.value||'',remainingOnly=Boolean(document.getElementById('report-remaining-only')?.checked),handoverOnly=Boolean(document.getElementById('report-handover-only')?.checked);return{start,end,kind,scope,store,shift,role,state,remainingOnly,handoverOnly};}
 function reportStoreMatches(name,f){if(f.scope!=='specific')return true;const a=getStoreNameIdentity(name||''),b=getStoreNameIdentity(f.store||'');return Boolean(a&&b&&(a.includes(b)||b.includes(a)));}
 function dateInReportRange(date,f){return Boolean(date&&f.start&&f.end&&date>=f.start&&date<=f.end);}
+// RC19：報表引用照片索引與統計，不把私有影像本體直接塞入主資料表。
+function getReportPhotoItems(date,store,shift=''){
+  if(!window.V82_PHOTO_MODULE_READY)return[];
+  const group=`${date}|${getStoreNameIdentity(store||'')}`,items=readV82ReportPhotos()[group]||[];
+  return items.filter(item=>!shift||!item.shift||item.shift===shift);
+}
+function getReportPhotoFields(date,store,shift='',applicable=[]){
+  const items=getReportPhotoItems(date,store,shift),counts={};
+  items.forEach(item=>{const id=item.subjectId||'legacy';counts[id]=(counts[id]||0)+1;});
+  const subjects=Object.entries(counts).map(([id,count])=>`${V82_SUBJECT_PHOTO_CONFIG[id]?.title||items.find(x=>(x.subjectId||'legacy')===id)?.subjectLabel||id}（${count}張）`);
+  const required=(applicable||[]).filter(id=>V82_PHOTO_REQUIRED_SUBJECTS.has(id)),missing=required.filter(id=>(counts[id]||0)<v82RequiredPhotoCount(id,store));
+  return {'照片狀態':items.length?'已附照片':'未附照片','照片張數':items.length,'照片科目':subjects.join('、')||'—','純拍照科目':required.length?(missing.length?`未完成：${missing.map(id=>V82_SUBJECT_PHOTO_CONFIG[id]?.title||id).join('、')}`:'已完成'):'不適用'};
+}
+function collectReportPhotoRows(f){
+  if(!window.V82_PHOTO_MODULE_READY)return[];
+  const rows=[];
+  Object.entries(readV82ReportPhotos()).forEach(([group,items])=>{const split=group.indexOf('|'),date=split>=0?group.slice(0,split):'',storeId=split>=0?group.slice(split+1):'';if(!dateInReportRange(date,f))return;(items||[]).forEach(item=>{const store=matchStoreName(item.storeName||storeId)||item.storeName||storeId;if(!reportStoreMatches(store,f)||f.shift&&(item.shift||'')!==f.shift)return;rows.push({日期:item.date||date,門市:store,班別:item.shift||'',科目:item.subjectLabel||V82_SUBJECT_PHOTO_CONFIG[item.subjectId]?.title||item.subjectId||'舊版未分類',拍攝時間:item.createdAt?new Date(item.createdAt).toLocaleString('zh-TW',{hour12:false}):'',上傳者:item.by||''});});});
+  return rows.sort((a,b)=>`${a.日期}${a.拍攝時間}`.localeCompare(`${b.日期}${b.拍攝時間}`));
+}
 function collectReportRows(f=getReportFilters()){
   const rows=[];
   if(f.kind==='support')getSupportDuties().filter(x=>dateInReportRange(x.date,f)&&reportStoreMatches(x.store,f)).forEach(x=>{const report=getDailyReportDrafts(x.date).find(d=>scheduleStoreIdentity(d.shopName)===scheduleStoreIdentity(x.store))||{},subjects=getSupportDutySubjects(x);rows.push({日期:x.date,門市:matchStoreName(x.store)||x.store,門市角色:'支援門市',工作:x.unlockAll?'全部科目（跨班別解鎖）':(x.tasks||[]).join('、'),其他內容:x.other||'',已確認科目:subjects.filter(id=>report._confirmedSubjects?.[id]).map(id=>dailyReportSubjects[id]?.title||id).join('、'),科目內容:subjects.map(id=>formatDailySubject(id,report)).filter(Boolean).join('\n')});});
   else if(f.kind==='schedule'){const schedule=JSON.parse(appStorage.getItem('shopee_user_schedule')||'{}');Object.entries(schedule).filter(([date])=>dateInReportRange(date,f)).forEach(([date,day])=>{const stores=getParsedLocations(day),supportIds=new Set((day.supportLocs||[]).flatMap(splitStoreLocationText).map(scheduleStoreIdentity));if(!stores.length&&day?.isOff)rows.push({日期:date,班別:'休假',勤務時間:'',門市:'休假',門市角色:'',路線:'',備註:day.note||''});stores.filter(x=>reportStoreMatches(x,f)).forEach(store=>rows.push({日期:date,班別:day.shift||'',勤務時間:[day.startTime,day.endTime].filter(Boolean).join('–'),門市:matchStoreName(store)||store,門市角色:supportIds.has(scheduleStoreIdentity(store))?'支援門市':'主要門市',路線:(day.routeOrder||[]).map(x=>getShortStoreName(matchStoreName(x)||x)).join(' → '),備註:day.note||''}));});}
   else if(f.kind==='incident')getIncidents().filter(x=>dateInReportRange((x.createdAt||'').slice(0,10),f)&&reportStoreMatches(x.store,f)).forEach(x=>rows.push({日期:(x.createdAt||'').slice(0,10),門市:matchStoreName(x.store)||x.store,類型:x.type,狀態:x.resolved?'已排除':'未排除',需交接:x.handover?'是':'否',說明:x.note||''}));
   else {let cur=new Date(`${f.start}T12:00:00`),end=new Date(`${f.end}T12:00:00`);while(cur<=end){const date=formatDateISO(cur);getDailyReportDrafts(date).filter(x=>reportStoreMatches(x.shopName,f)).forEach(data=>{const applicable=getApplicableSubjects(data.shopName,data.shift||'',data);rows.push({日期:date,門市:matchStoreName(data.shopName)||data.shopName,門市角色:data._supportDutyId?'支援門市':'主要門市',班別:data.shift||'',類型:data._supportDutyId?'臨時支援':'完整巡店',支援工作:(data._supportTasks||[]).join('、'),其他內容:data._supportOther||'',已確認科目:applicable.filter(id=>data._confirmedSubjects?.[id]).map(id=>dailyReportSubjects[id]?.title||id).join('、'),科目內容:applicable.map(id=>formatDailySubject(id,data)).filter(Boolean).join('\n'),備註:data.note||data.remark||''});});cur.setDate(cur.getDate()+1);}}
-  return rows.filter(row=>(!f.shift||String(row.班別||'').includes(f.shift))&&(!f.role||row.門市角色===f.role)&&(!f.state||row.狀態===f.state)&&(!f.remainingOnly||Boolean(String(row.剩餘滯留||'').trim()))&&(!f.handoverOnly||row.需交接==='是'));
+  const filtered=rows.filter(row=>(!f.shift||String(row.班別||'').includes(f.shift))&&(!f.role||row.門市角色===f.role)&&(!f.state||row.狀態===f.state)&&(!f.remainingOnly||Boolean(String(row.剩餘滯留||'').trim()))&&(!f.handoverOnly||row.需交接==='是'));
+  if(!['daily','support'].includes(f.kind))return filtered;
+  return filtered.map(row=>{const draft=getDailyReportDrafts(row.日期).find(data=>scheduleStoreIdentity(data.shopName)===scheduleStoreIdentity(row.門市))||{},applicable=getApplicableSubjects(row.門市,row.班別||draft.shift||'',draft);return{...row,...getReportPhotoFields(row.日期,row.門市,row.班別||draft.shift||'',applicable)};});
 }
 function reportKindTitle(kind){return({daily:'每日工作日報',support:'支援勤務報表',schedule:'班表報表',incident:'異常與交接'})[kind]||'勤務報表';}
 function buildAdvancedReportText(f=getReportFilters(),rows=collectReportRows(f)){const title=`蝦皮智取店勤務助手｜${reportKindTitle(f.kind)}`,head=[title,`統計期間：${f.start} 至 ${f.end}`,f.scope==='specific'?`指定門市：${f.store}`:'門市範圍：全部',''];if(!rows.length)return head.concat('此條件沒有資料。').join('\n');return head.concat(rows.map((row,i)=>[`【${i+1}】`,...Object.entries(row).map(([k,v])=>`${k}：${v||'—'}`)].join('\n')).join('\n\n')).join('\n');}
@@ -7075,6 +7351,13 @@ function appendFormalExcelSheet(wb,name,rows,f){
   for(let r=0;r<aoa.length;r++)for(let c=0;c<4;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:10,bold:r===0},alignment:{vertical:'top',wrapText:true,horizontal:r===0?'center':'left'},border};if(r===0)cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'17365D'}};else if(r===3||model.records.some(record=>aoa[r]?.[0]===record.title)){cell.s.fill={fgColor:{rgb:r===3?'D9EAF7':'2F75B5'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:r===3?'17365D':'FFFFFF'}};}else if(r===1||r===2||((r>3)&&(c===0||c===2))){cell.s.fill={fgColor:{rgb:'EDF4FB'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'17365D'}};}}
   XLSX.utils.book_append_sheet(wb,ws,name.slice(0,31));
 }
+function appendReportPhotoSheet(wb,f){
+  const rows=collectReportPhotoRows(f);if(!rows.length)return;
+  const headers=['日期','門市','班別','科目','拍攝時間','上傳者'],aoa=[headers,...rows.map(row=>headers.map(key=>row[key]||''))],ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:12},{wch:28},{wch:10},{wch:28},{wch:22},{wch:28}];ws['!freeze']={xSplit:0,ySplit:1};ws['!autofilter']={ref:`A1:F${aoa.length}`};
+  headers.forEach((_,c)=>{const cell=ws[XLSX.utils.encode_cell({r:0,c})];cell.s={font:{name:'Microsoft JhengHei',bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'2F75B5'}},alignment:{horizontal:'center'},border:{top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}};});
+  XLSX.utils.book_append_sheet(wb,ws,'照片明細');
+}
 function appendScheduleCalendarSheets(wb,f,rows){
   const weekdays=['星期一','星期二','星期三','星期四','星期五','星期六','星期日'],border={top:{style:'thin',color:{rgb:'CBD5E1'}},bottom:{style:'thin',color:{rgb:'CBD5E1'}},left:{style:'thin',color:{rgb:'CBD5E1'}},right:{style:'thin',color:{rgb:'CBD5E1'}}};
   getScheduleCalendarModels(f,rows).forEach(model=>{
@@ -7087,7 +7370,7 @@ function appendScheduleCalendarSheets(wb,f,rows){
     XLSX.utils.book_append_sheet(wb,ws,`${model.year}-${String(model.month).padStart(2,'0')}班表`);
   });
 }
-function exportReportExcel(){const result=previewAdvancedReport();if(!result)return;if(typeof XLSX==='undefined')return showToast('⚠️ Excel 元件尚未載入，請確認網路後重試。');const wb=XLSX.utils.book_new();if(result.f.kind==='schedule'){appendScheduleCalendarSheets(wb,result.f,result.rows);}else{appendFormalExcelSheet(wb,reportKindTitle(result.f.kind),result.rows,result.f);const supports=getSupportDuties().filter(x=>dateInReportRange(x.date,result.f));if(supports.length)appendFormalExcelSheet(wb,'支援勤務',supports.map(x=>{const report=getDailyReportDrafts(x.date).find(d=>scheduleStoreIdentity(d.shopName)===scheduleStoreIdentity(x.store))||{};return{日期:x.date,門市:matchStoreName(x.store)||x.store,工作:x.unlockAll?'全部科目（跨班別解鎖）':(x.tasks||[]).join('、'),其他內容:x.other||'',科目內容:getSupportDutySubjects(x).map(id=>formatDailySubject(id,report)).filter(Boolean).join('\n')};}),result.f);}XLSX.writeFile(wb,`勤務助手_${reportKindTitle(result.f.kind)}_${result.f.start}_${result.f.end}.xlsx`);showToast('✅ Excel 已匯出。');}
+function exportReportExcel(){const result=previewAdvancedReport();if(!result)return;if(typeof XLSX==='undefined')return showToast('⚠️ Excel 元件尚未載入，請確認網路後重試。');const wb=XLSX.utils.book_new();if(result.f.kind==='schedule'){appendScheduleCalendarSheets(wb,result.f,result.rows);}else{appendFormalExcelSheet(wb,reportKindTitle(result.f.kind),result.rows,result.f);appendReportPhotoSheet(wb,result.f);const supports=getSupportDuties().filter(x=>dateInReportRange(x.date,result.f));if(supports.length)appendFormalExcelSheet(wb,'支援勤務',supports.map(x=>{const report=getDailyReportDrafts(x.date).find(d=>scheduleStoreIdentity(d.shopName)===scheduleStoreIdentity(x.store))||{};return{日期:x.date,門市:matchStoreName(x.store)||x.store,工作:x.unlockAll?'全部科目（跨班別解鎖）':(x.tasks||[]).join('、'),其他內容:x.other||'',科目內容:getSupportDutySubjects(x).map(id=>formatDailySubject(id,report)).filter(Boolean).join('\n')};}),result.f);}XLSX.writeFile(wb,`勤務助手_${reportKindTitle(result.f.kind)}_${result.f.start}_${result.f.end}.xlsx`);showToast('✅ Excel 已匯出。');}
 function exportReportPdf(){
   const result=previewAdvancedReport();if(!result)return;const win=window.open('','_blank');if(!win)return showToast('⚠️ 瀏覽器阻擋了 PDF 預覽視窗。');const landscape=result.f.kind==='schedule';
   win.document.write(`<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>${reportKindTitle(result.f.kind)}</title><style>@page{size:A4 ${landscape?'landscape':'portrait'};margin:${landscape?'8mm':'12mm'}}*{box-sizing:border-box}body{font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;margin:0;color:#172b4d}.print-actions{margin:0 0 10px}.formal-report-sheet{width:100%;background:#fff;border:1px solid #7f8fa6}.formal-report-title{padding:14px;text-align:center;font-size:20px;font-weight:900;color:#17365d;border-bottom:2px solid #17365d}.formal-report-meta{width:100%;border-collapse:collapse;table-layout:fixed}.formal-report-meta th,.formal-report-meta td{border:1px solid #7f8fa6;padding:6px;font-size:10px;vertical-align:top;white-space:pre-wrap;word-break:break-word}.formal-report-meta th{width:90px;color:#fff;background:#2f75b5}.formal-report-section{padding:7px 9px;color:#17365d;background:#d9eaf7;border-top:2px solid #2f75b5;font-weight:900}.formal-report-record-title{padding:6px 8px;color:#fff;background:#2f75b5;border-top:2px solid #17365d;font-size:10px;font-weight:900}.formal-report-detail-grid{display:grid;grid-template-columns:90px minmax(0,1fr) 90px minmax(0,1fr);border-top:1px solid #7f8fa6}.formal-report-detail-grid b,.formal-report-detail-grid span{padding:5px 6px;border-right:1px solid #7f8fa6;border-bottom:1px solid #7f8fa6;font-size:9px;white-space:pre-wrap;word-break:break-word}.formal-report-detail-grid b{color:#17365d;background:#edf4fb}.formal-report-footer{display:flex;justify-content:space-between;padding:7px 9px;color:#667085;font-size:8px}.formal-report-empty{padding:22px;text-align:center}.schedule-report-month{padding:8px;background:#fff;color:#24324a;break-after:page}.schedule-report-month:last-child{break-after:auto}.schedule-month-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:7px}.schedule-month-title{color:#312e81;font-size:16px;font-weight:900}.schedule-month-subtitle{color:#667085;font-size:8px}.schedule-calendar{display:grid;grid-template-columns:repeat(7,1fr);border-top:1px solid #cbd5e1;border-left:1px solid #cbd5e1}.schedule-weekday{padding:5px;background:#4338ca;color:#fff;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;text-align:center;font-size:8px;font-weight:900}.schedule-day{position:relative;min-height:82px;padding:5px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;background:#fff}.schedule-day.weekend{background:#faf7ff}.schedule-day.outside{background:#f8fafc;color:#a0aec0}.schedule-day.off{background:#f1f5f9}.schedule-date{display:flex;justify-content:space-between;margin-bottom:3px;font-size:8px;font-weight:900}.schedule-week-badge{padding:1px 4px;border-radius:99px;background:#eef2ff;color:#4338ca;font-size:6px}.schedule-shift{color:#4338ca;font-size:7px;font-weight:900}.schedule-time{color:#64748b;font-size:6px;margin:1px 0 2px}.schedule-store{font-size:7px;font-weight:800;line-height:1.25}.schedule-store.support{color:#7c3aed}.schedule-tag{display:inline-block;margin:2px 2px 0 0;padding:1px 4px;border-radius:99px;background:#fff1ed;color:#c2410c;font-size:6px;font-weight:900}.schedule-off-label{color:#64748b;font-size:8px;font-weight:800}.schedule-legend{display:flex;flex-wrap:wrap;gap:3px 8px;padding:5px 1px;color:#64748b;font-size:6px}@media print{.print-actions{display:none}section:not(.schedule-report-month){break-inside:avoid}}</style></head><body><button class="print-actions" onclick="print()">列印／另存 PDF</button>${result.html}<script>setTimeout(()=>print(),300)<\/script></body></html>`);win.document.close();
@@ -7200,7 +7483,7 @@ function applySupabaseSnapshot(remoteData){
   createSupabaseRecoverySnapshot();const keys=[];for(let i=0;i<appStorage.length;i++){const key=appStorage.key(i);if(key?.startsWith('shopee_')&&!STORE_V8_LOCAL_META_KEYS.has(key))keys.push(key)}keys.forEach(key=>appStorage.removeItem(key));
   Object.entries(normalizeSupabaseSnapshot(remoteData)).forEach(([key,value])=>appStorage.setItem(key,value));markCloudSynced();clearV81Queue();
   if(Number.isFinite(storeV8CloudVersion))localStorage.setItem(STORE_V8_RESOLVED_VERSION_KEY,String(storeV8CloudVersion));
-  handleDailyRollover();reloadStoresDataFromStorage();resetActiveViewsToTodayAfterRestore();updateHistoryDropdown();loadWeekSchedule();renderMonthView();renderDayView();loadData(false);updateDraftLabels();renderTodayDashboard();updateSupabaseUI();showToast('☁️ 已套用 Supabase 雲端資料；原本本機資料已建立安全快照。',4000);
+  handleDailyRollover();reloadStoresDataFromStorage();resetActiveViewsToTodayAfterRestore();updateHistoryDropdown();loadWeekSchedule();renderMonthView();renderDayView();loadData(false);updateDraftLabels();renderTodayDashboard();renderV82ReportPhotos();updateSubjectConfirmationUI();updateReportProgress();updateSupabaseUI();showToast('☁️ 已套用 Supabase 雲端資料；原本本機資料已建立安全快照。',4000);
 }
 async function loadSupabaseCloud(options={}){
   try{if(window.IS_TRIAL_PROFILE)throw new Error('試用空間不連接正式 Supabase');if(!storeV8Session)throw new Error('請先登入 Supabase');const rows=await supabaseRpc('store_app_load_state'),row=Array.isArray(rows)?rows[0]:rows;if(!row)throw new Error('找不到雲端狀態');storeV8CloudVersion=Number(row.version);updateSupabaseUI();
@@ -7302,41 +7585,106 @@ function setV82Theme(theme){const value=readV82Appearance();value.theme=V82_THEM
 function saveV82Appearance(){const value=readV82Appearance(),work=document.getElementById('v82-work-color'),rest=document.getElementById('v82-rest-color'),auto=document.getElementById('v82-auto-status');if(work)value.workColor=work.value;if(rest)value.restColor=rest.value;if(auto)value.autoStatus=auto.checked;appStorage.setItem(V82_APPEARANCE_KEY,JSON.stringify(value));markCloudPending();applyV82Appearance();showToast('🎨 外觀與勤務狀態色已套用。');}
 async function resetV82Appearance(){if(!await showAppConfirm({title:'恢復預設外觀',message:'將工作區主題、上班色與休假色恢復預設值。',confirmText:'恢復預設',icon:'🎨'}))return;appStorage.removeItem(V82_APPEARANCE_KEY);markCloudPending();applyV82Appearance();showToast('已恢復預設外觀。');}
 let V82_HEIC_LOADER=null;
-function formatV82PhotoError(error){const raw=String(error?.message||error||'未知錯誤');let detail=raw;try{const data=JSON.parse(raw);detail=data.message||data.error||raw}catch{}if(/permission denied for table store_app_members/i.test(raw))return'照片權限尚未升級完成：請在 Supabase 執行「RC7照片權限修正.sql」。';if(/403|unauthorized|accessdenied/i.test(raw))return`照片權限遭拒絕：${detail}`;return detail}
+function formatV82PhotoError(error){const raw=String(error?.message||error||'未知錯誤');let detail=raw;try{const data=JSON.parse(raw);detail=data.message||data.error||raw}catch{}if(/permission denied for table store_app_members/i.test(raw))return'照片權限尚未升級完成：請在 Supabase 執行「RC7照片權限修正.sql」。';if(/403|unauthorized|accessdenied/i.test(raw))return`照片權限遭拒絕：${detail}`;if(/504|Gateway Time-out/i.test(raw))return'雲端照片服務逾時；系統已自動重試，仍失敗的照片請稍後重新選取。';if(/502|503|Failed to fetch|NetworkError/i.test(raw))return'雲端照片服務暫時不穩定；系統已自動重試，請稍後再補傳失敗照片。';return detail}
 function isV82HeicFile(file){return /\.(heic|heif)$/i.test(file?.name||'')||/image\/(heic|heif)/i.test(file?.type||'')}
 function loadV82HeicConverter(){if(window.heic2any)return Promise.resolve(window.heic2any);if(V82_HEIC_LOADER)return V82_HEIC_LOADER;V82_HEIC_LOADER=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';script.onload=()=>window.heic2any?resolve(window.heic2any):reject(new Error('HEIC 轉檔元件未載入'));script.onerror=()=>reject(new Error('無法下載 HEIC 轉檔元件，請確認網路'));document.head.appendChild(script)});return V82_HEIC_LOADER}
 function canvasCompressV82Photo(source,maxSide,quality){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=()=>reject(new Error('無法讀取圖片'));reader.onload=()=>{const image=new Image();image.onerror=()=>reject(new Error('瀏覽器無法解碼圖片'));image.onload=()=>{const scale=Math.min(1,maxSide/Math.max(image.width,image.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);canvas.toBlob(blob=>blob?resolve({blob,preview:canvas.toDataURL('image/jpeg',quality)}):reject(new Error('圖片壓縮失敗')),'image/jpeg',quality)};image.src=reader.result};reader.readAsDataURL(source)})}
 async function compressV82Photo(file,maxSide=1600,quality=.82){try{return await canvasCompressV82Photo(file,maxSide,quality)}catch(nativeError){if(!isV82HeicFile(file))throw nativeError;const converter=await loadV82HeicConverter(),result=await converter({blob:file,toType:'image/jpeg',quality:.92}),jpeg=Array.isArray(result)?result[0]:result;if(!(jpeg instanceof Blob))throw new Error('HEIC 轉檔失敗');return canvasCompressV82Photo(jpeg,maxSide,quality)}}
 function v82StorageObjectUrl(path,action='object'){const config=getSupabaseConfig(),encoded=String(path).split('/').map(encodeURIComponent).join('/');return`${config.url}/storage/v1/${action}/${V82_PHOTO_BUCKET}/${encoded}`}
-async function uploadV82PhotoBlob(blob,scope){if(!navigator.onLine)throw new Error('目前離線');if(!storeV8Session?.user?.id||!storeV8Member?.approved)throw new Error('請先登入並取得核准');if(storeV8Member.role==='viewer')throw new Error('viewer 不可上傳');const id=crypto.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2)}`,path=`${storeV8Session.user.id}/${scope}/${Date.now()}-${id}.jpg`,response=await fetch(v82StorageObjectUrl(path),{method:'POST',headers:{...supabaseHeaders(),'Content-Type':'image/jpeg','x-upsert':'false'},body:blob});if(!response.ok)throw new Error((await response.text())||`Storage ${response.status}`);return path}
-async function hydrateV82PhotoUrl(path,callback){if(!path||V82_PHOTO_URL_CACHE.has(path)||V82_PHOTO_SIGNING.has(path)||!storeV8Session)return;V82_PHOTO_SIGNING.add(path);try{const response=await fetch(v82StorageObjectUrl(path,'object/sign'),{method:'POST',headers:supabaseHeaders(),body:JSON.stringify({expiresIn:3600})});if(!response.ok)throw new Error(await response.text());const data=await response.json(),signed=data.signedURL||data.signedUrl;if(signed){const config=getSupabaseConfig();V82_PHOTO_URL_CACHE.set(path,signed.startsWith('http')?signed:`${config.url}${signed}`);callback?.()}}catch(error){console.warn('照片簽署失敗',error)}finally{V82_PHOTO_SIGNING.delete(path)}}
+async function uploadV82PhotoBlob(blob,scope){if(!navigator.onLine)throw new Error('目前離線');if(!storeV8Session?.user?.id||!storeV8Member?.approved)throw new Error('請先登入並取得核准');if(storeV8Member.role==='viewer')throw new Error('viewer 不可上傳');const id=crypto.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2)}`,path=`${storeV8Session.user.id}/${scope}/${Date.now()}-${id}.jpg`;for(let attempt=0;attempt<3;attempt++){try{const response=await fetch(v82StorageObjectUrl(path),{method:'POST',headers:{...supabaseHeaders(),'Content-Type':'image/jpeg','x-upsert':'false'},body:blob}),bodyText=response.ok?'':await response.text();if(response.ok||(attempt>0&&response.status===409))return path;if(![502,503,504].includes(response.status)||attempt===2)throw new Error(`Storage ${response.status}: ${bodyText||'雲端暫時無回應'}`)}catch(error){const transient=/Storage 50[234]|Gateway Time-out|Failed to fetch|NetworkError/i.test(String(error?.message||error));if(!transient||attempt===2)throw error}await new Promise(resolve=>setTimeout(resolve,1200*(attempt+1)))}throw new Error('照片上傳逾時')}
+const V82_PHOTO_LOAD_FAILURES=new Map(),V82_PHOTO_IMAGE_FAILURES=new Map();
+function normalizeV82SignedPhotoUrl(signed){if(!signed)return'';if(/^https?:\/\//i.test(signed))return signed;const base=String(getSupabaseConfig().url||'').replace(/\/$/,'');if(signed.startsWith('/storage/v1/'))return`${base}${signed}`;if(signed.startsWith('/object/'))return`${base}/storage/v1${signed}`;return`${base}/storage/v1/${String(signed).replace(/^\/+/, '')}`}
+async function hydrateV82PhotoUrl(path,callback,force=false){if(!path||(!force&&V82_PHOTO_URL_CACHE.has(path))||V82_PHOTO_SIGNING.has(path)||!storeV8Session)return;V82_PHOTO_SIGNING.add(path);try{let lastError=null;for(let attempt=0;attempt<2;attempt++){try{const response=await fetch(v82StorageObjectUrl(path,'object/sign'),{method:'POST',headers:{...supabaseHeaders(),'Content-Type':'application/json'},body:JSON.stringify({expiresIn:3600})});if(!response.ok)throw new Error((await response.text())||`照片讀取 ${response.status}`);const data=await response.json(),url=normalizeV82SignedPhotoUrl(data.signedURL||data.signedUrl);if(!url)throw new Error('未取得照片讀取網址');V82_PHOTO_URL_CACHE.set(path,url);V82_PHOTO_LOAD_FAILURES.delete(path);callback?.();return}catch(error){lastError=error;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,700))}}throw lastError}catch(error){V82_PHOTO_LOAD_FAILURES.set(path,(V82_PHOTO_LOAD_FAILURES.get(path)||0)+1);console.warn('照片簽署失敗',error);callback?.()}finally{V82_PHOTO_SIGNING.delete(path)}}
+function refreshV82PhotoImage(image,encodedPath){const path=decodeURIComponent(encodedPath),failures=V82_PHOTO_IMAGE_FAILURES.get(path)||0;if(failures>=2){image.outerHTML='<div style="padding:28px 10px;text-align:center;color:var(--ops-danger);">照片暫時讀取失敗<br><button type="button" onclick="retryV82PhotoPath(\''+encodeURIComponent(path)+'\')">重新載入</button></div>';return}V82_PHOTO_IMAGE_FAILURES.set(path,failures+1);V82_PHOTO_URL_CACHE.delete(path);hydrateV82PhotoUrl(path,renderV82ReportPhotos,true)}
+function retryV82PhotoPath(encodedPath){const path=decodeURIComponent(encodedPath);V82_PHOTO_LOAD_FAILURES.delete(path);V82_PHOTO_IMAGE_FAILURES.delete(path);V82_PHOTO_URL_CACHE.delete(path);hydrateV82PhotoUrl(path,renderV82ReportPhotos,true)}
 async function deleteV82PhotoObject(path){if(!path)throw new Error('缺少照片路徑');const cleanPath=String(path).replace(/^\/+|\/+$/g,'');if(!cleanPath)throw new Error('照片路徑無效');const config=getSupabaseConfig(),url=`${config.url}/storage/v1/object/${V82_PHOTO_BUCKET}`;const response=await fetch(url,{method:'DELETE',headers:{...supabaseHeaders(),'Content-Type':'application/json'},body:JSON.stringify({prefixes:[cleanPath]})});if(!response.ok)throw new Error((await response.text())||`Storage ${response.status}`);V82_PHOTO_URL_CACHE.delete(path)}
 const V82_REPORT_PHOTOS_KEY='shopee_v82_report_photo_refs_v1';
-const V82_PHOTO_SUBJECTS={c1:'科目1・進店',c2:'科目2・設備檢查',c7:'科目7・夜間上架異常',c13:'科目13・包裹重新整理',c16:'科目16・離店',c17:'科目17・關門照',c18:'科目18・指定門市勤務'};
 function readV82ReportPhotos(){try{return JSON.parse(appStorage.getItem(V82_REPORT_PHOTOS_KEY)||'{}')}catch{return{}}}
+let V82_PHOTO_INDEX_REFRESHING=null;
+function mergeV82PhotoIndexes(localIndex,remoteIndex){const merged={...remoteIndex};for(const [group,items] of Object.entries(localIndex||{})){const rows=[...(merged[group]||[])],seen=new Set(rows.map(item=>item.path||item.id));for(const item of items||[]){const key=item.path||item.id;if(key&&!seen.has(key)){rows.push(item);seen.add(key)}}merged[group]=rows}return merged}
+async function refreshV82PhotoIndexFromSupabase(){if(V82_PHOTO_INDEX_REFRESHING)return V82_PHOTO_INDEX_REFRESHING;if(window.IS_TRIAL_PROFILE||!storeV8Session||!storeV8Member?.approved){renderV82ReportPhotos();return false}V82_PHOTO_INDEX_REFRESHING=(async()=>{try{const rows=await supabaseRpc('store_app_load_state'),row=Array.isArray(rows)?rows[0]:rows,remotePayload=normalizeSupabaseSnapshot(row?.payload||{}),remoteRaw=remotePayload[V82_REPORT_PHOTOS_KEY],remoteIndex=typeof remoteRaw==='string'?JSON.parse(remoteRaw):(remoteRaw||{}),localIndex=readV82ReportPhotos(),merged=mergeV82PhotoIndexes(localIndex,remoteIndex),mergedText=JSON.stringify(merged),localText=JSON.stringify(localIndex),remotePaths=new Set(Object.values(remoteIndex).flat().map(item=>item.path).filter(Boolean)),hasLocalOnly=Object.values(localIndex).flat().some(item=>item.path&&!remotePaths.has(item.path));if(mergedText!==localText)appStorage.setItem(V82_REPORT_PHOTOS_KEY,mergedText);renderV82ReportPhotos();updateSubjectConfirmationUI();updateReportProgress();if(hasLocalOnly){markCloudPending({schedule:false});await syncSupabaseNow({})}return true}catch(error){console.warn('照片索引重新載入失敗',error);return false}finally{V82_PHOTO_INDEX_REFRESHING=null}})();return V82_PHOTO_INDEX_REFRESHING}
 function getV82ReportPhotoGroup(){const date=document.getElementById('report-date-picker')?.value||currentViewingReportDateKey||formatDateISO(new Date()),store=getStoreNameIdentity(document.getElementById('shopName')?.value||'');return store?`${date}|${store}`:''}
-function getV82PhotoSubject(){return document.getElementById('v82-report-photo-subject')?.value||'c1'}
-function renderV82ReportPhotos(){
-  const grid=document.getElementById('v82-report-photo-grid'),status=document.getElementById('v82-report-photo-status'),summary=document.getElementById('v82-report-photo-summary'),input=document.getElementById('v82-report-photo-input');
-  if(!grid||!status)return;
-  const group=getV82ReportPhotoGroup(),selected=getV82PhotoSubject();
-  if(input)input.disabled=storeV8Member?.role==='viewer';
-  if(!group){grid.innerHTML='';if(summary)summary.innerHTML='';if(!status.dataset.error)status.textContent='請先選擇門市，再選擇附圖科目。';return}
-  const items=readV82ReportPhotos()[group]||[],selectedItems=items.filter(item=>(item.subjectId||'legacy')===selected);
-  if(status.dataset.error)status.innerHTML=`<details class="v82-upload-error" open><summary>照片處理／上傳失敗</summary><code>${escapeStoreHTML(status.dataset.error)}</code></details>`;
-  else status.textContent=selectedItems.length?`${V82_PHOTO_SUBJECTS[selected]}：已附 ${selectedItems.length} 張照片`:`${V82_PHOTO_SUBJECTS[selected]}：尚未附圖`;
-  if(summary)summary.innerHTML=Object.entries(V82_PHOTO_SUBJECTS).map(([id,label])=>{const count=items.filter(item=>item.subjectId===id).length;return`<span class="v82-photo-subject-chip ${count?'has-photo':''}">${escapeStoreHTML(label)} ${count?`✓ ${count}`:'—'}</span>`}).join('')+(items.some(item=>!item.subjectId)?`<span class="v82-photo-subject-chip">舊版未分類 ${items.filter(item=>!item.subjectId).length}</span>`:'');
-  grid.innerHTML=items.map(item=>{const url=V82_PHOTO_URL_CACHE.get(item.path),label=V82_PHOTO_SUBJECTS[item.subjectId]||'舊版未分類照片',store=item.storeName||group.split('|').slice(1).join('|');if(!url)hydrateV82PhotoUrl(item.path,renderV82ReportPhotos);return`<div class="v82-photo-item">${url?`<img src="${escapeStoreHTML(url)}" alt="${escapeStoreHTML(label)}" onclick="openV82Photo('${encodeURIComponent(item.path)}')">`:'<div style="padding:34px 10px;text-align:center;color:var(--ops-muted);">讀取照片中…</div>'}<small><span class="v82-photo-subject-label">${escapeStoreHTML(label)}</span>${escapeStoreHTML(store)}・${escapeStoreHTML(formatV81Time(item.createdAt))}</small>${storeV8Member?.role!=='viewer'?`<button class="v82-photo-delete" onclick="deleteV82ReportPhoto('${item.id}')">刪除</button>`:''}</div>`}).join('');
-}
-async function handleV82ReportPhotos(event){const files=[...(event.target.files||[])];event.target.value='';const group=getV82ReportPhotoGroup(),subjectId=getV82PhotoSubject(),storeName=getStoreNameIdentity(document.getElementById('shopName')?.value||''),date=document.getElementById('report-date-picker')?.value||currentViewingReportDateKey||formatDateISO(new Date()),shift=document.getElementById('shift')?.value||'';if(!group)return showToast('請先選擇門市。');if(!V82_PHOTO_SUBJECTS[subjectId])return showToast('請先選擇附圖科目。');if(storeV8Member?.role==='viewer')return showToast('viewer 為唯讀帳號。');const status=document.getElementById('v82-report-photo-status');if(status)delete status.dataset.error;for(let i=0;i<files.length;i++){if(status)status.textContent=`${isV82HeicFile(files[i])?'HEIC 轉換 JPEG':'圖片壓縮'} ${i+1}/${files.length}…`;try{const {blob,preview}=await compressV82Photo(files[i]);if(status)status.textContent=`${V82_PHOTO_SUBJECTS[subjectId]}：JPEG 上傳私有雲端 ${i+1}/${files.length}…`;const path=await uploadV82PhotoBlob(blob,'report'),data=readV82ReportPhotos(),item={id:crypto.randomUUID?.()||String(Date.now()),path,subjectId,subjectLabel:V82_PHOTO_SUBJECTS[subjectId],storeName,date,shift,createdAt:new Date().toISOString(),by:storeV8Member?.email||''};if(!Array.isArray(data[group]))data[group]=[];data[group].push(item);appStorage.setItem(V82_REPORT_PHOTOS_KEY,JSON.stringify(data));V82_PHOTO_URL_CACHE.set(path,preview);markCloudPending()}catch(error){const message=formatV82PhotoError(error);if(status)status.dataset.error=message;showToast('⚠️ 照片上傳失敗，請查看附圖區錯誤。',5000);break}}renderV82ReportPhotos()}
+function renderV82ReportPhotos(){const grid=document.getElementById('v82-report-photo-grid'),status=document.getElementById('v82-report-photo-status'),input=document.getElementById('v82-report-photo-input');if(!grid||!status)return;const group=getV82ReportPhotoGroup();if(input)input.disabled=storeV8Member?.role==='viewer';if(!group){grid.innerHTML='';if(!status.dataset.error)status.textContent='請先選擇門市。';return}const items=readV82ReportPhotos()[group]||[];if(status.dataset.error)status.innerHTML=`<details class="v82-upload-error" open><summary>照片處理／上傳失敗</summary><code>${escapeStoreHTML(status.dataset.error)}</code></details>`;else status.textContent=items.length?`${items.length} 張私有雲端照片`:'尚未附加照片。';grid.innerHTML=items.map(item=>{const url=V82_PHOTO_URL_CACHE.get(item.path);if(!url)hydrateV82PhotoUrl(item.path,renderV82ReportPhotos);return`<div class="v82-photo-item">${url?`<img src="${escapeStoreHTML(url)}" alt="回報照片" onclick="openV82Photo('${encodeURIComponent(item.path)}')">`:'<div style="padding:34px 10px;text-align:center;color:var(--ops-muted);">讀取照片中…</div>'}<small>${escapeStoreHTML(formatV81Time(item.createdAt))}</small>${storeV8Member?.role!=='viewer'?`<button class="v82-photo-delete" onclick="deleteV82ReportPhoto('${item.id}')">刪除</button>`:''}</div>`}).join('')}
+async function handleV82ReportPhotos(event){const files=[...(event.target.files||[])];event.target.value='';const group=getV82ReportPhotoGroup();if(!group)return showToast('請先選擇門市。');if(storeV8Member?.role==='viewer')return showToast('viewer 為唯讀帳號。');const status=document.getElementById('v82-report-photo-status');if(status)delete status.dataset.error;for(let i=0;i<files.length;i++){if(status)status.textContent=`${isV82HeicFile(files[i])?'HEIC 轉換 JPEG':'圖片壓縮'} ${i+1}/${files.length}…`;try{const {blob,preview}=await compressV82Photo(files[i]);if(status)status.textContent=`JPEG 上傳私有雲端 ${i+1}/${files.length}…`;const path=await uploadV82PhotoBlob(blob,'report'),data=readV82ReportPhotos(),item={id:crypto.randomUUID?.()||String(Date.now()),path,createdAt:new Date().toISOString(),by:storeV8Member?.email||''};if(!Array.isArray(data[group]))data[group]=[];data[group].push(item);appStorage.setItem(V82_REPORT_PHOTOS_KEY,JSON.stringify(data));V82_PHOTO_URL_CACHE.set(path,preview);markCloudPending()}catch(error){const message=formatV82PhotoError(error);if(status)status.dataset.error=message;showToast('⚠️ 照片上傳失敗，請查看照片區錯誤。',5000);break}}renderV82ReportPhotos()}
 function openV82Photo(encodedPath){const path=decodeURIComponent(encodedPath),url=V82_PHOTO_URL_CACHE.get(path);if(url)window.open(url,'_blank','noopener')}
-async function deleteV82ReportPhoto(id){const group=getV82ReportPhotoGroup(),data=readV82ReportPhotos(),items=data[group]||[],item=items.find(x=>x.id===id);if(!item)return;if(!await showAppConfirm({title:'刪除雲端照片',message:'照片將從私有 Storage 永久刪除。',confirmText:'確定刪除',danger:true,icon:'📷'}))return;try{await deleteV82PhotoObject(item.path);data[group]=items.filter(x=>x.id!==id);appStorage.setItem(V82_REPORT_PHOTOS_KEY,JSON.stringify(data));markCloudPending();renderV82ReportPhotos();showToast('照片已刪除。')}catch(error){showToast('刪除失敗：'+error.message,4200)}}
+async function deleteV82ReportPhoto(id){const group=getV82ReportPhotoGroup(),data=readV82ReportPhotos(),items=data[group]||[],item=items.find(x=>x.id===id);if(!item)return;if(!await showAppConfirm({title:'刪除雲端照片',message:'照片將從私有 Storage 永久刪除。',confirmText:'確定刪除',danger:true,icon:'📷'}))return;try{await deleteV82PhotoObject(item.path);data[group]=items.filter(x=>x.id!==id);appStorage.setItem(V82_REPORT_PHOTOS_KEY,JSON.stringify(data));markCloudPending();renderV82ReportPhotos();renderV82OptionalDuties();updateSubjectConfirmationUI();updateReportProgress();updateDraftLabels();renderTodayDashboard();showToast('照片已刪除。')}catch(error){showToast('刪除失敗：'+error.message,4200)}}
+// RC15：照片是科目附件，每個科目可自由新增一張或多張。
+const V82_SUBJECT_PHOTO_CONFIG={
+  c1:{title:'科目1・進店',photoOnly:true},c2:{title:'科目2・設備檢查',photoOnly:true},c3:{title:'科目3・逾期包裹'},
+  c5:{title:'科目5・驗收／上架'},c6:{title:'科目6・異常包裹'},c7:{title:'科目7・夜間上架異常',photoOnly:true},
+  c8:{title:'科目8・離店／空箱盤點'},c9:{title:'科目9・早班打包'},c10:{title:'科目10・早班上架'},
+  c11:{title:'科目11・晚班打包'},c12:{title:'科目12・中正速配倉'},c13:{title:'科目13・包裹重新整理',photoOnly:true},
+  c14:{title:'科目14・晚班HD上架'},c15:{title:'科目15・AMS入庫／維修'},c16:{title:'科目16・離店',photoOnly:true},
+  c17:{title:'科目17・關門照',photoOnly:true},c18:{title:'科目18・指定門市勤務',photoOnly:true}
+};
+let V82_PENDING_PHOTO_SUBJECT='';
+function v82SubjectPhotoPanel(subjectId){return`<div class="v82-subject-photo-panel" data-photo-subject="${subjectId}"><div class="v82-subject-photo-head"><span><b>📷 科目照片</b> <small id="v82-photo-count-${subjectId}">0 張</small></span><button type="button" onclick="triggerV82SubjectPhoto('${subjectId}')">＋ 新增照片</button></div><div id="v82-photo-status-${subjectId}" class="v82-subject-photo-status">可自由新增一張或多張</div><div id="v82-photo-grid-${subjectId}" class="v82-photo-grid"></div></div>`}
+function v82PhotoOnlyInstruction(subjectId){if(subjectId!=='c18')return'選擇門市後，可直接拍照或一次選擇多張。';const shop=getCleanShopName(),shift=document.getElementById('shift')?.value||'早';if(/松菸.*旗艦/.test(shop))return shift==='早'?'本班需拍：開門照、拍貼機開機照。':'本班需拍：拍貼機關機照、關門照。';if(/中正.*軍總|軍總/.test(shop))return'本班需拍：騎樓清潔照。';return'本店已標記指定門市勤務，請依當日勤務附圖。'}
+function mountV82SubjectPhotoPanels(){
+  const photoOnly=document.getElementById('v82-photo-only-subjects');
+  if(photoOnly&&!photoOnly.dataset.ready){photoOnly.dataset.ready='1';photoOnly.innerHTML=Object.entries(V82_SUBJECT_PHOTO_CONFIG).filter(([,config])=>config.photoOnly).map(([id,config])=>`<div class="card v82-photo-only-card" id="card_${id}" data-shift="雙"><h3>${escapeStoreHTML(config.title)} <span class="shift-tag tag-both">附圖勤務</span></h3><p class="v82-photo-only-instruction" style="font-size:12px;color:var(--ops-muted);">${escapeStoreHTML(v82PhotoOnlyInstruction(id))}</p>${v82SubjectPhotoPanel(id)}</div>`).join('')+`<div class="card v82-photo-only-card" id="v82-legacy-photo-card" style="display:none;"><h3>舊版未分類照片</h3>${v82SubjectPhotoPanel('legacy')}</div>`;}
+  Object.entries(V82_SUBJECT_PHOTO_CONFIG).filter(([,config])=>!config.photoOnly).forEach(([id])=>{const card=document.getElementById(`card_${id}`);if(card&&!card.querySelector(`[data-photo-subject="${id}"]`))card.insertAdjacentHTML('beforeend',v82SubjectPhotoPanel(id));});
+  applyV82NumberedSubjectFlow();
+}
+function triggerV82SubjectPhoto(subjectId){if(!V82_SUBJECT_PHOTO_CONFIG[subjectId])return;const group=getV82ReportPhotoGroup();if(!group)return showToast('請先選擇門市。');if(storeV8Member?.role==='viewer')return showToast('viewer 為唯讀帳號。');V82_PENDING_PHOTO_SUBJECT=subjectId;document.getElementById('v82-report-photo-input')?.click()}
+function renderV82ReportPhotos(){
+  mountV82SubjectPhotoPanels();
+  const group=getV82ReportPhotoGroup(),items=group?(readV82ReportPhotos()[group]||[]):[];
+  [...Object.keys(V82_SUBJECT_PHOTO_CONFIG),'legacy'].forEach(subjectId=>{const subjectItems=items.filter(item=>(item.subjectId||'legacy')===subjectId),grid=document.getElementById(`v82-photo-grid-${subjectId}`),count=document.getElementById(`v82-photo-count-${subjectId}`),status=document.getElementById(`v82-photo-status-${subjectId}`);if(count)count.textContent=`${subjectItems.length} 張`;if(status&&!status.dataset.error)status.textContent=group?(subjectItems.length?'已附照片，可繼續新增':'可自由新增一張或多張'):'請先選擇門市';if(!grid)return;grid.innerHTML=subjectItems.map(item=>{const url=V82_PHOTO_URL_CACHE.get(item.path),encodedPath=encodeURIComponent(item.path);if(!url)hydrateV82PhotoUrl(item.path,renderV82ReportPhotos);return`<div class="v82-photo-item">${url?`<img src="${escapeStoreHTML(url)}" alt="${escapeStoreHTML(V82_SUBJECT_PHOTO_CONFIG[subjectId]?.title||'舊版照片')}" onload="V82_PHOTO_IMAGE_FAILURES.delete(decodeURIComponent('${encodedPath}'))" onerror="refreshV82PhotoImage(this,'${encodedPath}')" onclick="openV82Photo('${encodedPath}')">`:'<div style="padding:34px 10px;text-align:center;color:var(--ops-muted);">讀取照片中…</div>'}<small>${escapeStoreHTML(formatV81Time(item.createdAt))}</small>${storeV8Member?.role!=='viewer'?`<button class="v82-photo-delete" onclick="deleteV82ReportPhoto('${item.id}')">刪除</button>`:''}</div>`}).join('');});
+  const legacyCard=document.getElementById('v82-legacy-photo-card');if(legacyCard)legacyCard.style.display=items.some(item=>!item.subjectId)?'block':'none';
+}
+async function handleV82ReportPhotos(event){const files=[...(event.target.files||[])],subjectId=V82_PENDING_PHOTO_SUBJECT,anchor=document.getElementById(`card_${subjectId}`),anchorTop=anchor?.getBoundingClientRect().top;event.target.value='';V82_PENDING_PHOTO_SUBJECT='';const group=getV82ReportPhotoGroup(),config=getV82PhotoTargetConfig(subjectId),status=document.getElementById(`v82-photo-status-${subjectId}`);if(!group)return showToast('請先選擇門市。');if(!config)return showToast('找不到照片所屬科目。');if(storeV8Member?.role==='viewer')return showToast('viewer 為唯讀帳號。');if(status)delete status.dataset.error;let uploaded=0,failed=0,lastError='';for(let i=0;i<files.length;i++){if(status)status.textContent=`${isV82HeicFile(files[i])?'HEIC 轉換 JPEG':'圖片壓縮'} ${i+1}/${files.length}…`;try{const {blob,preview}=await compressV82Photo(files[i]);if(status)status.textContent=`JPEG 上傳私有雲端 ${i+1}/${files.length}…`;const path=await uploadV82PhotoBlob(blob,'report'),data=readV82ReportPhotos(),item={id:crypto.randomUUID?.()||String(Date.now()),path,subjectId,subjectLabel:config.title,storeName:getStoreNameIdentity(document.getElementById('shopName')?.value||''),date:document.getElementById('report-date-picker')?.value||currentViewingReportDateKey||formatDateISO(new Date()),shift:document.getElementById('shift')?.value||'',createdAt:new Date().toISOString(),by:storeV8Member?.email||''};if(!Array.isArray(data[group]))data[group]=[];data[group].push(item);appStorage.setItem(V82_REPORT_PHOTOS_KEY,JSON.stringify(data));V82_PHOTO_URL_CACHE.set(path,preview);markCloudPending();uploaded++}catch(error){failed++;lastError=formatV82PhotoError(error)}}renderV82ReportPhotos();renderV82OptionalDuties();updateSubjectConfirmationUI();updateReportProgress();updateDraftLabels();renderTodayDashboard();if(status&&uploaded)status.textContent='照片索引同步中…';const photoIndexSynced=uploaded?await syncSupabaseNow({}):true;if(status){if(failed){status.dataset.error=lastError;status.innerHTML=`<details class="v82-upload-error" open><summary>已完成 ${uploaded} 張，${failed} 張失敗${photoIndexSynced?'':'；索引等待同步'}</summary><code>${escapeStoreHTML(lastError)}</code></details>`}else{delete status.dataset.error;status.textContent=`已成功新增 ${uploaded} 張照片${photoIndexSynced?'，雲端索引已同步':'，索引等待同步'}`}}showToast(failed?`⚠️ 已上傳 ${uploaded} 張，另有 ${failed} 張失敗${photoIndexSynced?'':'；索引等待同步'}。`:`✅ 已上傳 ${uploaded} 張照片${photoIndexSynced?'，重開後可自動載入':'；索引等待同步'}`,5000);requestAnimationFrame(()=>{if(anchor&&Number.isFinite(anchorTop)){const nextTop=anchor.getBoundingClientRect().top;window.scrollBy(0,nextTop-anchorTop)}})}
+const V82_OPTIONAL_DUTY_KEY='shopee_v82_optional_daily_duties_v1';
+const V82_NUMBERED_SUBJECT_ORDER=['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10','c11','c12','c13','c14','c15','c16','c17','c18'];
+// 只有純拍照科目把照片列為完成條件；其餘科目的照片皆為輔助附件。
+const V82_PHOTO_REQUIRED_SUBJECTS=new Set(['c1','c2','c7','c13','c16','c17','c18']);
+window.V82_PHOTO_MODULE_READY=true;
+function getApplicableSubjects(shopName,shift,reportData=null){
+  const allowed=V82_NUMBERED_SUBJECT_ORDER;
+  if(reportData?._supportDutyId&&reportData?._supportUnlockAll)return [...allowed];
+  if(reportData?._supportDutyId&&Array.isArray(reportData?._supportSubjects))return [...new Set(reportData._supportSubjects)].filter(id=>allowed.includes(id)).sort((a,b)=>allowed.indexOf(a)-allowed.indexOf(b));
+  const tags=getScheduleStoreDetails(shopName).tags||[],has=value=>tags.some(tag=>String(tag).includes(value));
+  let result=['c1','c2','c4','c5','c6','c8','c15','c16','c17'];
+  if(shift==='晚')result.push('c11','c14');else result.push('c3','c9','c10');
+  if(has('夜間上架'))result.push('c7');
+  if(has('中正速配倉'))result.push('c12');
+  if(has('包裹重新分配'))result.push('c13');
+  if(has('指定門市勤務'))result.push('c18');
+  if(!has('SCS HD打包'))result=result.filter(id=>!['c9','c10','c11'].includes(id));
+  if(!has('HD上架'))result=result.filter(id=>id!=='c14');
+  return [...new Set(result)].sort((a,b)=>allowed.indexOf(a)-allowed.indexOf(b));
+}
+function v82PhotoGroupKey(date,store){return store?`${date}|${getStoreNameIdentity(store)}`:''}
+function v82SubjectPhotoCount(subjectId,date=currentViewingReportDateKey||formatDateISO(new Date()),store=getCleanShopName(),shift=document.getElementById('shift')?.value||'早'){const items=readV82ReportPhotos()[v82PhotoGroupKey(date,store)]||[];return items.filter(item=>item.subjectId===subjectId&&(!item.shift||item.shift===shift)).length}
+function v82RequiredPhotoCount(subjectId,shop=getCleanShopName()){if(subjectId==='c18'&&/松菸.*旗艦/.test(shop))return 2;return V82_PHOTO_REQUIRED_SUBJECTS.has(subjectId)?1:0}
+function isSubjectConfirmed(subjectId,data=readCurrentDraftObject()){const shop=data.shopName||getCleanShopName(),shift=data.shift||document.getElementById('shift')?.value||'早',date=currentViewingReportDateKey||formatDateISO(new Date());if(V82_SUBJECT_PHOTO_CONFIG[subjectId]?.photoOnly)return v82SubjectPhotoCount(subjectId,date,shop,shift)>=v82RequiredPhotoCount(subjectId,shop);return data._confirmedSubjects?.[subjectId]===true}
+function hasRequiredSubjectPhotos(subjectId,data=readCurrentDraftObject()){const required=v82RequiredPhotoCount(subjectId,data.shopName||getCleanShopName());if(required<=0)return true;const date=currentViewingReportDateKey||formatDateISO(new Date()),shop=data.shopName||getCleanShopName(),shift=data.shift||document.getElementById('shift')?.value||'早';return v82SubjectPhotoCount(subjectId,date,shop,shift)>=required}
+function isSubjectReadyForArchive(subjectId,data=readCurrentDraftObject()){return isSubjectConfirmed(subjectId,data)&&hasRequiredSubjectPhotos(subjectId,data)}
+function getDraftCompletion(index){try{const draft=JSON.parse(appStorage.getItem(`shopee_report_draft_${index+1}`)||'{}');if(!draft.shopName)return{exists:false,percent:0,total:0,confirmed:0};const subjects=getApplicableSubjects(draft.shopName,draft.shift||'早',draft),confirmed=subjects.filter(id=>isSubjectReadyForArchive(id,draft)).length;return{exists:true,percent:subjects.length?Math.round(confirmed/subjects.length*100):100,total:subjects.length,confirmed}}catch{return{exists:false,percent:0,total:0,confirmed:0}}}
+function v82ReportTextEntryActive(){const active=document.activeElement,report=document.getElementById('report-tab');return !!(active&&report?.contains(active)&&active.matches('input:not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select, [contenteditable="true"]'))}
+function applyV82NumberedSubjectFlow(){const report=document.getElementById('report-tab');if(!report)return;const flow=report.querySelector('.report-main-column')||report;const editing=v82ReportTextEntryActive();if(!editing){const desired=V82_NUMBERED_SUBJECT_ORDER.map(id=>document.getElementById(`card_${id}`)).filter(Boolean),legacy=document.getElementById('v82-legacy-photo-card'),optional=document.getElementById('v82-optional-duty-card'),support=document.getElementById('support-report-copy-card');[legacy,optional,support].filter(Boolean).forEach(node=>desired.push(node));const desiredSet=new Set(desired),current=[...flow.children].filter(node=>desiredSet.has(node)),needsOrder=current.length!==desired.length||desired.some((node,index)=>current[index]!==node);if(needsOrder)desired.forEach(node=>flow.appendChild(node))}const optional=document.getElementById('v82-optional-duty-card');if(optional)optional.style.display=getV82ReportPhotoGroup()?'block':'none';const holder=document.getElementById('v82-photo-only-subjects');if(holder)holder.style.display='none';document.querySelectorAll('.v82-photo-only-card .subject-confirm-row').forEach(row=>row.remove());const c18=document.getElementById('card_c18');if(c18){const p=c18.querySelector('.v82-photo-only-instruction');if(p)p.textContent=v82PhotoOnlyInstruction('c18')}updateSubjectConfirmationUI();renderV82OptionalDuties()}
+function readV82OptionalDuties(){try{return JSON.parse(appStorage.getItem(V82_OPTIONAL_DUTY_KEY)||'{}')}catch{return{}}}
+function v82OptionalDutyGroup(){const base=getV82ReportPhotoGroup(),shift=document.getElementById('shift')?.value||'早';return base?`${base}|${shift}`:''}
+function getV82CurrentOptionalDuties(){const group=v82OptionalDutyGroup();return group?(readV82OptionalDuties()[group]||[]):[]}
+function saveV82OptionalDuties(items){const group=v82OptionalDutyGroup();if(!group)return;const data=readV82OptionalDuties();data[group]=items;appStorage.setItem(V82_OPTIONAL_DUTY_KEY,JSON.stringify(data));markCloudPending();renderV82OptionalDuties()}
+function addV82OptionalDuty(){const input=document.getElementById('v82-optional-duty-name'),name=input?.value.trim();if(!v82OptionalDutyGroup())return showToast('請先選擇門市。');if(!name)return showToast('請輸入臨時任務名稱。');saveV82OptionalDuties([...getV82CurrentOptionalDuties(),{id:crypto.randomUUID?.()||String(Date.now()),name,createdAt:new Date().toISOString()}]);input.value='';showToast('已新增今日臨時勤務。')}
+function editV82OptionalDuty(id){const items=getV82CurrentOptionalDuties(),item=items.find(x=>x.id===id);if(!item)return;const name=prompt('修改臨時任務名稱',item.name);if(name===null)return;if(!name.trim())return showToast('任務名稱不可空白。');item.name=name.trim();saveV82OptionalDuties(items)}
+async function deleteV82OptionalDuty(id){const items=getV82CurrentOptionalDuties(),item=items.find(x=>x.id===id);if(!item)return;if(!await showAppConfirm({title:'刪除臨時勤務',message:`將刪除「${item.name}」及其雲端照片。`,confirmText:'刪除',danger:true,icon:'🗑️'}))return;const group=getV82ReportPhotoGroup(),photos=readV82ReportPhotos(),groupPhotos=photos[group]||[],targets=groupPhotos.filter(photo=>photo.subjectId===`optional:${id}`);try{for(const photo of targets)await deleteV82PhotoObject(photo.path);photos[group]=groupPhotos.filter(photo=>photo.subjectId!==`optional:${id}`);appStorage.setItem(V82_REPORT_PHOTOS_KEY,JSON.stringify(photos));saveV82OptionalDuties(items.filter(x=>x.id!==id));showToast('臨時勤務已刪除。')}catch(error){showToast('刪除失敗：'+error.message,4200)}}
+function triggerV82OptionalPhoto(id){V82_PENDING_PHOTO_SUBJECT=`optional:${id}`;document.getElementById('v82-report-photo-input')?.click()}
+function getV82PhotoTargetConfig(subjectId){if(V82_SUBJECT_PHOTO_CONFIG[subjectId])return V82_SUBJECT_PHOTO_CONFIG[subjectId];if(String(subjectId).startsWith('optional:')){const id=String(subjectId).slice(9),item=getV82CurrentOptionalDuties().find(x=>x.id===id);return item?{title:item.name,optional:true}:null}return null}
+function renderV82OptionalDuties(){const card=document.getElementById('v82-optional-duty-card'),box=document.getElementById('v82-optional-duty-list');if(!card||!box)return;const group=getV82ReportPhotoGroup(),shift=document.getElementById('shift')?.value||'早',photos=group?(readV82ReportPhotos()[group]||[]):[];card.style.display=group?'block':'none';box.innerHTML=getV82CurrentOptionalDuties().map(item=>{const subjectId=`optional:${item.id}`,items=photos.filter(photo=>photo.subjectId===subjectId&&(!photo.shift||photo.shift===shift));items.forEach(photo=>{if(!V82_PHOTO_URL_CACHE.has(photo.path))hydrateV82PhotoUrl(photo.path,renderV82OptionalDuties)});return`<div class="v82-optional-duty-item"><div class="v82-optional-duty-row"><b>${escapeStoreHTML(item.name)}</b><button onclick="triggerV82OptionalPhoto('${item.id}')">＋ 照片</button><button onclick="editV82OptionalDuty('${item.id}')">修改</button><button onclick="deleteV82OptionalDuty('${item.id}')" style="color:#b42318;">刪除</button></div><div class="v82-photo-grid">${items.map(photo=>{const url=V82_PHOTO_URL_CACHE.get(photo.path);return`<div class="v82-photo-item">${url?`<img src="${escapeStoreHTML(url)}" alt="臨時勤務照片" onclick="openV82Photo('${encodeURIComponent(photo.path)}')">`:'<div style="padding:34px 10px;text-align:center;color:var(--ops-muted);">讀取照片中…</div>'}<small>${escapeStoreHTML(formatV81Time(photo.createdAt))}</small><button class="v82-photo-delete" onclick="deleteV82ReportPhoto('${photo.id}')">刪除</button></div>`}).join('')}</div></div>`}).join('')||'<div style="color:var(--ops-muted);font-size:12px;">今日尚未新增臨時勤務。</div>'}
 // RC13 導覽修正：恢復小工具獨立主頁簽並保留回報內快捷入口；勤務規則維持整併於更多。
 const V82_NAV_ORDER_KEY='shopee_v82_main_nav_order_v1';
 const V82_NAV_DEFAULT=['today-tab','report-tab','tools-tab','schedule-tab','reports-tab','knowledge-tab','settings-tab'];
 const V82_NAV_META={'today-tab':['⌂','今日'],'report-tab':['▣','回報'],'tools-tab':['⚒','小工具'],'schedule-tab':['▦','班表'],'reports-tab':['▤','報表'],'knowledge-tab':['☷','資料庫'],'settings-tab':['⚙','更多']};
 function setContextTabActive(tabId,index){document.querySelectorAll(`#${tabId} .context-tabs button`).forEach((button,i)=>button.classList.toggle('active',i===index));}
 function openReportContext(view='report'){const tab=view==='tools'?'tools-tab':'report-tab';switchMainTab(tab,navButtonFor(tab));setContextTabActive(tab,view==='tools'?1:0);}
+function setMorePanelView(view='overview'){
+  const overview=document.getElementById('more-overview-panel'),settings=document.getElementById('more-settings-panel');
+  if(overview)overview.hidden=view!=='overview';
+  if(settings)settings.hidden=view!=='settings';
+  setContextTabActive('settings-tab',view==='settings'?2:0);
+}
 function openMoreContext(view='overview'){
   if(view==='rules'){
     switchMainTab('rules-tab',navButtonFor('settings-tab'));
@@ -7345,8 +7693,9 @@ function openMoreContext(view='overview'){
     return;
   }
   switchMainTab('settings-tab',navButtonFor('settings-tab'));
-  setContextTabActive('settings-tab',view==='settings'?2:0);
-  setTimeout(()=>{if(view==='settings')document.querySelector('.settings-center-tabs')?.scrollIntoView({behavior:'smooth',block:'start'});else document.querySelector('#settings-tab .more-hero')?.scrollIntoView({behavior:'smooth',block:'start'});},30);
+  setMorePanelView(view==='settings'?'settings':'overview');
+  if(view==='settings')selectV82SettingsCategory(appStorage.getItem('shopee_v82_settings_category')||'appearance');
+  setTimeout(()=>{if(view==='settings')document.getElementById('v82-settings-workbench')?.scrollIntoView({behavior:'smooth',block:'start'});else document.querySelector('#settings-tab .context-tabs')?.scrollIntoView({behavior:'smooth',block:'start'});},30);
 }
 function readNavigationOrder(){let order=[];try{order=JSON.parse(appStorage.getItem(V82_NAV_ORDER_KEY)||'[]')}catch{}order=Array.isArray(order)?order.filter(x=>V82_NAV_DEFAULT.includes(x)):[];return[...order,...V82_NAV_DEFAULT.filter(x=>!order.includes(x))];}
 function applyNavigationOrder(){const nav=document.querySelector('.main-nav');if(!nav)return;readNavigationOrder().forEach(id=>{const button=navButtonFor(id);if(button)nav.appendChild(button);});}
@@ -7393,7 +7742,8 @@ async function initSupabaseV8(){
   const config=JSON.parse(localStorage.getItem(STORE_V8_CONFIG_KEY)||'{}');const url=document.getElementById('supabase-project-url'),key=document.getElementById('supabase-publishable-key');if(url)url.value=config.url||'';if(key)key.value=config.key||'';storeV8Session=JSON.parse(localStorage.getItem(STORE_V8_SESSION_KEY)||'null');
   if(storeV8Session&&config.url&&config.key){await refreshSupabaseSession();try{await registerSupabaseMember();await refreshCloudSnapshots()}catch(error){console.warn(error);updateSupabaseUI()}}else updateSupabaseUI();
   if(appStorage.getItem('shopee_cloud_pending')==='true')setV81QueuePending();else updateV81SyncCenter();
-  applyV82SidebarPreference();applyV82Appearance();renderV82ReminderCenter();renderV82ReportPhotos();setInterval(()=>{renderV82ReminderCenter();renderV82ReportPhotos()},2500);
+  // RC16 手機輸入保護：回報頁使用期間不得有 2.5 秒全域 DOM 輪詢；提醒與照片改由載入、儲存、切店及資料增刪事件更新。
+  applyV82SidebarPreference();applyV82Appearance();renderV82ReminderCenter();renderV82ReportPhotos();
   if('serviceWorker'in navigator)navigator.serviceWorker.register('./store-app-sw.js').catch(error=>console.warn('Service Worker',error));
 }
 window.addEventListener('online',()=>{updateV81SyncCenter();if(hasV81Pending())setTimeout(()=>syncSupabaseNow(),500)});
