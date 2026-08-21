@@ -1107,6 +1107,32 @@
   .settings-center-tabs button { min-height:50px;background:var(--ops-surface);border:1px solid var(--ops-border);color:var(--ops-text); }
   .settings-center-tabs button.active { background:#7c3aed;color:#fff;border-color:#7c3aed; }
   .settings-section[hidden] { display:none !important; }
+  /* RC20 設定工作台候選：只重組既有設定卡片，不變更任何資料鍵或儲存事件。 */
+  .v82-settings-workbench { display:grid;grid-template-columns:230px minmax(0,1fr);gap:14px;align-items:start;margin-top:12px; }
+  .v82-settings-rail { position:sticky;top:14px;border:1px solid var(--ops-border);border-radius:14px;background:var(--ops-surface);padding:10px;box-shadow:var(--ops-shadow); }
+  .v82-settings-rail-head { padding:6px 8px 10px;border-bottom:1px solid var(--ops-border);margin-bottom:7px; }
+  .v82-settings-rail-head b { display:block;color:var(--ops-text);font-size:14px; }
+  .v82-settings-rail-head small { color:var(--ops-muted);font-size:10px;line-height:1.45; }
+  .v82-settings-category { width:100%;display:grid;grid-template-columns:28px minmax(0,1fr);gap:7px;align-items:center;text-align:left;padding:10px 9px;margin:4px 0;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--ops-text);box-shadow:none; }
+  .v82-settings-category span { font-size:17px;text-align:center; }
+  .v82-settings-category b { font-size:12px; }
+  .v82-settings-category small { display:block;color:var(--ops-muted);font-size:9px;font-weight:500;margin-top:2px; }
+  .v82-settings-category.active { border-color:#8b5cf6;background:rgba(124,58,237,.10);color:#6d28d9; }
+  .v82-settings-detail { min-width:0; }
+  .v82-settings-detail-head { display:flex;justify-content:space-between;gap:10px;align-items:center;padding:13px 15px;margin-bottom:10px;border:1px solid var(--ops-border);border-radius:14px;background:var(--ops-surface);box-shadow:var(--ops-shadow); }
+  .v82-settings-detail-head h2 { margin:0;color:var(--ops-text);font-size:17px; }
+  .v82-settings-detail-head p { margin:3px 0 0;color:var(--ops-muted);font-size:11px; }
+  .v82-settings-detail .settings-section { margin:0 0 11px; }
+  .v82-settings-detail #settings-search-wrap { margin:0 0 10px; }
+  .settings-center-tabs.v82-settings-legacy-tabs { display:none !important; }
+  @media(max-width:760px){
+    .v82-settings-workbench { display:block;margin-top:9px; }
+    .v82-settings-rail { position:static;display:flex;gap:7px;overflow-x:auto;padding:8px;margin-bottom:10px;scrollbar-width:thin; }
+    .v82-settings-rail-head { display:none; }
+    .v82-settings-category { flex:0 0 142px;min-height:58px;margin:0;padding:8px; }
+    .v82-settings-category small { white-space:normal; }
+    .v82-settings-detail-head { padding:11px 12px; }
+  }
   .incident-item { padding:11px;border:1px solid var(--ops-border);border-radius:10px;margin:8px 0;background:var(--ops-bg); }.incident-item.open { border-left:4px solid #dc2626; }
   .health-list { display:grid;gap:8px; }.health-row { display:flex;gap:8px;align-items:flex-start;padding:10px;border-radius:9px;background:var(--ops-bg);border:1px solid var(--ops-border);font-size:12px; }
   .multi-picker { border:1px solid var(--ops-border);border-radius:8px;padding:8px;background:var(--ops-bg);max-height:190px;overflow:auto; }
@@ -3051,28 +3077,63 @@ function switchMainTab(tabId, btn) {
     renderQuickInputSettings();
     renderStoreManageList();
     renderSupportDutyList();
+    initV82SettingsWorkbench();
     selectSettingsGroup(appStorage.getItem('shopee_v7_settings_group') || 'global');
     runDataHealthCheck();
   }
 }
 
-/* v7.0.0 設定中心：只切換既有設定卡片的可見性；原控制項、儲存鍵與事件函式保持不變。 */
+const V82_SETTINGS_CATEGORIES=[
+  {id:'appearance',icon:'🎨',title:'外觀與導覽',note:'主題、狀態色與顯示方式'},
+  {id:'sync',icon:'☁️',title:'帳號與同步',note:'Supabase、備份與權限'},
+  {id:'stores',icon:'🏪',title:'門市管理',note:'門市資料與勤務標籤'},
+  {id:'tools',icon:'▣',title:'QR 與快捷',note:'條碼、QR 與快速輸入'},
+  {id:'support',icon:'🤝',title:'支援勤務',note:'臨時支援新增與維護'},
+  {id:'safety',icon:'🛡️',title:'系統維護',note:'狀態、進階與資料健康'}
+];
+function classifyV82SettingsCard(card){
+  const text=card.textContent||'';
+  if(/介面外觀|勤務狀態色/.test(text))return'appearance';
+  if(/Supabase 帳號|同步與資料安全/.test(text))return'sync';
+  if(/門市資料與回報任務/.test(text))return'stores';
+  if(/到店工具箱|手機快捷輸入/.test(text))return'tools';
+  if(/支援勤務管理/.test(text))return'support';
+  return'safety';
+}
+function initV82SettingsWorkbench(){
+  const tab=document.getElementById('settings-tab'),tabs=tab?.querySelector('.settings-center-tabs');if(!tab||!tabs||document.getElementById('v82-settings-workbench'))return;
+  tabs.classList.add('v82-settings-legacy-tabs');
+  const workbench=document.createElement('div');workbench.id='v82-settings-workbench';workbench.className='v82-settings-workbench';
+  const rail=document.createElement('aside');rail.className='v82-settings-rail';rail.innerHTML=`<div class="v82-settings-rail-head"><b>設定分類</b><small>選擇左側項目，右側只顯示相關設定</small></div>${V82_SETTINGS_CATEGORIES.map(item=>`<button type="button" class="v82-settings-category" data-settings-category="${item.id}" onclick="selectV82SettingsCategory('${item.id}')"><span>${item.icon}</span><div><b>${item.title}</b><small>${item.note}</small></div></button>`).join('')}`;
+  const detail=document.createElement('main');detail.className='v82-settings-detail';detail.innerHTML='<div class="v82-settings-detail-head"><div><h2 id="v82-settings-detail-title">設定</h2><p id="v82-settings-detail-note">選擇分類以管理設定</p></div></div>';
+  const search=document.getElementById('settings-search-wrap');if(search)detail.appendChild(search);
+  tab.querySelectorAll('.settings-section').forEach(card=>{card.dataset.v82SettingsCategory=classifyV82SettingsCard(card);detail.appendChild(card);});
+  workbench.append(rail,detail);tabs.insertAdjacentElement('afterend',workbench);
+}
+function selectV82SettingsCategory(category='appearance'){
+  initV82SettingsWorkbench();if(!V82_SETTINGS_CATEGORIES.some(item=>item.id===category))category='appearance';
+  appStorage.setItem('shopee_v82_settings_category',category);
+  document.querySelectorAll('.v82-settings-category').forEach(button=>button.classList.toggle('active',button.dataset.settingsCategory===category));
+  const meta=V82_SETTINGS_CATEGORIES.find(item=>item.id===category),title=document.getElementById('v82-settings-detail-title'),note=document.getElementById('v82-settings-detail-note');if(title)title.textContent=`${meta.icon} ${meta.title}`;if(note)note.textContent=meta.note;
+  filterSettingsCards();
+}
+/* RC20 相容入口：舊的 global／feature 捷徑導向新的工作台分類，原控制項與資料鍵不變。 */
 function selectSettingsGroup(group = 'global') {
   appStorage.setItem('shopee_v7_settings_group', group);
-  document.querySelectorAll('.settings-section').forEach(card => { card.hidden = card.dataset.settingsGroup !== group; card.style.display = card.hidden ? 'none' : ''; });
+  initV82SettingsWorkbench();
   document.getElementById('settings-global-btn')?.classList.toggle('active', group === 'global');
   document.getElementById('settings-feature-btn')?.classList.toggle('active', group === 'feature');
-  filterSettingsCards();
+  const saved=appStorage.getItem('shopee_v82_settings_category'),allowed=V82_SETTINGS_CATEGORIES.some(item=>item.id===saved);selectV82SettingsCategory(allowed?saved:(group==='feature'?'stores':'appearance'));
 }
 function filterSettingsCards() {
   const q = (document.getElementById('settings-search')?.value || '').trim().toLowerCase();
-  const group = appStorage.getItem('shopee_v7_settings_group') || 'global';
+  const category=appStorage.getItem('shopee_v82_settings_category')||'appearance';
   document.querySelectorAll('.settings-section').forEach(card => {
-    const visible = card.dataset.settingsGroup === group && (!q || card.textContent.toLowerCase().includes(q));
+    const visible = card.dataset.v82SettingsCategory === category && (!q || card.textContent.toLowerCase().includes(q));
     card.hidden = !visible; card.style.display = visible ? '' : 'none';
   });
 }
-function focusMoreSection(id) { selectSettingsGroup('feature'); setTimeout(() => document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'}), 80); }
+function focusMoreSection(id) { selectV82SettingsCategory(id==='arrival-tools-card'?'tools':'stores'); setTimeout(() => document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'}), 80); }
 
 function navButtonFor(tabId) {
   return Array.from(document.querySelectorAll('.nav-btn')).find(btn => btn.dataset.navTab===tabId) ||
@@ -7554,64 +7615,3 @@ function openMoreContext(view='overview'){
     setContextTabActive('rules-tab',1);
     setTimeout(renderDutyRuleCenter,0);
     return;
-  }
-  switchMainTab('settings-tab',navButtonFor('settings-tab'));
-  setContextTabActive('settings-tab',view==='settings'?2:0);
-  setTimeout(()=>{if(view==='settings')document.querySelector('.settings-center-tabs')?.scrollIntoView({behavior:'smooth',block:'start'});else document.querySelector('#settings-tab .more-hero')?.scrollIntoView({behavior:'smooth',block:'start'});},30);
-}
-function readNavigationOrder(){let order=[];try{order=JSON.parse(appStorage.getItem(V82_NAV_ORDER_KEY)||'[]')}catch{}order=Array.isArray(order)?order.filter(x=>V82_NAV_DEFAULT.includes(x)):[];return[...order,...V82_NAV_DEFAULT.filter(x=>!order.includes(x))];}
-function applyNavigationOrder(){const nav=document.querySelector('.main-nav');if(!nav)return;readNavigationOrder().forEach(id=>{const button=navButtonFor(id);if(button)nav.appendChild(button);});}
-function renderNavigationOrder(){const box=document.getElementById('navigation-order-list');if(!box)return;const order=readNavigationOrder();box.innerHTML=order.map((id,index)=>{const [icon,label]=V82_NAV_META[id];return`<div class="nav-order-item"><span>${icon}</span><b>${label}</b><button onclick="moveNavigationItem('${id}',-1)" ${index===0?'disabled':''}>↑</button><button onclick="moveNavigationItem('${id}',1)" ${index===order.length-1?'disabled':''}>↓</button></div>`}).join('');}
-function openNavigationOrderManager(){openMoreContext('overview');setTimeout(()=>{const card=document.getElementById('navigation-order-card');if(card){card.style.display='block';renderNavigationOrder();card.scrollIntoView({behavior:'smooth',block:'start'});}},60);}
-function moveNavigationItem(id,direction){const order=readNavigationOrder(),index=order.indexOf(id),target=index+direction;if(index<0||target<0||target>=order.length)return;[order[index],order[target]]=[order[target],order[index]];appStorage.setItem(V82_NAV_ORDER_KEY,JSON.stringify(order));markCloudPending();applyNavigationOrder();renderNavigationOrder();showToast('主導覽順序已更新。');}
-async function resetNavigationOrder(){if(!await showAppConfirm({title:'恢復導覽順序',message:'將七個主要頁簽恢復為：今日、回報、小工具、班表、報表、資料庫、更多。',confirmText:'恢復預設',icon:'↕'}))return;appStorage.removeItem(V82_NAV_ORDER_KEY);markCloudPending();applyNavigationOrder();renderNavigationOrder();showToast('已恢復預設導覽順序。');}
-document.addEventListener('DOMContentLoaded',applyNavigationOrder);
-
-// RC10 勤務規則中心：先使用獨立資料鍵驗證主從式管理介面，不直接改寫現行班表與勤務資料庫。
-const V82_RULE_CENTER_KEY='shopee_v82_rule_center_candidate_v1';
-const V82_RULE_CATEGORIES={
-  shifts:{icon:'🕒',label:'班別',description:'開始時間與班別代碼'},
-  weekly:{icon:'📅',label:'每週固定勤務',description:'依星期重複的工作'},
-  monthly:{icon:'🗓️',label:'每月固定勤務',description:'依月週次重複的工作'},
-  reminders:{icon:'🔔',label:'提醒規則',description:'時間與漏填提示'}
-};
-const V82_RULE_DEFAULTS={
-  shifts:[['白班','CSNU01','08:00','每日','全天'],['早班','SHIFT-EARLY','06:00','每日','早班'],['中班','SHIFT-MID','12:00','每日','全天'],['午班','SHIFT-PM','12:00','每日','全天'],['小夜','SHIFT-EVE','20:00','每日','晚班'],['大夜','SHIFT-NIGHT','00:00','每日','晚班']],
-  weekly:[['繳費機','W-MON-PAY','','每週一','早班'],['掃地拖地','W-TUE-CLEAN','','每週二','晚班'],['清潔門框','W-WED-DOOR','','每週三','晚班'],['倒垃圾','W-THU-TRASH','','每週四','早班'],['盤點空箱','W-THU-BOX','','每週四','晚班']],
-  monthly:[['清潔玻璃','M-W1-GLASS','','每月第一週','全天'],['清潔智取櫃上方','M-W2-TOP','','每月第二週','全天'],['清潔操作桌與招牌燈點檢','M-W3-DESK','','每月第三週','全天'],['蜘蛛網清潔與紙箱回收','M-W4-WALL','','每月第四週','全天']],
-  reminders:[['勤務開始提醒','R-START','18:30','上班日','全天'],['漏填檢查','R-MISSING','22:15','上班日','全天'],['照片上傳確認','R-PHOTO','22:20','上班日','全天']]
-};
-let activeDutyRuleCategory='shifts',selectedDutyRuleId='';
-function makeDutyRule(category,row,index){return{id:`rule-${category}-${index+1}`,category,name:row[0],code:row[1],time:row[2],cycle:row[3],shift:row[4],order:index+1,note:'',enabled:true};}
-function getDutyRules(){let items=[];try{items=JSON.parse(appStorage.getItem(V82_RULE_CENTER_KEY)||'[]')}catch{}if(!Array.isArray(items)||!items.length){items=Object.entries(V82_RULE_DEFAULTS).flatMap(([category,rows])=>rows.map((row,index)=>makeDutyRule(category,row,index)));appStorage.setItem(V82_RULE_CENTER_KEY,JSON.stringify(items));}return items;}
-function saveDutyRules(items){appStorage.setItem(V82_RULE_CENTER_KEY,JSON.stringify(items));markCloudPending();}
-function openDutyRuleCenter(){openMoreContext('rules');setTimeout(()=>document.getElementById('duty-rule-center')?.scrollIntoView({behavior:'smooth',block:'start'}),80);}
-function selectDutyRuleCategory(category){if(!V82_RULE_CATEGORIES[category])return;activeDutyRuleCategory=category;selectedDutyRuleId='';resetDutyRuleDraft(false);renderDutyRuleCenter();}
-function dutyRuleSummary(rule){return [rule.time,rule.cycle,rule.shift].filter(Boolean).join('・')||'尚未設定';}
-function renderDutyRuleCenter(){const categoryBox=document.getElementById('rule-category-list'),body=document.getElementById('rule-table-body');if(!categoryBox||!body)return;const all=getDutyRules();categoryBox.innerHTML=Object.entries(V82_RULE_CATEGORIES).map(([id,item])=>{const count=all.filter(x=>x.category===id).length;return`<button class="rule-category ${id===activeDutyRuleCategory?'active':''}" onclick="selectDutyRuleCategory('${id}')"><span>${item.icon}</span><span><b>${item.label}</b><small style="display:block;">${item.description}</small></span><small>${count}</small></button>`}).join('');const q=(document.getElementById('rule-search')?.value||'').trim().toLowerCase(),items=all.filter(x=>x.category===activeDutyRuleCategory&&(!q||[x.name,x.code,x.cycle,x.shift,x.note].join(' ').toLowerCase().includes(q))).sort((a,b)=>(a.order||0)-(b.order||0));body.innerHTML=items.length?items.map(x=>`<tr class="${x.id===selectedDutyRuleId?'selected':''}" onclick="selectDutyRule('${x.id}')"><td>${x.order||'—'}</td><td><b>${escapeStoreHTML(x.name)}</b></td><td>${escapeStoreHTML(x.code||'—')}</td><td>${escapeStoreHTML(dutyRuleSummary(x))}</td><td><span class="rule-status ${x.enabled?'':'off'}">${x.enabled?'啟用':'停用'}</span></td></tr>`).join(''):`<tr><td colspan="5" style="padding:22px;text-align:center;color:var(--ops-muted);">此分類尚無規則</td></tr>`;}
-function selectDutyRule(id){const rule=getDutyRules().find(x=>x.id===id);if(!rule)return;selectedDutyRuleId=id;document.getElementById('rule-id').value=rule.id;document.getElementById('rule-name').value=rule.name||'';document.getElementById('rule-code').value=rule.code||'';document.getElementById('rule-time').value=rule.time||'';document.getElementById('rule-cycle').value=rule.cycle||'';document.getElementById('rule-shift').value=rule.shift||'全天';document.getElementById('rule-order').value=rule.order||1;document.getElementById('rule-note').value=rule.note||'';document.getElementById('rule-enabled').checked=rule.enabled!==false;document.getElementById('rule-editor-title').textContent=`編輯：${rule.name}`;renderDutyRuleCenter();if(matchMedia('(max-width:700px)').matches)document.querySelector('.rule-editor')?.scrollIntoView({behavior:'smooth',block:'start'});}
-function resetDutyRuleDraft(render=true){selectedDutyRuleId='';['rule-id','rule-name','rule-code','rule-time','rule-cycle','rule-note'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});const order=document.getElementById('rule-order'),shift=document.getElementById('rule-shift'),enabled=document.getElementById('rule-enabled'),title=document.getElementById('rule-editor-title');if(order)order.value=getDutyRules().filter(x=>x.category===activeDutyRuleCategory).length+1;if(shift)shift.value='全天';if(enabled)enabled.checked=true;if(title)title.textContent=`新增：${V82_RULE_CATEGORIES[activeDutyRuleCategory].label}`;if(render)renderDutyRuleCenter();}
-function newDutyRule(){resetDutyRuleDraft();document.getElementById('rule-name')?.focus();if(matchMedia('(max-width:700px)').matches)document.querySelector('.rule-editor')?.scrollIntoView({behavior:'smooth',block:'start'});}
-function saveDutyRule(event){event?.preventDefault();const name=document.getElementById('rule-name').value.trim();if(!name)return showToast('請輸入規則名稱。');const items=getDutyRules(),id=document.getElementById('rule-id').value||`rule-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,rule={id,category:activeDutyRuleCategory,name,code:document.getElementById('rule-code').value.trim(),time:document.getElementById('rule-time').value,cycle:document.getElementById('rule-cycle').value.trim(),shift:document.getElementById('rule-shift').value,order:Math.max(1,Number(document.getElementById('rule-order').value)||1),note:document.getElementById('rule-note').value.trim(),enabled:document.getElementById('rule-enabled').checked};const index=items.findIndex(x=>x.id===id);if(index>=0)items[index]=rule;else items.push(rule);saveDutyRules(items);selectedDutyRuleId=id;renderDutyRuleCenter();selectDutyRule(id);showToast(index>=0?'勤務規則已更新。':'勤務規則已新增。');}
-async function deleteDutyRule(){if(!selectedDutyRuleId)return showToast('請先選擇要刪除的規則。');const items=getDutyRules(),rule=items.find(x=>x.id===selectedDutyRuleId);if(!rule)return;if(!await showAppConfirm({title:'刪除勤務規則',message:`確定刪除「${rule.name}」？目前仍是獨立試作資料，不會刪除正式班表。`,confirmText:'確定刪除',danger:true,icon:'⚙️'}))return;saveDutyRules(items.filter(x=>x.id!==selectedDutyRuleId));resetDutyRuleDraft();showToast('勤務規則已刪除。');}
-function duplicateDutyRule(){if(!selectedDutyRuleId)return showToast('請先選擇要複製的規則。');const items=getDutyRules(),source=items.find(x=>x.id===selectedDutyRuleId);if(!source)return;const copy={...source,id:`rule-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,name:`${source.name}（複製）`,code:source.code?`${source.code}-COPY`:'',order:items.filter(x=>x.category===source.category).length+1};items.push(copy);saveDutyRules(items);selectDutyRule(copy.id);showToast('已複製勤務規則。');}
-function moveDutyRule(direction){if(!selectedDutyRuleId)return showToast('請先選擇要移動的規則。');const items=getDutyRules(),group=items.filter(x=>x.category===activeDutyRuleCategory).sort((a,b)=>(a.order||0)-(b.order||0)),index=group.findIndex(x=>x.id===selectedDutyRuleId),target=index+direction;if(index<0||target<0||target>=group.length)return showToast('已經到最前或最後。');[group[index].order,group[target].order]=[group[target].order,group[index].order];saveDutyRules(items);renderDutyRuleCenter();}
-document.addEventListener('DOMContentLoaded',()=>{renderDutyRuleCenter();resetDutyRuleDraft(false);});
-async function initSupabaseV8(){
-  // v8.1.0：正式化清除功能名稱；即使瀏覽器保留舊的按鈕狀態，載入時也強制校正。
-  const clearMemoryButton=document.getElementById('clear-web-memory-btn');
-  if(clearMemoryButton&&!window.IS_TRIAL_PROFILE)clearMemoryButton.textContent='🧹 清除本應用網頁記憶';
-  const config=JSON.parse(localStorage.getItem(STORE_V8_CONFIG_KEY)||'{}');const url=document.getElementById('supabase-project-url'),key=document.getElementById('supabase-publishable-key');if(url)url.value=config.url||'';if(key)key.value=config.key||'';storeV8Session=JSON.parse(localStorage.getItem(STORE_V8_SESSION_KEY)||'null');
-  if(storeV8Session&&config.url&&config.key){await refreshSupabaseSession();try{await registerSupabaseMember();await refreshCloudSnapshots()}catch(error){console.warn(error);updateSupabaseUI()}}else updateSupabaseUI();
-  if(appStorage.getItem('shopee_cloud_pending')==='true')setV81QueuePending();else updateV81SyncCenter();
-  // RC16 手機輸入保護：回報頁使用期間不得有 2.5 秒全域 DOM 輪詢；提醒與照片改由載入、儲存、切店及資料增刪事件更新。
-  applyV82SidebarPreference();applyV82Appearance();renderV82ReminderCenter();renderV82ReportPhotos();
-  if('serviceWorker'in navigator)navigator.serviceWorker.register('./store-app-sw.js').catch(error=>console.warn('Service Worker',error));
-}
-window.addEventListener('online',()=>{updateV81SyncCenter();if(hasV81Pending())setTimeout(()=>syncSupabaseNow(),500)});
-window.addEventListener('offline',updateV81SyncCenter);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&navigator.onLine&&hasV81Pending())setTimeout(()=>syncSupabaseNow(),500)});
-window.addEventListener('DOMContentLoaded',initSupabaseV8);
-</script>
-</body>
-</html>
