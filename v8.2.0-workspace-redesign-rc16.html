@@ -1152,10 +1152,15 @@
     #report-tab { padding-bottom:calc(76px + var(--report-action-dock-height, 112px) + env(safe-area-inset-bottom, 0px)); }
     #report-tab .bottom-action-bar {
       position:fixed;
-      left:8px;
-      right:8px;
+      left:0;
+      right:0;
       bottom:calc(72px + env(safe-area-inset-bottom, 0px));
       z-index:1090;
+      width:auto;
+      max-width:none;
+      border-left:0;
+      border-right:0;
+      border-radius:16px 16px 0 0;
       max-height:176px;
       overflow-y:auto;
     }
@@ -1452,6 +1457,74 @@
     .report-jump-controls { bottom:150px !important; }
     body:has(.modal-overlay.active) .report-jump-controls,body:has(.knowledge-modal.active) .report-jump-controls { display:none !important; }
   }
+  /* RC17：桌面回報操作改為右側工作欄；手機仍使用底部拇指操作列。 */
+  .report-workspace-layout { min-width:0; }
+  .report-main-column { min-width:0; }
+  .report-action-column { min-width:0; }
+  @media (min-width:901px) {
+    #report-tab .report-workspace-layout {
+      display:grid;
+      grid-template-columns:minmax(0,1fr) 232px;
+      align-items:start;
+      gap:18px;
+    }
+    #report-tab .report-action-column {
+      position:sticky;
+      top:18px;
+      z-index:24;
+    }
+    #report-tab .report-action-column .bottom-action-bar {
+      position:static;
+      bottom:auto;
+      width:100%;
+      overflow:hidden;
+      border-radius:16px;
+      box-shadow:0 8px 24px rgba(10,25,48,.12);
+    }
+    #report-tab .report-action-column .bottom-action-main {
+      display:grid;
+      grid-template-columns:1fr;
+      align-items:stretch;
+      gap:8px;
+      padding:12px;
+    }
+    #report-tab .report-action-column .progress-label {
+      min-width:0;
+      padding:9px 10px;
+      border-radius:10px;
+      background:var(--ops-bg);
+      color:var(--ops-text);
+      text-align:center;
+      font-size:13px;
+    }
+    #report-tab .report-action-column .bottom-action-main button {
+      width:100%;
+      min-height:44px;
+      flex:none;
+    }
+    #report-tab .report-action-column .quick-input-dock {
+      display:block;
+      padding:10px 12px 12px;
+    }
+    #report-tab .report-action-column .quick-input-dock > b {
+      display:block;
+      margin-bottom:8px;
+    }
+    #report-tab .report-action-column #quick-input-buttons {
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:6px;
+    }
+    #report-tab .report-action-column #quick-input-buttons .badge-btn {
+      min-width:0;
+      margin:0;
+      padding:8px 4px;
+    }
+  }
+  @media (max-width:900px) {
+    #report-tab .report-workspace-layout { display:block; }
+    #report-tab .report-action-column { position:static; }
+  }
 </style>
 </head>
 <body>
@@ -1597,7 +1670,7 @@
   <input id="v82-report-photo-input" type="file" accept="image/*,.heic,.heif" multiple hidden onchange="handleV82ReportPhotos(event)">
 
   <!-- v7.1.19：啟動時由 buildReportGroups() 移入底部回報操作停靠區。 -->
-  <div class="quick-input-dock"><b style="color:var(--ops-muted);">手機快速輸入：</b><span id="quick-input-buttons"></span></div>
+  <div class="quick-input-dock"><b style="color:var(--ops-muted);">快捷輸入：</b><span id="quick-input-buttons"></span></div>
 
   <div class="card" style="background: var(--ops-surface); border: 1px solid var(--ops-border);">
     <h3 style="color: var(--ops-orange); border-bottom-color: var(--ops-border);">基本資訊</h3>
@@ -3821,6 +3894,9 @@ function buildReportGroups() {
   const report = document.getElementById('report-tab');
   if (!report) return;
 
+  let layout = report.querySelector(':scope > .report-workspace-layout');
+  let flow = layout?.querySelector(':scope > .report-main-column') || report;
+
   const oldAnchor = document.getElementById('report-groups-anchor');
   if (oldAnchor) oldAnchor.remove();
 
@@ -3831,9 +3907,9 @@ function buildReportGroups() {
   // 科目卡之前；手機上再受到黏附列影響，會誤以為全部表單消失。
   standardOrder.forEach(id => {
     const card = document.getElementById(id);
-    if (card) report.appendChild(card);
+    if (card) flow.appendChild(card);
   });
-  if (supportCopyCard) report.appendChild(supportCopyCard);
+  if (supportCopyCard) flow.appendChild(supportCopyCard);
 
   setupSubjectConfirmationControls();
 
@@ -3852,8 +3928,24 @@ function buildReportGroups() {
   // v7.1.19：快速輸入成為同一停靠區的下排，不再獨立 fixed／sticky。
   const quickDock = report.querySelector('.quick-input-dock');
   if (quickDock) bar.appendChild(quickDock);
-  // 合併後的停靠區必須永遠是回報頁最後一個內容節點。
-  report.appendChild(bar);
+
+  // RC17：表單與操作拆成兩欄。桌面顯示右側操作欄，手機由 CSS 將同一操作欄固定於底部。
+  if (!layout) {
+    layout = document.createElement('div');
+    layout.className = 'report-workspace-layout';
+    flow = document.createElement('div');
+    flow.className = 'report-main-column';
+    const rail = document.createElement('aside');
+    rail.className = 'report-action-column';
+    rail.setAttribute('aria-label', '回報操作');
+    Array.from(report.children).filter(child => child !== bar).forEach(child => flow.appendChild(child));
+    rail.appendChild(bar);
+    layout.append(flow, rail);
+    report.appendChild(layout);
+  } else {
+    const rail = layout.querySelector(':scope > .report-action-column');
+    if (rail && bar.parentElement !== rail) rail.appendChild(bar);
+  }
 
   report.addEventListener('input', handleSubjectMutation);
   report.addEventListener('change', handleSubjectMutation);
@@ -3954,13 +4046,14 @@ function updateSubjectConfirmationUI() {
     }
 
     const confirmed = isSubjectConfirmed(subjectId, data);
+    const photosReady = hasRequiredSubjectPhotos(subjectId, data);
     const row = card.querySelector('.subject-confirm-row');
     if (!row) return;
     row.classList.toggle('confirmed', confirmed);
     card.classList.toggle('subject-confirmed', confirmed);
     const state = row.querySelector('.subject-confirm-state');
     const button = row.querySelector('.subject-confirm-btn');
-    if (state) state.textContent = confirmed ? '本項已確認' : '尚未確認';
+    if (state) state.textContent = confirmed ? (photosReady ? '本項已確認' : '本項已確認・尚缺照片') : '尚未確認';
     if (button) button.textContent = confirmed ? '取消確認' : (subjectConfirmLabels[subjectId] || '確認本項資料');
   });
 }
@@ -4010,7 +4103,7 @@ function openReportOverview() {
     .filter(card => card.style.display !== 'none')
     .filter(card => override || applicable.includes(card.id.replace('card_', '')));
 
-  const confirmedCount = cards.filter(card => isSubjectConfirmed(card.id.replace('card_', ''), data)).length;
+  const confirmedCount = cards.filter(card => isSubjectReadyForArchive(card.id.replace('card_', ''), data)).length;
   let modal = document.getElementById('report-overview-modal');
   if (!modal) {
     modal = document.createElement('div');
@@ -4021,7 +4114,7 @@ function openReportOverview() {
   const inner = document.getElementById('overview-modal-inner') || modal;
   inner.innerHTML = `<div class="overview-head"><div><h3>${escapeOverviewHTML(data.shopName || '本店')}・回報總覽</h3><div style="font-size:12px;color:var(--ops-muted);margin-top:5px;">已確認 ${confirmedCount}/${cards.length} 個適用科目</div></div><button class="overview-close" onclick="closeReportOverview()">×</button></div><div class="overview-list">${cards.map(card => {
     const id = card.id.replace('card_', '');
-    const confirmed = isSubjectConfirmed(id, data);
+    const confirmed = isSubjectReadyForArchive(id, data);
     return `<div class="overview-item ${confirmed ? 'confirmed' : ''}"><div><div class="overview-title"><span class="overview-dot"></span>${subjectOverviewNames[id] || id}</div><div class="overview-summary">${getSubjectOverviewSummary(id, data)}</div><div class="overview-status">${confirmed ? '✓ 已確認' : '○ 尚未確認'}</div></div><button class="overview-go" onclick="focusSubjectFromOverview('${id}')">${confirmed ? '查看' : '前往確認'}</button></div>`;
   }).join('')}</div>`;
   modal.classList.add('active');
@@ -4049,7 +4142,7 @@ function updateReportProgress() {
     .filter(card => card.style.display !== 'none')
     .filter(card => override || applicable.includes(card.id.replace('card_', '')));
 
-  const complete = cards.filter(card => isSubjectConfirmed(card.id.replace('card_', ''), data)).length;
+  const complete = cards.filter(card => isSubjectReadyForArchive(card.id.replace('card_', ''), data)).length;
   const label = document.getElementById('report-progress-label');
   if (label) label.textContent = `完成 ${complete}/${cards.length}`;
 }
@@ -4063,7 +4156,7 @@ function previewReport() {
   const text = buildFormalSupportReport();
   const data = readCurrentDraftObject();
   const applicable = getApplicableSubjects(data.shopName || getCleanShopName(), data.shift || document.getElementById('shift')?.value || '早', data);
-  const pending = applicable.filter(id => !isSubjectConfirmed(id, data));
+  const pending = applicable.filter(id => !isSubjectReadyForArchive(id, data));
   const modal = document.getElementById('formal-report-preview-modal');
   const textarea = document.getElementById('formal-report-preview-text');
   const status = document.getElementById('formal-preview-status');
@@ -4102,7 +4195,7 @@ function finishReport() {
   const pendingCards = Array.from(document.querySelectorAll('#report-tab .card[data-shift]'))
     .filter(card => card.style.display !== 'none')
     .filter(card => override || applicable.includes(card.id.replace('card_', '')))
-    .filter(card => !isSubjectConfirmed(card.id.replace('card_', ''), data));
+    .filter(card => !isSubjectReadyForArchive(card.id.replace('card_', ''), data));
 
   if (pendingCards.length) {
     pendingCards[0].scrollIntoView({ behavior:'smooth', block:'center' });
@@ -7346,7 +7439,7 @@ function renderV82ReportPhotos(){
   [...Object.keys(V82_SUBJECT_PHOTO_CONFIG),'legacy'].forEach(subjectId=>{const subjectItems=items.filter(item=>(item.subjectId||'legacy')===subjectId),grid=document.getElementById(`v82-photo-grid-${subjectId}`),count=document.getElementById(`v82-photo-count-${subjectId}`),status=document.getElementById(`v82-photo-status-${subjectId}`);if(count)count.textContent=`${subjectItems.length} 張`;if(status&&!status.dataset.error)status.textContent=group?(subjectItems.length?'已附照片，可繼續新增':'可自由新增一張或多張'):'請先選擇門市';if(!grid)return;grid.innerHTML=subjectItems.map(item=>{const url=V82_PHOTO_URL_CACHE.get(item.path);if(!url)hydrateV82PhotoUrl(item.path,renderV82ReportPhotos);return`<div class="v82-photo-item">${url?`<img src="${escapeStoreHTML(url)}" alt="${escapeStoreHTML(V82_SUBJECT_PHOTO_CONFIG[subjectId]?.title||'舊版照片')}" onclick="openV82Photo('${encodeURIComponent(item.path)}')">`:'<div style="padding:34px 10px;text-align:center;color:var(--ops-muted);">讀取照片中…</div>'}<small>${escapeStoreHTML(formatV81Time(item.createdAt))}</small>${storeV8Member?.role!=='viewer'?`<button class="v82-photo-delete" onclick="deleteV82ReportPhoto('${item.id}')">刪除</button>`:''}</div>`}).join('');});
   const legacyCard=document.getElementById('v82-legacy-photo-card');if(legacyCard)legacyCard.style.display=items.some(item=>!item.subjectId)?'block':'none';
 }
-async function handleV82ReportPhotos(event){const files=[...(event.target.files||[])],subjectId=V82_PENDING_PHOTO_SUBJECT;event.target.value='';V82_PENDING_PHOTO_SUBJECT='';const group=getV82ReportPhotoGroup(),config=getV82PhotoTargetConfig(subjectId),status=document.getElementById(`v82-photo-status-${subjectId}`);if(!group)return showToast('請先選擇門市。');if(!config)return showToast('找不到照片所屬科目。');if(storeV8Member?.role==='viewer')return showToast('viewer 為唯讀帳號。');if(status)delete status.dataset.error;for(let i=0;i<files.length;i++){if(status)status.textContent=`${isV82HeicFile(files[i])?'HEIC 轉換 JPEG':'圖片壓縮'} ${i+1}/${files.length}…`;try{const {blob,preview}=await compressV82Photo(files[i]);if(status)status.textContent=`JPEG 上傳私有雲端 ${i+1}/${files.length}…`;const path=await uploadV82PhotoBlob(blob,'report'),data=readV82ReportPhotos(),item={id:crypto.randomUUID?.()||String(Date.now()),path,subjectId,subjectLabel:config.title,storeName:getStoreNameIdentity(document.getElementById('shopName')?.value||''),date:document.getElementById('report-date-picker')?.value||currentViewingReportDateKey||formatDateISO(new Date()),shift:document.getElementById('shift')?.value||'',createdAt:new Date().toISOString(),by:storeV8Member?.email||''};if(!Array.isArray(data[group]))data[group]=[];data[group].push(item);appStorage.setItem(V82_REPORT_PHOTOS_KEY,JSON.stringify(data));V82_PHOTO_URL_CACHE.set(path,preview);markCloudPending()}catch(error){const message=formatV82PhotoError(error);if(status){status.dataset.error=message;status.innerHTML=`<details class="v82-upload-error" open><summary>照片處理／上傳失敗</summary><code>${escapeStoreHTML(message)}</code></details>`}showToast('⚠️ 照片上傳失敗，請查看該科目照片區。',5000);break}}renderV82ReportPhotos();renderV82OptionalDuties();updateSubjectConfirmationUI();updateReportProgress();updateDraftLabels();renderTodayDashboard()}
+async function handleV82ReportPhotos(event){const files=[...(event.target.files||[])],subjectId=V82_PENDING_PHOTO_SUBJECT,anchor=document.getElementById(`card_${subjectId}`),anchorTop=anchor?.getBoundingClientRect().top;event.target.value='';V82_PENDING_PHOTO_SUBJECT='';const group=getV82ReportPhotoGroup(),config=getV82PhotoTargetConfig(subjectId),status=document.getElementById(`v82-photo-status-${subjectId}`);if(!group)return showToast('請先選擇門市。');if(!config)return showToast('找不到照片所屬科目。');if(storeV8Member?.role==='viewer')return showToast('viewer 為唯讀帳號。');if(status)delete status.dataset.error;for(let i=0;i<files.length;i++){if(status)status.textContent=`${isV82HeicFile(files[i])?'HEIC 轉換 JPEG':'圖片壓縮'} ${i+1}/${files.length}…`;try{const {blob,preview}=await compressV82Photo(files[i]);if(status)status.textContent=`JPEG 上傳私有雲端 ${i+1}/${files.length}…`;const path=await uploadV82PhotoBlob(blob,'report'),data=readV82ReportPhotos(),item={id:crypto.randomUUID?.()||String(Date.now()),path,subjectId,subjectLabel:config.title,storeName:getStoreNameIdentity(document.getElementById('shopName')?.value||''),date:document.getElementById('report-date-picker')?.value||currentViewingReportDateKey||formatDateISO(new Date()),shift:document.getElementById('shift')?.value||'',createdAt:new Date().toISOString(),by:storeV8Member?.email||''};if(!Array.isArray(data[group]))data[group]=[];data[group].push(item);appStorage.setItem(V82_REPORT_PHOTOS_KEY,JSON.stringify(data));V82_PHOTO_URL_CACHE.set(path,preview);markCloudPending()}catch(error){const message=formatV82PhotoError(error);if(status){status.dataset.error=message;status.innerHTML=`<details class="v82-upload-error" open><summary>照片處理／上傳失敗</summary><code>${escapeStoreHTML(message)}</code></details>`}showToast('⚠️ 照片上傳失敗，請查看該科目照片區。',5000);break}}renderV82ReportPhotos();renderV82OptionalDuties();updateSubjectConfirmationUI();updateReportProgress();updateDraftLabels();renderTodayDashboard();requestAnimationFrame(()=>{if(anchor&&Number.isFinite(anchorTop)){const nextTop=anchor.getBoundingClientRect().top;window.scrollBy(0,nextTop-anchorTop)}})}
 const V82_OPTIONAL_DUTY_KEY='shopee_v82_optional_daily_duties_v1';
 const V82_NUMBERED_SUBJECT_ORDER=['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10','c11','c12','c13','c14','c15','c16','c17','c18'];
 const V82_PHOTO_REQUIRED_SUBJECTS=new Set(['c1','c2','c3','c5','c6','c7','c8','c9','c10','c11','c12','c13','c14','c15','c16','c17','c18']);
@@ -7368,10 +7461,12 @@ function getApplicableSubjects(shopName,shift,reportData=null){
 function v82PhotoGroupKey(date,store){return store?`${date}|${getStoreNameIdentity(store)}`:''}
 function v82SubjectPhotoCount(subjectId,date=currentViewingReportDateKey||formatDateISO(new Date()),store=getCleanShopName(),shift=document.getElementById('shift')?.value||'早'){const items=readV82ReportPhotos()[v82PhotoGroupKey(date,store)]||[];return items.filter(item=>item.subjectId===subjectId&&(!item.shift||item.shift===shift)).length}
 function v82RequiredPhotoCount(subjectId,shop=getCleanShopName()){if(subjectId==='c18'&&/松菸.*旗艦/.test(shop))return 2;return V82_PHOTO_REQUIRED_SUBJECTS.has(subjectId)?1:0}
-function isSubjectConfirmed(subjectId,data=readCurrentDraftObject()){const shop=data.shopName||getCleanShopName(),shift=data.shift||document.getElementById('shift')?.value||'早',date=currentViewingReportDateKey||formatDateISO(new Date()),photoReady=v82SubjectPhotoCount(subjectId,date,shop,shift)>=v82RequiredPhotoCount(subjectId,shop);if(V82_SUBJECT_PHOTO_CONFIG[subjectId]?.photoOnly)return photoReady;return data._confirmedSubjects?.[subjectId]===true&&photoReady}
-function getDraftCompletion(index){try{const draft=JSON.parse(appStorage.getItem(`shopee_report_draft_${index+1}`)||'{}');if(!draft.shopName)return{exists:false,percent:0,total:0,confirmed:0};const subjects=getApplicableSubjects(draft.shopName,draft.shift||'早',draft),date=formatDateISO(new Date()),confirmed=subjects.filter(id=>{const photos=v82SubjectPhotoCount(id,date,draft.shopName,draft.shift||'早')>=v82RequiredPhotoCount(id,draft.shopName);return V82_SUBJECT_PHOTO_CONFIG[id]?.photoOnly?photos:draft._confirmedSubjects?.[id]===true&&photos}).length;return{exists:true,percent:subjects.length?Math.round(confirmed/subjects.length*100):100,total:subjects.length,confirmed}}catch{return{exists:false,percent:0,total:0,confirmed:0}}}
+function isSubjectConfirmed(subjectId,data=readCurrentDraftObject()){const shop=data.shopName||getCleanShopName(),shift=data.shift||document.getElementById('shift')?.value||'早',date=currentViewingReportDateKey||formatDateISO(new Date());if(V82_SUBJECT_PHOTO_CONFIG[subjectId]?.photoOnly)return v82SubjectPhotoCount(subjectId,date,shop,shift)>=v82RequiredPhotoCount(subjectId,shop);return data._confirmedSubjects?.[subjectId]===true}
+function hasRequiredSubjectPhotos(subjectId,data=readCurrentDraftObject()){const required=v82RequiredPhotoCount(subjectId,data.shopName||getCleanShopName());if(required<=0)return true;const date=currentViewingReportDateKey||formatDateISO(new Date()),shop=data.shopName||getCleanShopName(),shift=data.shift||document.getElementById('shift')?.value||'早';return v82SubjectPhotoCount(subjectId,date,shop,shift)>=required}
+function isSubjectReadyForArchive(subjectId,data=readCurrentDraftObject()){return isSubjectConfirmed(subjectId,data)&&hasRequiredSubjectPhotos(subjectId,data)}
+function getDraftCompletion(index){try{const draft=JSON.parse(appStorage.getItem(`shopee_report_draft_${index+1}`)||'{}');if(!draft.shopName)return{exists:false,percent:0,total:0,confirmed:0};const subjects=getApplicableSubjects(draft.shopName,draft.shift||'早',draft),confirmed=subjects.filter(id=>isSubjectReadyForArchive(id,draft)).length;return{exists:true,percent:subjects.length?Math.round(confirmed/subjects.length*100):100,total:subjects.length,confirmed}}catch{return{exists:false,percent:0,total:0,confirmed:0}}}
 function v82ReportTextEntryActive(){const active=document.activeElement,report=document.getElementById('report-tab');return !!(active&&report?.contains(active)&&active.matches('input:not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select, [contenteditable="true"]'))}
-function applyV82NumberedSubjectFlow(){const report=document.getElementById('report-tab');if(!report)return;const editing=v82ReportTextEntryActive();if(!editing){V82_NUMBERED_SUBJECT_ORDER.forEach(id=>{const card=document.getElementById(`card_${id}`);if(card)report.appendChild(card)});const legacy=document.getElementById('v82-legacy-photo-card');if(legacy)report.appendChild(legacy);const optional=document.getElementById('v82-optional-duty-card');if(optional)report.appendChild(optional);const support=document.getElementById('support-report-copy-card');if(support)report.appendChild(support);const bar=report.querySelector('.bottom-action-bar');if(bar)report.appendChild(bar)}const optional=document.getElementById('v82-optional-duty-card');if(optional)optional.style.display=getV82ReportPhotoGroup()?'block':'none';const holder=document.getElementById('v82-photo-only-subjects');if(holder)holder.style.display='none';document.querySelectorAll('.v82-photo-only-card .subject-confirm-row').forEach(row=>row.remove());const c18=document.getElementById('card_c18');if(c18){const p=c18.querySelector('.v82-photo-only-instruction');if(p)p.textContent=v82PhotoOnlyInstruction('c18')}updateSubjectConfirmationUI();renderV82OptionalDuties()}
+function applyV82NumberedSubjectFlow(){const report=document.getElementById('report-tab');if(!report)return;const flow=report.querySelector('.report-main-column')||report;const editing=v82ReportTextEntryActive();if(!editing){const desired=V82_NUMBERED_SUBJECT_ORDER.map(id=>document.getElementById(`card_${id}`)).filter(Boolean),legacy=document.getElementById('v82-legacy-photo-card'),optional=document.getElementById('v82-optional-duty-card'),support=document.getElementById('support-report-copy-card');[legacy,optional,support].filter(Boolean).forEach(node=>desired.push(node));const desiredSet=new Set(desired),current=[...flow.children].filter(node=>desiredSet.has(node)),needsOrder=current.length!==desired.length||desired.some((node,index)=>current[index]!==node);if(needsOrder)desired.forEach(node=>flow.appendChild(node))}const optional=document.getElementById('v82-optional-duty-card');if(optional)optional.style.display=getV82ReportPhotoGroup()?'block':'none';const holder=document.getElementById('v82-photo-only-subjects');if(holder)holder.style.display='none';document.querySelectorAll('.v82-photo-only-card .subject-confirm-row').forEach(row=>row.remove());const c18=document.getElementById('card_c18');if(c18){const p=c18.querySelector('.v82-photo-only-instruction');if(p)p.textContent=v82PhotoOnlyInstruction('c18')}updateSubjectConfirmationUI();renderV82OptionalDuties()}
 function readV82OptionalDuties(){try{return JSON.parse(appStorage.getItem(V82_OPTIONAL_DUTY_KEY)||'{}')}catch{return{}}}
 function v82OptionalDutyGroup(){const base=getV82ReportPhotoGroup(),shift=document.getElementById('shift')?.value||'早';return base?`${base}|${shift}`:''}
 function getV82CurrentOptionalDuties(){const group=v82OptionalDutyGroup();return group?(readV82OptionalDuties()[group]||[]):[]}
@@ -7444,7 +7539,7 @@ async function initSupabaseV8(){
   const config=JSON.parse(localStorage.getItem(STORE_V8_CONFIG_KEY)||'{}');const url=document.getElementById('supabase-project-url'),key=document.getElementById('supabase-publishable-key');if(url)url.value=config.url||'';if(key)key.value=config.key||'';storeV8Session=JSON.parse(localStorage.getItem(STORE_V8_SESSION_KEY)||'null');
   if(storeV8Session&&config.url&&config.key){await refreshSupabaseSession();try{await registerSupabaseMember();await refreshCloudSnapshots()}catch(error){console.warn(error);updateSupabaseUI()}}else updateSupabaseUI();
   if(appStorage.getItem('shopee_cloud_pending')==='true')setV81QueuePending();else updateV81SyncCenter();
-  // RC16 手機輸入保護：照片區只在資料事件發生時更新；週期刷新不得搬動含焦點的科目卡，否則行動瀏覽器會關閉軟體鍵盤。
+  // RC16 手機輸入保護：回報頁使用期間不得有 2.5 秒全域 DOM 輪詢；提醒與照片改由載入、儲存、切店及資料增刪事件更新。
   applyV82SidebarPreference();applyV82Appearance();renderV82ReminderCenter();renderV82ReportPhotos();
   if('serviceWorker'in navigator)navigator.serviceWorker.register('./store-app-sw.js').catch(error=>console.warn('Service Worker',error));
 }
