@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>智取店勤務助手 v8.2.0</title>
+<title>智取店勤務助手 v8.2.1</title>
 
 <!--
   v7.0.0 程式碼註解與維護規則
@@ -1629,7 +1629,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 智取店勤務助手<br>v8.2.0
+      📦 智取店勤務助手<br>v8.2.1
     </h1>
   </div>
   <div class="main-nav">
@@ -1907,6 +1907,14 @@
     <div class="row">
       <div><label>濕損</label><input type="text" id="c6_wet" value="0" oninput="autoSave()"></div>
       <div><label>打X往SOC</label><input type="text" id="c6_soc" value="0" oninput="autoSave()"></div>
+    </div>
+    <div class="row">
+      <div><label>NDD 單顆錯店（隔日）</label><input type="text" id="c6_ndd" value="0" oninput="autoSave()"></div>
+      <div><label>SCS 特選異常</label><input type="text" id="c6_scs" value="0" oninput="autoSave()"></div>
+    </div>
+    <div class="row">
+      <div><label>FBS 環保無包裝異常</label><input type="text" id="c6_fbs" value="0" oninput="autoSave()"></div>
+      <div style="display:flex;align-items:end;padding-bottom:8px;"><label style="display:flex;align-items:center;gap:7px;margin:0;font-weight:normal;"><input type="checkbox" id="c6_omit_zero" checked style="width:auto;margin:0;" onchange="autoSave()"> 複製時省略數量 0 的項目</label></div>
     </div>
     <button class="copy-btn" id="btn_c6" onclick="copyC6()">📋 複製【科目6】</button>
   </div>
@@ -2362,7 +2370,7 @@
   <div class="card settings-section" data-settings-group="global">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v8.2.0 正式版（2026/08/21）</div>
+      <div><b>目前版本：</b> v8.2.1 正式版（2026/08/27）</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -2607,6 +2615,9 @@
     <label>💡 注意事項 (備註)</label>
     <input type="text" id="store-modal-notes" placeholder="例: HD滯留放隔壁小房間">
 
+    <label>🚦 門市狀態</label>
+    <select id="store-modal-status"><option value="active">營運中</option><option value="closed">已閉店（保留歷史資料）</option></select>
+
     <label>🏷️ 任務標籤 (勾選代表本店適用該回報項目)</label>
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; font-size: 13px;">
       <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="NDD打包" style="width:auto;"> NDD打包</label>
@@ -2617,9 +2628,9 @@
       <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="夜間上架" style="width:auto;"> 夜間上架</label>
       <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="中正速配倉" style="width:auto;"> 中正速配倉</label>
       <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="指定門市勤務" style="width:auto;"> 指定門市勤務</label>
-      <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="📦純取店" style="width:auto;"> 📦純取店</label>
       <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="⭐重點店" style="width:auto;"> ⭐重點店</label>
       <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="👤有人店" style="width:auto;"> 👤有人店</label>
+      <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="純取店" style="width:auto;"> 📦 純取店</label>
     </div>
 
     <div style="display: flex; gap: 8px; margin-top: 18px;">
@@ -3107,7 +3118,8 @@ function normalizeStoresData(data) {
       name: String(store.name).trim(),
       address: String(store.address || '').trim(),
       tags,
-      notes
+      notes,
+      status: store.status === 'closed' ? 'closed' : 'active'
     };
   });
 }
@@ -3373,6 +3385,18 @@ function getScheduleStoreDetails(value) {
   const store = storesData.find(item => item.name === canonicalName) || null;
   const tags = [...new Set([...(store?.tags || []), ...parsed.tags])];
   return { ...parsed, canonicalName, store, tags };
+}
+
+function getStoreDisplayBadges(value) {
+  const details = getScheduleStoreDetails(value);
+  const badges = [];
+  if (details.tags.includes('純取店')) badges.push('<span class="shift-tag" style="background:#e8f4ff;color:#1769aa;margin-left:4px;">純取店</span>');
+  if (details.store?.status === 'closed') badges.push('<span class="shift-tag" style="background:#eceff1;color:#546e7a;margin-left:4px;">已閉店</span>');
+  return badges.join('');
+}
+
+function renderStoreNameWithBadges(value) {
+  return `${escapeStoreHTML(String(value || '').trim())}${getStoreDisplayBadges(value)}`;
 }
 
 function normalizeDraftStoreMetadata(data) {
@@ -3771,7 +3795,7 @@ function renderTodayDashboard() {
   const locationDetails = locations.map(getScheduleStoreDetails);
   // v7.0.1 修正：核心門市資訊必須先由今日班表完成更新；時效、勤務卡等附屬模組
   // 即使遇到單筆舊資料格式異常，也不能讓首頁停留在前一次顯示的門市。
-  if (locLabel) locLabel.textContent = locations.map(getShortStoreName).join(' → ');
+  if (locLabel) locLabel.innerHTML = locations.map(loc => renderStoreNameWithBadges(getScheduleStoreDetails(loc).canonicalName || loc)).join(' → ');
   if (shiftLabel) shiftLabel.textContent = dayData.t1 ? `勤務時間／班別：${dayData.t1}` : '勤務時間尚未設定';
   try { renderPriorityWorkbench(dayData, locations, locationDetails); }
   catch (error) { console.error('首頁時效工作台更新失敗：', error); }
@@ -3812,7 +3836,7 @@ function renderTodayDashboard() {
       chipsContainer.innerHTML = locations.map((loc, i) => {
         const comp = getDraftCompletion(i);
         const isDone = comp.exists && comp.confirmed === comp.total;
-        return `<div class="home-overview-chip ${isDone ? 'confirmed' : ''}" onclick="openDutyStop(${i})"><span>${escapeStoreHTML(getShortStoreName(loc))}</span><span>${isDone ? '✓完成' : (comp.exists ? `${comp.confirmed}/${comp.total}` : '未填')}</span></div>`;
+        return `<div class="home-overview-chip ${isDone ? 'confirmed' : ''}" onclick="openDutyStop(${i})"><span>${escapeStoreHTML(getShortStoreName(loc))}${getStoreDisplayBadges(loc)}</span><span>${isDone ? '✓完成' : (comp.exists ? `${comp.confirmed}/${comp.total}` : '未填')}</span></div>`;
       }).join('');
     }
   }
@@ -3840,7 +3864,7 @@ function populateReportStoreDatalist() {
   if (!datalist) return;
   // v7.1.1：報表選單只顯示門市主檔 canonical 名稱。班表簡稱、任務附註、X 與休假不再污染選單。
   const canonicalStores = new Map();
-  storesData.forEach(store => {
+  storesData.filter(store => store.status !== 'closed').forEach(store => {
     const name = String(store?.name || '').trim();
     const identity = getStoreNameIdentity(name);
     if (name && identity && name.toUpperCase() !== 'X') canonicalStores.set(identity, name);
@@ -4438,9 +4462,10 @@ function renderStoreManageList() {
     const safeName = escapeStoreHTML(store.name);
     const safeAddress = escapeStoreHTML(store.address || '無地址');
     const safeTags = escapeStoreHTML((store.tags || []).join(', ') || '無');
-    return `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid var(--ops-border); background:var(--ops-surface); border-radius:6px; margin-bottom:4px;">
+    const closed = store.status === 'closed';
+    return `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid var(--ops-border); background:var(--ops-surface); border-radius:6px; margin-bottom:4px;${closed?'opacity:.65;':''}">
       <div>
-        <div style="font-weight:bold; font-size:13px; color:var(--ops-text);">${safeName}</div>
+        <div style="font-weight:bold; font-size:13px; color:var(--ops-text);">${safeName}${getStoreDisplayBadges(store.name)}</div>
         <div style="font-size:11px; color:var(--ops-muted);">${safeAddress} | 標籤: ${safeTags}</div>
       </div>
       <div style="display:flex; gap:4px;">
@@ -4458,6 +4483,7 @@ function openStoreEditModal(index = -1) {
   const nameInput = document.getElementById('store-modal-name');
   const addrInput = document.getElementById('store-modal-address');
   const notesInput = document.getElementById('store-modal-notes');
+  const statusInput = document.getElementById('store-modal-status');
   const checkboxes = document.querySelectorAll('.store-tag-cb');
   
   idxInput.value = index;
@@ -4469,6 +4495,7 @@ function openStoreEditModal(index = -1) {
     nameInput.value = store.name;
     addrInput.value = store.address || '';
     notesInput.value = store.notes || '';
+    statusInput.value = store.status === 'closed' ? 'closed' : 'active';
     const storeTags = store.tags || [];
     checkboxes.forEach(cb => {
       if (storeTags.includes(cb.value)) cb.checked = true;
@@ -4478,6 +4505,7 @@ function openStoreEditModal(index = -1) {
     nameInput.value = '';
     addrInput.value = '';
     notesInput.value = '';
+    statusInput.value = 'active';
   }
   modal.classList.add('active');
 }
@@ -4491,6 +4519,7 @@ function saveStoreModalData() {
   const name = document.getElementById('store-modal-name').value.trim();
   const address = document.getElementById('store-modal-address').value.trim();
   const notes = document.getElementById('store-modal-notes').value.trim();
+  const status = document.getElementById('store-modal-status').value === 'closed' ? 'closed' : 'active';
 
   if (!name) {
     showToast('⚠️ 門市名稱不可為空！');
@@ -4510,7 +4539,7 @@ function saveStoreModalData() {
     if (cb.checked) tags.push(cb.value);
   });
 
-  const storeObj = { name, address, tags, notes };
+  const storeObj = { name, address, tags, notes, status };
 
   if (index >= 0) {
     const oldName = storesData[index]?.name || '';
@@ -4719,13 +4748,13 @@ function renderStoreLocationHtml(dayData) {
 
   let htmlParts = [];
   if (baseLoc && baseLoc.trim() !== '') {
-    htmlParts.push(`<span>${baseLoc}</span>`);
+    splitStoreLocationText(baseLoc).forEach(loc => htmlParts.push(`<span>${renderStoreNameWithBadges(loc)}</span>`));
   }
 
   if (supportList.length > 0) {
     supportList.forEach(sLoc => {
       if (sLoc && sLoc.trim() !== '') {
-        htmlParts.push(`<span class="support-store-text">${sLoc.trim()}</span>`);
+        htmlParts.push(`<span class="support-store-text">${renderStoreNameWithBadges(sLoc.trim())}</span>`);
       }
     });
   }
@@ -5376,7 +5405,7 @@ function updateDraftLabels() {
     const archived=storeName!=='未填'&&isDutyStoreArchived(today,storeName);
     const activeClass = isCurrent&&!archived ? 'draft-badge active' : `draft-badge${archived?' archived':''}`;
     const statusText = getShortStoreName(storeName);
-    const html=`<div class="${activeClass}" draggable="false" data-index="${index}" data-key="${key}" onclick="${archived?'':'handleDraftBadgeClick(\''+key+'\')'}"><span>${escapeStoreHTML(statusText)}</span>${archived?`<button class="undo-archive" onclick="event.stopPropagation();restoreArchivedStore(${index})">解除封存</button>`:`<button class="undo-archive" title="移出今日勤務" onclick="event.stopPropagation();removeDutyStoreByIndex(${index})">移除</button>`}</div>`;
+    const html=`<div class="${activeClass}" draggable="false" data-index="${index}" data-key="${key}" onclick="${archived?'':'handleDraftBadgeClick(\''+key+'\')'}"><span>${escapeStoreHTML(statusText)}${getStoreDisplayBadges(storeName)}</span>${archived?`<button class="undo-archive" onclick="event.stopPropagation();restoreArchivedStore(${index})">解除封存</button>`:`<button class="undo-archive" title="移出今日勤務" onclick="event.stopPropagation();removeDutyStoreByIndex(${index})">移除</button>`}</div>`;
     if(archived)groups.archived.push(html);else if(isCurrent)groups.active.push(html);else pendingEntries.push({index,key,html});
   });
   groups.pending=pendingEntries.map(entry=>`<div class="pending-route-item" draggable="true" data-index="${entry.index}" title="拖曳可排序；拖到正要進行可立即切換">${entry.html}</div>`);
@@ -6023,7 +6052,7 @@ function resetFormFields() {
       else if (el.tagName === 'SELECT') el.selectedIndex = 0;
       else if (el.id === 'c3_overdue' || el.id === 'c3_scs' || el.id === 'c3_fbs' || 
                el.id === 'c4_boxes' || el.id === 'c4_stay' || el.id === 'c4_ndd' || el.id === 'c4_whndd' || el.id === 'c4_as' || el.id === 'c4_not_left' ||
-               el.id === 'c6_wrong' || el.id === 'c6_damaged' || el.id === 'c6_wet' || el.id === 'c6_soc' ||
+               el.id === 'c6_wrong' || el.id === 'c6_damaged' || el.id === 'c6_wet' || el.id === 'c6_soc' || el.id === 'c6_ndd' || el.id === 'c6_scs' || el.id === 'c6_fbs' ||
                el.id === 'c8_reverse' || el.id === 'c8_wrong' || el.id === 'c8_abnormal' || el.id === 'c8_wh_empty' || el.id === 'c8_orange_empty' || el.id === 'c8_empty_as' ||
                el.id === 'c9_pack' || el.id === 'c9_last_night' || el.id === 'c9_total' ||
                el.id === 'c10_success' || el.id === 'c10_stay' || el.id === 'c11_pack' || el.id === 'c12_bags' || el.id === 'c14_sys' || el.id === 'c14_real') {
@@ -6034,6 +6063,8 @@ function resetFormFields() {
     }
   });
   
+  const omitZero = document.getElementById('c6_omit_zero');
+  if (omitZero) omitZero.checked = true;
   const dateEl = document.getElementById('date');
   if (dateEl) dateEl.value = reportDateDisplay(currentViewingReportDateKey);
   
@@ -6202,7 +6233,7 @@ function populateShopOptions() {
   const datalist = document.getElementById('shopList');
   if (!datalist) return;
   datalist.innerHTML = '';
-  storesData.forEach(store => {
+  storesData.filter(store => store.status !== 'closed').forEach(store => {
     const opt = document.createElement('option');
     opt.value = store.name;
     datalist.appendChild(opt);
@@ -6432,8 +6463,25 @@ function copyC5() {
 function toOutOutStr(val) { return val ? val : ""; }
 
 function copyC6() {
-  const txt = `⬆️${getHeader()}\n單顆錯店：${document.getElementById('c6_wrong')?.value || 0}\n破損：${document.getElementById('c6_damaged')?.value || 0}\n濕損：${document.getElementById('c6_wet')?.value || 0}\n打X往SOC：${document.getElementById('c6_soc')?.value || 0}`;
+  const ids = ['c6_wrong','c6_damaged','c6_wet','c6_soc','c6_ndd','c6_scs','c6_fbs','c6_omit_zero'];
+  const data = Object.fromEntries(ids.map(id => { const el=document.getElementById(id); return [id,el?.type==='checkbox'?el.checked:el?.value]; }));
+  const txt = `⬆️${getHeader()}\n${buildC6Lines(data)}`;
   copyText(txt, '科目6 異常包裹');
+}
+
+function buildC6Lines(data = {}) {
+  const omitZero = data.c6_omit_zero === true || data.c6_omit_zero === 'true';
+  const rows = [
+    ['單顆錯店：',data.c6_wrong],
+    ['單顆錯店：隔日 ',data.c6_ndd],
+    ['SCS特選異常：',data.c6_scs],
+    ['FBS環保無包裝異常：',data.c6_fbs],
+    ['破損：',data.c6_damaged],
+    ['濕損：',data.c6_wet],
+    ['打X往SOC：',data.c6_soc]
+  ].map(([label,value]) => [label, value === undefined || value === null || String(value).trim()==='' ? '0' : String(value).trim()]);
+  const selected = omitZero ? rows.filter(([,value]) => !['0','無'].includes(value)) : rows;
+  return (selected.length ? selected : rows.slice(4)).map(([label,value]) => `${label}${value}`).join('\n');
 }
 
 function formatShipText(northId, southId) {
@@ -6535,7 +6583,7 @@ function buildFormalSupportReport() {
   }
   add('c5', `驗收完畢回報\n\n驗收包裹數量：${countText}\n第一顆上架時間：${startText}\n完成驗收時間：${endText}\n平均驗收時間：${reportValue(data,'c5_avg','')}\nNDD完成驗收時間：${reportValue(data,'c5_ndd_time','')}\nWH NDD完成驗收時間：${reportValue(data,'c5_whndd_time','')}\n\n————————————-\n⭕️滯留：${reportValue(data,'c5_stay_box','0')}\n⭕️剩餘櫃位：${reportValue(data,'c5_seats','')}\n‼️產生滯留且有剩餘櫃位時，需通報值班幹部以利立刻進行人員調度\n————————————-\n到店TO單：${reportValue(data,'c5_to_in','')}\n離店TO單：${reportValue(data,'c5_to_out','')}`);
 
-  add('c6', `單顆錯店：${reportValue(data,'c6_wrong','0')}\n破損：${reportValue(data,'c6_damaged','0')}\n濕損：${reportValue(data,'c6_wet','0')}\n打X往SOC：${reportValue(data,'c6_soc','0')}`);
+  add('c6', buildC6Lines(data));
 
   const lockText = reportValue(data,'c8_lock_type','has') === 'has'
     ? `‼️寄件櫃共${reportValue(data,'c8_lock_count','4')}個鑰匙孔已確認上鎖`
