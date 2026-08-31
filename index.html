@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>智取店勤務助手 v8.2.2</title>
+<title>智取店勤務助手 v8.2.3</title>
 
 <!--
   v7.0.0 程式碼註解與維護規則
@@ -1629,7 +1629,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 智取店勤務助手<br>v8.2.2
+      📦 智取店勤務助手<br>v8.2.3
     </h1>
   </div>
   <div class="main-nav">
@@ -2259,8 +2259,8 @@
         <div class="v82-settings-rail-head"><b>設定分類</b><small>選擇項目，右側只顯示相關設定</small></div>
         <button type="button" class="v82-settings-category" data-settings-category="appearance" onclick="selectV82SettingsCategory('appearance')"><span>🎨</span><div><b>外觀與導覽</b><small>主題、狀態色與顯示方式</small></div></button>
         <button type="button" class="v82-settings-category" data-settings-category="sync" onclick="selectV82SettingsCategory('sync')"><span>☁️</span><div><b>帳號與同步</b><small>Supabase、備份與權限</small></div></button>
-        <button type="button" class="v82-settings-category" data-settings-category="stores" onclick="selectV82SettingsCategory('stores')"><span>🏪</span><div><b>門市管理</b><small>門市資料與勤務標籤</small></div></button>
-        <button type="button" class="v82-settings-category" data-settings-category="tools" onclick="selectV82SettingsCategory('tools')"><span>▣</span><div><b>QR 與快捷</b><small>條碼、QR 與快速輸入</small></div></button>
+        <button type="button" class="v82-settings-category" data-settings-category="stores" onclick="selectV82SettingsCategory('stores')"><span>🏪</span><div><b>門市管理</b><small>門市資料、標籤與到店工具</small></div></button>
+        <button type="button" class="v82-settings-category" data-settings-category="tools" onclick="selectV82SettingsCategory('tools')"><span>⚡</span><div><b>快捷輸入</b><small>回報欄位的快速輸入按鈕</small></div></button>
         <button type="button" class="v82-settings-category" data-settings-category="support" onclick="selectV82SettingsCategory('support')"><span>🤝</span><div><b>支援勤務</b><small>臨時支援新增與維護</small></div></button>
         <button type="button" class="v82-settings-category" data-settings-category="backup" onclick="selectV82SettingsCategory('backup')"><span>💾</span><div><b>備份與資料</b><small>備份、還原與 Google Drive</small></div></button>
         <button type="button" class="v82-settings-category" data-settings-category="safety" onclick="selectV82SettingsCategory('safety')"><span>🛡️</span><div><b>系統維護</b><small>狀態、進階與資料健康</small></div></button>
@@ -2392,7 +2392,7 @@
   <div class="card settings-section" data-settings-group="global">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v8.2.2 正式版（2026/08/31）</div>
+      <div><b>目前版本：</b> v8.2.3 正式版（2026/08/31）</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -3195,18 +3195,19 @@ function switchMainTab(tabId, btn) {
 const V82_SETTINGS_CATEGORIES=[
   {id:'appearance',icon:'🎨',title:'外觀與導覽',note:'主題、狀態色與顯示方式'},
   {id:'sync',icon:'☁️',title:'帳號與同步',note:'Supabase、備份與權限'},
-  {id:'stores',icon:'🏪',title:'門市管理',note:'門市資料與勤務標籤'},
-  {id:'tools',icon:'▣',title:'QR 與快捷',note:'條碼、QR 與快速輸入'},
+  {id:'stores',icon:'🏪',title:'門市管理',note:'門市資料、勤務標籤與到店工具綁定'},
+  {id:'tools',icon:'⚡',title:'快捷輸入',note:'管理回報欄位的快速輸入按鈕'},
   {id:'support',icon:'🤝',title:'支援勤務',note:'臨時支援新增與維護'},
   {id:'backup',icon:'💾',title:'備份與資料',note:'安全快照、JSON 與 Google Drive'},
   {id:'safety',icon:'🛡️',title:'系統維護',note:'狀態、進階與資料健康'}
 ];
 function classifyV82SettingsCard(card){
   const text=card.textContent||'';
+  if(card.id==='arrival-tools-card')return'stores';
   if(/介面外觀|勤務狀態色/.test(text))return'appearance';
+  if(/門市資料與回報任務|到店工具箱/.test(text))return'stores';
+  if(/手機快捷輸入/.test(text))return'tools';
   if(/Supabase 帳號|Supabase 同步|同步與資料安全/.test(text))return'sync';
-  if(/門市資料與回報任務/.test(text))return'stores';
-  if(/到店工具箱|手機快捷輸入/.test(text))return'tools';
   if(/支援勤務管理/.test(text))return'support';
   if(/備份與資料/.test(text))return'backup';
   return'safety';
@@ -3240,7 +3241,7 @@ function filterSettingsCards() {
     card.hidden = !visible; card.style.display = visible ? '' : 'none';
   });
 }
-function focusMoreSection(id) { openMoreContext('settings');selectV82SettingsCategory(id==='arrival-tools-card'?'tools':'stores');setTimeout(() => document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'}),80); }
+function focusMoreSection(id) { openMoreContext('settings');selectV82SettingsCategory('stores');setTimeout(() => document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'}),80); }
 
 function navButtonFor(tabId) {
   return Array.from(document.querySelectorAll('.nav-btn')).find(btn => btn.dataset.navTab===tabId) ||
@@ -7403,10 +7404,10 @@ function buildScheduleCalendarHtml(f,rows){
   }).join('');
 }
 function buildFormalReportHtml(f,rows){
-  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v8.2.2</span></div></article>`;
+  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v8.2.3</span></div></article>`;
   const model=getFormalReportModel(f,rows);
   const records=model.records.map(record=>{const cells=[];for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];cells.push(`<b>${escapeStoreHTML(a[0])}</b><span>${escapeStoreHTML(String(a[1]??'—'))}</span>${b?`<b>${escapeStoreHTML(b[0])}</b><span>${escapeStoreHTML(String(b[1]??'—'))}</span>`:'<b></b><span></span>'}`);}return `<section><div class="formal-report-record-title">${escapeStoreHTML(record.title)}</div><div class="formal-report-detail-grid">${cells.join('')}</div></section>`;}).join('');
-  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${model.stores}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v8.2.2｜第 1 頁</span></div></article>`;
+  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${model.stores}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v8.2.3｜第 1 頁</span></div></article>`;
 }
 function initReportCenter(){const f=getReportFilters();if(!f.start||!f.end)setReportRange('today');previewAdvancedReport();}
 // v7.1.4 報表預覽可收合：只改變畫面顯示，不清除預覽或勤務資料。
@@ -7418,7 +7419,7 @@ function appendFormalExcelSheet(wb,name,rows,f){
   const model=getFormalReportModel(f,rows),aoa=[[model.title],['統計期間',`${f.start} 至 ${f.end}`,'門市範圍',model.scope],['資料筆數',rows.length,'涉及門市',model.stores],['勤務明細']],merges=[{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:3,c:0},e:{r:3,c:3}}];
   if(!model.records.length)aoa.push(['此條件沒有資料。']);
   model.records.forEach(record=>{const titleRow=aoa.length;aoa.push([record.title]);merges.push({s:{r:titleRow,c:0},e:{r:titleRow,c:3}});for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];aoa.push([a[0],a[1]??'',b?.[0]||'',b?.[1]??'']);}});
-  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v8.2.2']);
+  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v8.2.3']);
   const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=merges;ws['!cols']=[{wch:16},{wch:46},{wch:16},{wch:46}];ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:Math.max(22,18+String(aoa[r][1]||'').split('\n').length*12)}));ws['!freeze']={xSplit:0,ySplit:4};ws['!autofilter']=undefined;ws['!margins']={left:.35,right:.35,top:.5,bottom:.5,header:.2,footer:.2};ws['!pageSetup']={paperSize:9,orientation:'portrait',fitToWidth:1,fitToHeight:0};
   const border={top:{style:'thin',color:{rgb:'7F8FA6'}},bottom:{style:'thin',color:{rgb:'7F8FA6'}},left:{style:'thin',color:{rgb:'7F8FA6'}},right:{style:'thin',color:{rgb:'7F8FA6'}}};
   for(let r=0;r<aoa.length;r++)for(let c=0;c<4;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:10,bold:r===0},alignment:{vertical:'top',wrapText:true,horizontal:r===0?'center':'left'},border};if(r===0)cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'17365D'}};else if(r===3||model.records.some(record=>aoa[r]?.[0]===record.title)){cell.s.fill={fgColor:{rgb:r===3?'D9EAF7':'2F75B5'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:r===3?'17365D':'FFFFFF'}};}else if(r===1||r===2||((r>3)&&(c===0||c===2))){cell.s.fill={fgColor:{rgb:'EDF4FB'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'17365D'}};}}
@@ -7437,7 +7438,7 @@ function appendScheduleCalendarSheets(wb,f,rows){
     const aoa=[[`${model.year} 年 ${model.month} 月｜個人勤務班表`],[`統計範圍：${f.start} 至 ${f.end}`],weekdays];
     model.weeks.forEach(week=>aoa.push(week.map(scheduleDayText)));
     if(model.legend.length){aoa.push(['門市圖例',...model.legend.map(([short,full])=>`${short}＝${full}`)]);}
-    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v8.2.2']);
+    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v8.2.3']);
     const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}},{s:{r:1,c:0},e:{r:1,c:6}}];ws['!cols']=weekdays.map(()=>({wch:22}));ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:r===1||r===2?22:(r>=3&&r<3+model.weeks.length?88:26)}));ws['!margins']={left:.25,right:.25,top:.4,bottom:.4,header:.15,footer:.15};ws['!pageSetup']={paperSize:9,orientation:'landscape',fitToWidth:1,fitToHeight:1};ws['!freeze']={xSplit:0,ySplit:3};
     for(let r=0;r<aoa.length;r++)for(let c=0;c<7;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:r===2?10:9,bold:r===0||r===2},alignment:{vertical:'top',wrapText:true,horizontal:r<=2?'center':'left'},border};if(r===0){cell.s.fill={fgColor:{rgb:'EEF2FF'}};cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'312E81'}};}else if(r===2){cell.s.fill={fgColor:{rgb:'4338CA'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'FFFFFF'}};}else if(r>=3&&r<3+model.weeks.length){cell.s.fill={fgColor:{rgb:c===0||c===6?'FAF7FF':'FFFFFF'}};}}
     XLSX.utils.book_append_sheet(wb,ws,`${model.year}-${String(model.month).padStart(2,'0')}班表`);
