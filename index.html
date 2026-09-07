@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>智取店勤務助手 v8.2.3</title>
+<title>智取店勤務助手 v8.3.0</title>
 
 <!--
   v7.0.0 程式碼註解與維護規則
@@ -1629,7 +1629,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 智取店勤務助手<br>v8.2.3
+      📦 智取店勤務助手<br>v8.3.0
     </h1>
   </div>
   <div class="main-nav">
@@ -2359,6 +2359,11 @@
       <input type="text" id="settings-store-search" placeholder="輸入店名搜尋 (如: 興隆)" oninput="renderStoreManageList()" style="flex: 1; margin: 0;">
       <button class="btn-add-support" onclick="openStoreEditModal()">+ 新增門市</button>
     </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+      <button onclick="document.getElementById('store-master-file-input').click()" style="background:#2878d0;color:#fff;">📥 匯入門市資料 Excel</button>
+      <button id="restore-store-master-btn" onclick="restoreLastStoreMasterUpdate()" style="background:#667085;color:#fff;">↩ 復原上次門市更新</button>
+    </div>
+    <div id="store-master-import-status" style="display:none;margin-bottom:10px;padding:9px;border-radius:8px;background:var(--ops-bg);font-size:12px;color:var(--ops-muted);"></div>
     <div id="settings-store-list-container" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--ops-border); border-radius: 8px; padding: 6px; background: var(--ops-bg);"></div>
   </div>
 
@@ -2392,7 +2397,7 @@
   <div class="card settings-section" data-settings-group="global">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v8.2.3 正式版（2026/08/31）</div>
+      <div><b>目前版本：</b> v8.3.0 正式版（2026/09/06）</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -2554,6 +2559,7 @@
   </div>
   
   <input type="file" id="excel-file-input" style="display:none;" onchange="handleExcelImport(event)" accept=".xlsx, .xls">
+  <input type="file" id="store-master-file-input" style="display:none;" onchange="handleStoreMasterImport(event)" accept=".xlsx, .xls">
   <input type="file" id="backup-file-input" style="display:none;" onchange="handleFileImport(event)" accept=".json">
   <input type="file" id="paper-qr-file-input" style="display:none;" onchange="handlePaperQrUpload(event)" accept="image/*">
 </footer>
@@ -2640,6 +2646,9 @@
     <label>🚦 門市狀態</label>
     <select id="store-modal-status"><option value="active">營運中</option><option value="closed">已閉店（保留歷史資料）</option></select>
 
+    <label>🏬 店型</label>
+    <select id="store-modal-type"><option value="pickup">智取店</option><option value="staffed">有人店</option></select>
+
     <label>🏷️ 任務標籤 (勾選代表本店適用該回報項目)</label>
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; font-size: 13px;">
       <label style="margin:0; font-weight:normal; cursor:pointer;"><input type="checkbox" class="store-tag-cb" value="NDD打包" style="width:auto;"> NDD打包</label>
@@ -2658,6 +2667,24 @@
     <div style="display: flex; gap: 8px; margin-top: 18px;">
       <button style="flex:1; background: var(--ops-success); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;" onclick="saveStoreModalData()">💾 儲存門市</button>
       <button style="flex:1; background: #95a5a6; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;" onclick="closeStoreEditModal()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- v8.3.0 門市主檔差異預覽：套用前必須由使用者勾選確認。 -->
+<div id="store-master-preview-modal" class="modal-overlay">
+  <div class="modal-card" style="max-width:760px;max-height:88vh;display:flex;flex-direction:column;">
+    <h3 style="margin:0;color:#2878d0;">📥 門市資料更新預覽</h3>
+    <p id="store-master-preview-summary" style="font-size:12px;line-height:1.6;color:var(--ops-muted);margin:8px 0;"></p>
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px;">
+      <button onclick="toggleStoreMasterChanges(true)">全選</button>
+      <button onclick="toggleStoreMasterChanges(false)">取消全選</button>
+    </div>
+    <div id="store-master-preview-list" style="overflow:auto;border:1px solid var(--ops-border);border-radius:8px;padding:6px;background:var(--ops-bg);flex:1;"></div>
+    <p style="font-size:11px;color:#b45309;margin:8px 0 0;">未出現在 Excel 的既有門市不會被刪除或自動閉店；套用前會自動保存可復原快照。</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+      <button onclick="closeStoreMasterPreview()" style="background:#667085;color:#fff;">取消</button>
+      <button onclick="applySelectedStoreMasterChanges()" style="background:#2ea44f;color:#fff;">套用勾選異動</button>
     </div>
   </div>
 </div>
@@ -3141,7 +3168,19 @@ function normalizeStoresData(data) {
       address: String(store.address || '').trim(),
       tags,
       notes,
-      status: store.status === 'closed' ? 'closed' : 'active'
+      status: store.status === 'closed' ? 'closed' : 'active',
+      storeType: store.storeType === 'staffed' || tags.includes('👤有人店') ? 'staffed' : 'pickup',
+      openDate: String(store.openDate || '').trim(),
+      closeDate: String(store.closeDate || '').trim(),
+      isPrimaryStore: store.isPrimaryStore !== false,
+      recycleLocation: String(store.recycleLocation || '').trim(),
+      hasChecklist: Boolean(store.hasChecklist),
+      providesWater: Boolean(store.providesWater),
+      coolingHours: String(store.coolingHours || '').trim(),
+      routeNote: String(store.routeNote || '').trim(),
+      sourceNotes: String(store.sourceNotes || '').trim(),
+      sourceUpdatedAt: String(store.sourceUpdatedAt || '').trim(),
+      sourceLabel: String(store.sourceLabel || '').trim()
     };
   });
 }
@@ -4490,7 +4529,7 @@ function renderStoreManageList() {
     const closed = store.status === 'closed';
     return `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid var(--ops-border); background:var(--ops-surface); border-radius:6px; margin-bottom:4px;${closed?'opacity:.65;':''}">
       <div>
-        <div style="font-weight:bold; font-size:13px; color:var(--ops-text);">${safeName}${getStoreDisplayBadges(store.name)}</div>
+        <div style="font-weight:bold; font-size:13px; color:var(--ops-text);">${safeName}${getStoreDisplayBadges(store.name)}${store.storeType==='staffed'?'<span class="store-status-badge staffed">👤 有人店</span>':''}</div>
         <div style="font-size:11px; color:var(--ops-muted);">${safeAddress} | 標籤: ${safeTags}</div>
       </div>
       <div style="display:flex; gap:4px;">
@@ -4509,6 +4548,7 @@ function openStoreEditModal(index = -1) {
   const addrInput = document.getElementById('store-modal-address');
   const notesInput = document.getElementById('store-modal-notes');
   const statusInput = document.getElementById('store-modal-status');
+  const typeInput = document.getElementById('store-modal-type');
   const checkboxes = document.querySelectorAll('.store-tag-cb');
   
   idxInput.value = index;
@@ -4521,6 +4561,7 @@ function openStoreEditModal(index = -1) {
     addrInput.value = store.address || '';
     notesInput.value = store.notes || '';
     statusInput.value = store.status === 'closed' ? 'closed' : 'active';
+    typeInput.value = store.storeType === 'staffed' ? 'staffed' : 'pickup';
     const storeTags = store.tags || [];
     checkboxes.forEach(cb => {
       if (storeTags.includes(cb.value)) cb.checked = true;
@@ -4531,6 +4572,7 @@ function openStoreEditModal(index = -1) {
     addrInput.value = '';
     notesInput.value = '';
     statusInput.value = 'active';
+    typeInput.value = 'pickup';
   }
   modal.classList.add('active');
 }
@@ -4545,6 +4587,7 @@ function saveStoreModalData() {
   const address = document.getElementById('store-modal-address').value.trim();
   const notes = document.getElementById('store-modal-notes').value.trim();
   const status = document.getElementById('store-modal-status').value === 'closed' ? 'closed' : 'active';
+  const storeType = document.getElementById('store-modal-type').value === 'staffed' ? 'staffed' : 'pickup';
 
   if (!name) {
     showToast('⚠️ 門市名稱不可為空！');
@@ -4563,8 +4606,14 @@ function saveStoreModalData() {
   document.querySelectorAll('.store-tag-cb').forEach(cb => {
     if (cb.checked) tags.push(cb.value);
   });
+  if (storeType === 'staffed' && !tags.includes('👤有人店')) tags.push('👤有人店');
+  if (storeType !== 'staffed') {
+    const staffedIndex = tags.indexOf('👤有人店');
+    if (staffedIndex >= 0) tags.splice(staffedIndex, 1);
+  }
 
-  const storeObj = { name, address, tags, notes, status };
+  const previous = index >= 0 ? storesData[index] : {};
+  const storeObj = normalizeStoresData([{ ...previous, name, address, tags, notes, status, storeType }])[0];
 
   if (index >= 0) {
     const oldName = storesData[index]?.name || '';
@@ -4588,6 +4637,229 @@ function saveStoreModalData() {
   applyShiftLock();
   renderTodayDashboard();
   syncScheduleToDrive();
+}
+
+/* v8.3.0 公司門市主檔匯入：與班表匯入完全分離，只在使用者預覽並勾選後更新。 */
+const STORE_MASTER_SNAPSHOT_KEY = 'shopee_store_master_last_snapshot';
+const STORE_MASTER_MANAGED_TAGS = ['⭐重點店','NDD打包','FBS打包','SCS HD打包','HD上架','純取店','包裹重新分配','夜間上架','中正速配倉','👤有人店'];
+let pendingStoreMasterImport = null;
+
+function cleanStoreMasterCell(value) {
+  return String(value ?? '').replace(/\r/g, '').replace(/[ \t]+/g, ' ').replace(/ *\n */g, ' ').trim();
+}
+
+function hasStoreMasterMark(value) {
+  const text = cleanStoreMasterCell(value);
+  return Boolean(text) && !/^(?:0|無|否|x)$/i.test(text);
+}
+
+function normalizeStoreMasterText(value) {
+  return cleanStoreMasterCell(value).replace(/\s+/g, '').replace(/3段/g, '三段').replace(/2段/g, '二段').replace(/1段/g, '一段');
+}
+
+function parseStoreMasterEvent(text, sourceDate) {
+  const value = cleanStoreMasterCell(text);
+  const match = value.match(/(\d{1,2})\s*[\/.月]\s*(\d{1,2}).*?(開幕|撤店|閉店)/);
+  if (!match) return null;
+  const year = Number(String(sourceDate || '').slice(0, 4)) || new Date().getFullYear();
+  return { action: match[3] === '開幕' ? 'open' : 'close', date: `${year}-${String(match[1]).padStart(2,'0')}-${String(match[2]).padStart(2,'0')}` };
+}
+
+function inferStoreMasterSourceDate(fileName, rows) {
+  const lead = cleanStoreMasterCell(rows?.[0]?.[0]);
+  const match = `${fileName || ''} ${lead}`.match(/(\d{1,2})[.\/-](\d{1,2})/);
+  const year = new Date().getFullYear();
+  return match ? `${year}-${String(match[1]).padStart(2,'0')}-${String(match[2]).padStart(2,'0')}` : new Date().toISOString().slice(0,10);
+}
+
+function buildStoreMasterRecord(row, kind, sourceDate, sourceLabel) {
+  const staffed = kind === 'staffed';
+  const offset = staffed ? 0 : 2;
+  const name = cleanStoreMasterCell(row[offset]);
+  if (!name || /^(智取店|有人店)$/.test(name)) return null;
+  const tagColumns = staffed
+    ? [['NDD打包',1],['FBS打包',2],['SCS HD打包',3],['HD上架',4],['純取店',5],['包裹重新分配',6],['夜間上架',7]]
+    : [['NDD打包',3],['FBS打包',4],['SCS HD打包',5],['HD上架',6],['純取店',7],['包裹重新分配',8],['夜間上架',9]];
+  const notesIndex = staffed ? 8 : 10;
+  const addressIndex = staffed ? 9 : 11;
+  const tags = tagColumns.filter(([,index]) => hasStoreMasterMark(row[index])).map(([tag]) => tag);
+  if (!staffed && hasStoreMasterMark(row[1])) tags.unshift('⭐重點店');
+  if (staffed) tags.push('👤有人店');
+  const sourceNotes = cleanStoreMasterCell(row[notesIndex]);
+  if (sourceNotes.includes('中正速配倉') && !tags.includes('中正速配倉')) tags.push('中正速配倉');
+  const event = parseStoreMasterEvent([row[1], sourceNotes].join(' '), sourceDate);
+  return {
+    name,
+    address: cleanStoreMasterCell(row[addressIndex]),
+    tags: [...new Set(tags)],
+    storeType: staffed ? 'staffed' : 'pickup',
+    statusEvent: event,
+    isPrimaryStore: staffed ? false : hasStoreMasterMark(row[0]),
+    sourceNotes,
+    recycleLocation: staffed ? '' : cleanStoreMasterCell(row[12]),
+    hasChecklist: staffed ? false : hasStoreMasterMark(row[13]),
+    providesWater: staffed ? false : hasStoreMasterMark(row[14]),
+    coolingHours: staffed ? '' : cleanStoreMasterCell(row[15]),
+    routeNote: staffed ? '' : cleanStoreMasterCell(row[16]),
+    sourceUpdatedAt: sourceDate,
+    sourceLabel
+  };
+}
+
+function parseStoreMasterWorkbookRows(rows, fileName) {
+  const mainHeader = rows.findIndex(row => row.some(cell => cleanStoreMasterCell(cell) === '智取店') && row.some(cell => cleanStoreMasterCell(cell) === '門市地址'));
+  if (mainHeader < 0) throw new Error('找不到「智取店／門市地址」欄位，請確認使用公司門市資訊表。');
+  const staffedHeader = rows.findIndex((row, index) => index > mainHeader && cleanStoreMasterCell(row[0]) === '有人店');
+  const sourceDate = inferStoreMasterSourceDate(fileName, rows);
+  const records = [];
+  rows.slice(mainHeader + 1, staffedHeader < 0 ? rows.length : staffedHeader).forEach(row => {
+    const item = buildStoreMasterRecord(row, 'pickup', sourceDate, fileName);
+    if (item) records.push(item);
+  });
+  if (staffedHeader >= 0) rows.slice(staffedHeader + 1).forEach(row => {
+    const item = buildStoreMasterRecord(row, 'staffed', sourceDate, fileName);
+    if (item) records.push(item);
+  });
+  if (!records.length) throw new Error('表格中沒有可匯入的門市資料。');
+  return { records, sourceDate, sourceLabel:fileName };
+}
+
+function mergeStoreMasterRecord(current, source) {
+  const manualTags = (current?.tags || []).filter(tag => !STORE_MASTER_MANAGED_TAGS.includes(tag));
+  const status = source.statusEvent ? (source.statusEvent.action === 'close' ? 'closed' : 'active') : (current?.status || 'active');
+  return normalizeStoresData([{
+    ...(current || {}),
+    ...source,
+    notes: current?.notes || (current ? '' : source.sourceNotes),
+    tags: [...new Set([...manualTags, ...source.tags])],
+    status,
+    openDate: source.statusEvent?.action === 'open' ? source.statusEvent.date : (current?.openDate || ''),
+    closeDate: source.statusEvent?.action === 'close' ? source.statusEvent.date : (source.statusEvent?.action === 'open' ? '' : (current?.closeDate || ''))
+  }])[0];
+}
+
+function describeStoreMasterDiff(current, next) {
+  const labels = {name:'名稱',address:'地址',tags:'勤務標籤',status:'狀態',storeType:'店型',isPrimaryStore:'主要門市',recycleLocation:'垃圾回收',hasChecklist:'檢核表',providesWater:'飲用水',coolingHours:'冷氣時段',routeNote:'路線',sourceNotes:'公司備註'};
+  return Object.keys(labels).filter(key => {
+    const left = Array.isArray(current?.[key]) ? [...current[key]].sort().join('|') : normalizeStoreMasterText(current?.[key]);
+    const right = Array.isArray(next?.[key]) ? [...next[key]].sort().join('|') : normalizeStoreMasterText(next?.[key]);
+    return left !== right;
+  }).map(key => labels[key]);
+}
+
+function buildStoreMasterChanges(parsed) {
+  return parsed.records.map(source => {
+    const index = storesData.findIndex(store => getStoreNameIdentity(store.name) === getStoreNameIdentity(source.name));
+    const current = index >= 0 ? storesData[index] : null;
+    const next = mergeStoreMasterRecord(current, source);
+    const fields = current ? describeStoreMasterDiff(current, next) : ['新增門市'];
+    if (current && !fields.length) return null;
+    let type = current ? 'update' : 'add';
+    if (source.statusEvent?.action === 'close') type = 'close';
+    if (source.statusEvent?.action === 'open') type = 'open';
+    return { type, index, current, next, fields, selected:true };
+  }).filter(Boolean);
+}
+
+function handleStoreMasterImport(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+  if (typeof XLSX === 'undefined') return showToast('Excel 元件尚未載入，請重新整理後再試。', 4200);
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const workbook = XLSX.read(reader.result, {type:'array'});
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {header:1, raw:false, defval:''});
+      const parsed = parseStoreMasterWorkbookRows(rows, file.name);
+      const changes = buildStoreMasterChanges(parsed);
+      pendingStoreMasterImport = {...parsed, changes};
+      renderStoreMasterPreview();
+    } catch (error) {
+      console.error('門市資料匯入失敗：', error);
+      showToast(`門市資料讀取失敗：${error.message}`, 5200);
+    }
+  };
+  reader.onerror = () => showToast('無法讀取門市資料檔。', 4200);
+  reader.readAsArrayBuffer(file);
+}
+
+function renderStoreMasterPreview() {
+  const modal = document.getElementById('store-master-preview-modal');
+  const list = document.getElementById('store-master-preview-list');
+  const summary = document.getElementById('store-master-preview-summary');
+  const data = pendingStoreMasterImport;
+  if (!modal || !list || !summary || !data) return;
+  const counts = {add:0,update:0,open:0,close:0};
+  data.changes.forEach(change => counts[change.type]++);
+  summary.textContent = `${data.sourceLabel}｜來源 ${data.records.length} 店｜新增 ${counts.add}、資料異動 ${counts.update}、開幕 ${counts.open}、撤店 ${counts.close}、無異動 ${data.records.length-data.changes.length}`;
+  list.innerHTML = data.changes.length ? data.changes.map((change,index) => {
+    const badge = {add:'新增',update:'異動',open:'開幕',close:'撤店'}[change.type];
+    const color = {add:'#2878d0',update:'#b45309',open:'#2ea44f',close:'#c62828'}[change.type];
+    return `<label style="display:flex;gap:9px;align-items:flex-start;padding:9px;border-bottom:1px solid var(--ops-border);cursor:pointer;">
+      <input type="checkbox" class="store-master-change-cb" data-index="${index}" ${change.selected?'checked':''} style="width:auto;margin-top:3px;">
+      <span style="background:${color};color:#fff;border-radius:999px;padding:2px 7px;font-size:11px;">${badge}</span>
+      <span><b>${escapeStoreHTML(change.next.name)}</b><br><small style="color:var(--ops-muted);">${escapeStoreHTML(change.fields.join('、'))}</small></span>
+    </label>`;
+  }).join('') : '<div style="padding:18px;text-align:center;color:var(--ops-muted);">門市資料已是最新，沒有需要套用的異動。</div>';
+  modal.classList.add('active');
+}
+
+function toggleStoreMasterChanges(checked) {
+  document.querySelectorAll('.store-master-change-cb').forEach(input => { input.checked = checked; });
+}
+
+function closeStoreMasterPreview() {
+  document.getElementById('store-master-preview-modal')?.classList.remove('active');
+  pendingStoreMasterImport = null;
+}
+
+function updateStoreMasterImportStatus(message) {
+  const box = document.getElementById('store-master-import-status');
+  if (!box) return;
+  box.style.display = 'block';
+  box.textContent = message;
+}
+
+function applySelectedStoreMasterChanges() {
+  if (!pendingStoreMasterImport) return;
+  const selectedIndexes = [...document.querySelectorAll('.store-master-change-cb:checked')].map(input => Number(input.dataset.index));
+  if (!selectedIndexes.length) return showToast('請至少勾選一筆門市異動。');
+  const snapshot = {createdAt:new Date().toISOString(),source:pendingStoreMasterImport.sourceLabel,stores:storesData};
+  appStorage.setItem(STORE_MASTER_SNAPSHOT_KEY, JSON.stringify(snapshot));
+  const selected = selectedIndexes.map(index => pendingStoreMasterImport.changes[index]).filter(Boolean);
+  selected.forEach(change => {
+    const currentIndex = storesData.findIndex(store => getStoreNameIdentity(store.name) === getStoreNameIdentity(change.next.name));
+    if (currentIndex >= 0) storesData[currentIndex] = change.next;
+    else storesData.push(change.next);
+  });
+  appStorage.setItem('shopee_custom_stores_data', JSON.stringify(normalizeStoresData(storesData)));
+  const sourceLabel = pendingStoreMasterImport.sourceLabel;
+  document.getElementById('store-master-preview-modal')?.classList.remove('active');
+  pendingStoreMasterImport = null;
+  reloadStoresDataFromStorage();
+  renderPaperQrSettings();
+  renderPaperQrTools();
+  updateStoreMasterImportStatus(`已套用 ${sourceLabel} 的 ${selected.length} 筆門市異動；更新前資料已保存，可使用「復原上次門市更新」。`);
+  syncScheduleToDrive();
+  showToast(`✅ 已安全套用 ${selected.length} 筆門市異動`, 4200);
+}
+
+async function restoreLastStoreMasterUpdate() {
+  let snapshot = null;
+  try { snapshot = JSON.parse(appStorage.getItem(STORE_MASTER_SNAPSHOT_KEY) || 'null'); } catch (_) {}
+  if (!snapshot?.stores?.length) return showToast('目前沒有可復原的門市更新快照。');
+  if (!await showAppConfirm({title:'復原上次門市更新',message:`將門市主檔恢復到 ${new Date(snapshot.createdAt).toLocaleString('zh-TW',{hour12:false})} 更新前；班表與歷史回報不受影響。`,confirmText:'確定復原',danger:true,icon:'↩'})) return;
+  storesData = normalizeStoresData(snapshot.stores);
+  appStorage.setItem('shopee_custom_stores_data', JSON.stringify(storesData));
+  appStorage.removeItem(STORE_MASTER_SNAPSHOT_KEY);
+  reloadStoresDataFromStorage();
+  renderPaperQrSettings();
+  renderPaperQrTools();
+  updateStoreMasterImportStatus('已復原上次門市資料更新；班表及歷史回報均保留。');
+  syncScheduleToDrive();
+  showToast('↩ 已復原上次門市更新', 4200);
 }
 
 let pendingStoreDeleteIndex = -1;
@@ -7404,10 +7676,10 @@ function buildScheduleCalendarHtml(f,rows){
   }).join('');
 }
 function buildFormalReportHtml(f,rows){
-  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v8.2.3</span></div></article>`;
+  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v8.3.0</span></div></article>`;
   const model=getFormalReportModel(f,rows);
   const records=model.records.map(record=>{const cells=[];for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];cells.push(`<b>${escapeStoreHTML(a[0])}</b><span>${escapeStoreHTML(String(a[1]??'—'))}</span>${b?`<b>${escapeStoreHTML(b[0])}</b><span>${escapeStoreHTML(String(b[1]??'—'))}</span>`:'<b></b><span></span>'}`);}return `<section><div class="formal-report-record-title">${escapeStoreHTML(record.title)}</div><div class="formal-report-detail-grid">${cells.join('')}</div></section>`;}).join('');
-  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${model.stores}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v8.2.3｜第 1 頁</span></div></article>`;
+  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${model.stores}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v8.3.0｜第 1 頁</span></div></article>`;
 }
 function initReportCenter(){const f=getReportFilters();if(!f.start||!f.end)setReportRange('today');previewAdvancedReport();}
 // v7.1.4 報表預覽可收合：只改變畫面顯示，不清除預覽或勤務資料。
@@ -7419,7 +7691,7 @@ function appendFormalExcelSheet(wb,name,rows,f){
   const model=getFormalReportModel(f,rows),aoa=[[model.title],['統計期間',`${f.start} 至 ${f.end}`,'門市範圍',model.scope],['資料筆數',rows.length,'涉及門市',model.stores],['勤務明細']],merges=[{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:3,c:0},e:{r:3,c:3}}];
   if(!model.records.length)aoa.push(['此條件沒有資料。']);
   model.records.forEach(record=>{const titleRow=aoa.length;aoa.push([record.title]);merges.push({s:{r:titleRow,c:0},e:{r:titleRow,c:3}});for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];aoa.push([a[0],a[1]??'',b?.[0]||'',b?.[1]??'']);}});
-  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v8.2.3']);
+  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v8.3.0']);
   const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=merges;ws['!cols']=[{wch:16},{wch:46},{wch:16},{wch:46}];ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:Math.max(22,18+String(aoa[r][1]||'').split('\n').length*12)}));ws['!freeze']={xSplit:0,ySplit:4};ws['!autofilter']=undefined;ws['!margins']={left:.35,right:.35,top:.5,bottom:.5,header:.2,footer:.2};ws['!pageSetup']={paperSize:9,orientation:'portrait',fitToWidth:1,fitToHeight:0};
   const border={top:{style:'thin',color:{rgb:'7F8FA6'}},bottom:{style:'thin',color:{rgb:'7F8FA6'}},left:{style:'thin',color:{rgb:'7F8FA6'}},right:{style:'thin',color:{rgb:'7F8FA6'}}};
   for(let r=0;r<aoa.length;r++)for(let c=0;c<4;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:10,bold:r===0},alignment:{vertical:'top',wrapText:true,horizontal:r===0?'center':'left'},border};if(r===0)cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'17365D'}};else if(r===3||model.records.some(record=>aoa[r]?.[0]===record.title)){cell.s.fill={fgColor:{rgb:r===3?'D9EAF7':'2F75B5'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:r===3?'17365D':'FFFFFF'}};}else if(r===1||r===2||((r>3)&&(c===0||c===2))){cell.s.fill={fgColor:{rgb:'EDF4FB'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'17365D'}};}}
@@ -7438,7 +7710,7 @@ function appendScheduleCalendarSheets(wb,f,rows){
     const aoa=[[`${model.year} 年 ${model.month} 月｜個人勤務班表`],[`統計範圍：${f.start} 至 ${f.end}`],weekdays];
     model.weeks.forEach(week=>aoa.push(week.map(scheduleDayText)));
     if(model.legend.length){aoa.push(['門市圖例',...model.legend.map(([short,full])=>`${short}＝${full}`)]);}
-    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v8.2.3']);
+    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v8.3.0']);
     const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}},{s:{r:1,c:0},e:{r:1,c:6}}];ws['!cols']=weekdays.map(()=>({wch:22}));ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:r===1||r===2?22:(r>=3&&r<3+model.weeks.length?88:26)}));ws['!margins']={left:.25,right:.25,top:.4,bottom:.4,header:.15,footer:.15};ws['!pageSetup']={paperSize:9,orientation:'landscape',fitToWidth:1,fitToHeight:1};ws['!freeze']={xSplit:0,ySplit:3};
     for(let r=0;r<aoa.length;r++)for(let c=0;c<7;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:r===2?10:9,bold:r===0||r===2},alignment:{vertical:'top',wrapText:true,horizontal:r<=2?'center':'left'},border};if(r===0){cell.s.fill={fgColor:{rgb:'EEF2FF'}};cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'312E81'}};}else if(r===2){cell.s.fill={fgColor:{rgb:'4338CA'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'FFFFFF'}};}else if(r>=3&&r<3+model.weeks.length){cell.s.fill={fgColor:{rgb:c===0||c===6?'FAF7FF':'FFFFFF'}};}}
     XLSX.utils.book_append_sheet(wb,ws,`${model.year}-${String(model.month).padStart(2,'0')}班表`);
