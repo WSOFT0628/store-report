@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>智取店勤務助手 v8.3.4</title>
+<title>智取店勤務助手 v8.3.5</title>
 
 <!--
   v7.0.0 程式碼註解與維護規則
@@ -1640,7 +1640,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 智取店勤務助手<br>v8.3.4
+      📦 智取店勤務助手<br>v8.3.5
     </h1>
   </div>
   <div class="main-nav">
@@ -2431,7 +2431,7 @@
   <div class="card settings-section" data-settings-group="global">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v8.3.4 正式版（2026/10/03）</div>
+      <div><b>目前版本：</b> v8.3.5 正式版（2026/10/03）</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -7811,10 +7811,10 @@ function buildScheduleCalendarHtml(f,rows){
   }).join('');
 }
 function buildFormalReportHtml(f,rows){
-  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v8.3.4</span></div></article>`;
+  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v8.3.5</span></div></article>`;
   const model=getFormalReportModel(f,rows);
   const records=model.records.map(record=>{const cells=[];for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];cells.push(`<b>${escapeStoreHTML(a[0])}</b><span>${escapeStoreHTML(String(a[1]??'—'))}</span>${b?`<b>${escapeStoreHTML(b[0])}</b><span>${escapeStoreHTML(String(b[1]??'—'))}</span>`:'<b></b><span></span>'}`);}return `<section><div class="formal-report-record-title">${escapeStoreHTML(record.title)}</div><div class="formal-report-detail-grid">${cells.join('')}</div></section>`;}).join('');
-  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${escapeStoreHTML(model.stores)}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v8.3.4｜第 1 頁</span></div></article>`;
+  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${escapeStoreHTML(model.stores)}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v8.3.5｜第 1 頁</span></div></article>`;
 }
 function initReportCenter(){const f=getReportFilters();if(!f.start||!f.end)setReportRange('today');previewAdvancedReport();}
 // v7.1.4 報表預覽可收合：只改變畫面顯示，不清除預覽或勤務資料。
@@ -7826,7 +7826,7 @@ function appendFormalExcelSheet(wb,name,rows,f){
   const model=getFormalReportModel(f,rows),aoa=[[model.title],['統計期間',`${f.start} 至 ${f.end}`,'門市範圍',model.scope],['資料筆數',rows.length,'涉及門市',model.stores],['勤務明細']],merges=[{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:3,c:0},e:{r:3,c:3}}];
   if(!model.records.length)aoa.push(['此條件沒有資料。']);
   model.records.forEach(record=>{const titleRow=aoa.length;aoa.push([record.title]);merges.push({s:{r:titleRow,c:0},e:{r:titleRow,c:3}});for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];aoa.push([a[0],a[1]??'',b?.[0]||'',b?.[1]??'']);}});
-  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v8.3.4']);
+  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v8.3.5']);
   const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=merges;ws['!cols']=[{wch:16},{wch:46},{wch:16},{wch:46}];ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:Math.max(22,18+String(aoa[r][1]||'').split('\n').length*12)}));ws['!freeze']={xSplit:0,ySplit:4};ws['!autofilter']=undefined;ws['!margins']={left:.35,right:.35,top:.5,bottom:.5,header:.2,footer:.2};ws['!pageSetup']={paperSize:9,orientation:'portrait',fitToWidth:1,fitToHeight:0};
   const border={top:{style:'thin',color:{rgb:'7F8FA6'}},bottom:{style:'thin',color:{rgb:'7F8FA6'}},left:{style:'thin',color:{rgb:'7F8FA6'}},right:{style:'thin',color:{rgb:'7F8FA6'}}};
   for(let r=0;r<aoa.length;r++)for(let c=0;c<4;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:10,bold:r===0},alignment:{vertical:'top',wrapText:true,horizontal:r===0?'center':'left'},border};if(r===0)cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'17365D'}};else if(r===3||model.records.some(record=>aoa[r]?.[0]===record.title)){cell.s.fill={fgColor:{rgb:r===3?'D9EAF7':'2F75B5'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:r===3?'17365D':'FFFFFF'}};}else if(r===1||r===2||((r>3)&&(c===0||c===2))){cell.s.fill={fgColor:{rgb:'EDF4FB'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'17365D'}};}}
@@ -7845,7 +7845,7 @@ function appendScheduleCalendarSheets(wb,f,rows){
     const aoa=[[`${model.year} 年 ${model.month} 月｜個人勤務班表`],[`統計範圍：${f.start} 至 ${f.end}`],weekdays];
     model.weeks.forEach(week=>aoa.push(week.map(scheduleDayText)));
     if(model.legend.length){aoa.push(['門市圖例',...model.legend.map(([short,full])=>`${short}＝${full}`)]);}
-    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v8.3.4']);
+    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v8.3.5']);
     const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}},{s:{r:1,c:0},e:{r:1,c:6}}];ws['!cols']=weekdays.map(()=>({wch:22}));ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:r===1||r===2?22:(r>=3&&r<3+model.weeks.length?88:26)}));ws['!margins']={left:.25,right:.25,top:.4,bottom:.4,header:.15,footer:.15};ws['!pageSetup']={paperSize:9,orientation:'landscape',fitToWidth:1,fitToHeight:1};ws['!freeze']={xSplit:0,ySplit:3};
     for(let r=0;r<aoa.length;r++)for(let c=0;c<7;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:r===2?10:9,bold:r===0||r===2},alignment:{vertical:'top',wrapText:true,horizontal:r<=2?'center':'left'},border};if(r===0){cell.s.fill={fgColor:{rgb:'EEF2FF'}};cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'312E81'}};}else if(r===2){cell.s.fill={fgColor:{rgb:'4338CA'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'FFFFFF'}};}else if(r>=3&&r<3+model.weeks.length){cell.s.fill={fgColor:{rgb:c===0||c===6?'FAF7FF':'FFFFFF'}};}}
     XLSX.utils.book_append_sheet(wb,ws,`${model.year}-${String(model.month).padStart(2,'0')}班表`);
@@ -7881,8 +7881,9 @@ const STORE_V8_SESSION_KEY='store_v8_supabase_session_v1';
 const STORE_V8_RESOLVED_VERSION_KEY='store_v8_supabase_resolved_version_v1';
 const STORE_V81_QUEUE_KEY='store_v81_sync_queue_v1';
 const STORE_V81_LAST_SUCCESS_KEY='store_v81_last_sync_success_v1';
+const STORE_V8_DEFAULT_URL='https://wfukoajqjtemcusfqvrb.supabase.co';
 const GOOGLE_BACKUP_SYNC=window.syncScheduleToDrive;
-let storeV8Session=null,storeV8Member=null,storeV8CloudVersion=null,storeV8PendingCloud=null,storeV8SyncTimer=null,storeV8PullTimer=null,storeV8Pulling=false;
+let storeV8Session=null,storeV8Member=null,storeV8CloudVersion=null,storeV8PendingCloud=null,storeV8SyncTimer=null,storeV8PullTimer=null,storeV8Pulling=false,storeV8CloudReady=false;
 const STORE_V8_LOCAL_META_KEYS=new Set([
   'shopee_cloud_pending','shopee_cloud_file_id','shopee_cloud_modified_time',
   'shopee_last_cloud_sync','shopee_last_local_save'
@@ -7911,7 +7912,7 @@ async function retrySupabaseQueue(){if(!navigator.onLine)return showToast('📴 
 
 function getSupabaseConfig(){
   const saved=JSON.parse(localStorage.getItem(STORE_V8_CONFIG_KEY)||'{}');
-  const url=(document.getElementById('supabase-project-url')?.value||saved.url||'').trim().replace(/\/$/,'');
+  const url=(document.getElementById('supabase-project-url')?.value||saved.url||STORE_V8_DEFAULT_URL).trim().replace(/\/$/,'');
   const key=(document.getElementById('supabase-publishable-key')?.value||saved.key||'').trim();
   return{url,key};
 }
@@ -7951,6 +7952,23 @@ function collectSupabaseSnapshot(){
   for(let i=0;i<appStorage.length;i++){const key=appStorage.key(i);if(key?.startsWith('shopee_')&&!STORE_V8_LOCAL_META_KEYS.has(key))data[key]=appStorage.getItem(key)}return data;
 }
 function normalizeSupabaseSnapshot(snapshot){return Object.fromEntries(Object.entries(snapshot||{}).filter(([key])=>key.startsWith('shopee_')&&!STORE_V8_LOCAL_META_KEYS.has(key)))}
+function snapshotJSON(value,fallback){try{return JSON.parse(value)}catch{return fallback}}
+function hasMeaningfulOperationalData(snapshot=collectSupabaseSnapshot()){
+  const schedule=snapshotJSON(snapshot.shopee_user_schedule,'');
+  if(schedule&&typeof schedule==='object'&&Object.keys(schedule).length)return true;
+  if(snapshot.shopee_custom_stores_data||snapshot.shopee_support_duties||snapshot.shopee_incidents)return true;
+  return Object.entries(snapshot).some(([key,value])=>{
+    if(!/^shopee_report_(draft_|daily_)/.test(key))return false;
+    const parsed=snapshotJSON(value,null),items=Array.isArray(parsed)?parsed:[parsed];
+    return items.some(item=>item&&typeof item==='object'&&String(item.shopName||'').trim()&&Object.entries(item).some(([field,fieldValue])=>field==='shopName'||(/^c\d+_/.test(field)&&String(fieldValue??'').trim())||field==='_supportDutyId'));
+  });
+}
+function showCloudStartupGate(message,actionText='開啟雲端登入設定'){
+  let gate=document.getElementById('cloud-startup-gate');
+  if(!gate){gate=document.createElement('div');gate.id='cloud-startup-gate';gate.style.cssText='position:fixed;inset:0;z-index:5000;background:rgba(15,35,58,.82);display:flex;align-items:center;justify-content:center;padding:18px';gate.innerHTML='<div style="width:min(440px,100%);background:var(--ops-card);color:var(--ops-text);border-radius:14px;padding:22px;box-shadow:0 18px 55px rgba(0,0,0,.28)"><h3 style="margin:0 0 10px;color:var(--ops-info)">☁️ 載入雲端勤務資料</h3><p id="cloud-startup-gate-message" style="font-size:13px;line-height:1.75;margin:0 0 14px"></p><button id="cloud-startup-gate-action" style="width:100%;background:#2878d0;color:#fff">開啟雲端登入設定</button></div>';document.body.appendChild(gate)}
+  document.getElementById('cloud-startup-gate-message').textContent=message;const button=document.getElementById('cloud-startup-gate-action');button.textContent=actionText;button.onclick=()=>{gate.style.display='none';openMoreContext('settings');setTimeout(()=>document.getElementById('supabase-login-email')?.focus(),120)};gate.style.display='flex';
+}
+function hideCloudStartupGate(){const gate=document.getElementById('cloud-startup-gate');if(gate)gate.style.display='none'}
 function describeSupabaseDifference(local,remote){
   const keys=new Set([...Object.keys(local||{}),...Object.keys(remote||{})]);let added=0,removed=0,changed=0;const groups=new Set();
   const groupName=key=>/schedule|shift|roster/i.test(key)?'班表':/sop|knowledge/i.test(key)?'SOP':/report|visit|incident/i.test(key)?'回報／巡店':/device|vault|qr/i.test(key)?'設備／QR':'設定與其他';
@@ -7962,7 +7980,7 @@ async function hashSupabaseSnapshot(value){const text=JSON.stringify(canonicalSu
 function createSupabaseRecoverySnapshot(){const recovery=collectSupabaseSnapshot();sessionStorage.setItem('shopee_before_cloud_restore',JSON.stringify(recovery))}
 function applySupabaseSnapshot(remoteData,options={}){
   createSupabaseRecoverySnapshot();const keys=[];for(let i=0;i<appStorage.length;i++){const key=appStorage.key(i);if(key?.startsWith('shopee_')&&!STORE_V8_LOCAL_META_KEYS.has(key))keys.push(key)}keys.forEach(key=>appStorage.removeItem(key));
-  Object.entries(normalizeSupabaseSnapshot(remoteData)).forEach(([key,value])=>appStorage.setItem(key,value));markCloudSynced();clearV81Queue();
+  Object.entries(normalizeSupabaseSnapshot(remoteData)).forEach(([key,value])=>appStorage.setItem(key,value));storeV8CloudReady=true;markCloudSynced();clearV81Queue();hideCloudStartupGate();
   if(Number.isFinite(storeV8CloudVersion))localStorage.setItem(STORE_V8_RESOLVED_VERSION_KEY,String(storeV8CloudVersion));
   handleDailyRollover();reloadStoresDataFromStorage();resetActiveViewsToTodayAfterRestore();updateHistoryDropdown();loadWeekSchedule();renderMonthView();renderDayView();loadData(false);updateDraftLabels();renderTodayDashboard();renderV82ReportPhotos();updateSubjectConfirmationUI();updateReportProgress();updateSupabaseUI();
   if(!options.silent)showToast(options.auto?'☁️ 已自動更新其他裝置的資料。':'☁️ 已套用 Supabase 雲端資料；原本本機資料已建立安全快照。',options.auto?2600:4000);
@@ -7970,8 +7988,10 @@ function applySupabaseSnapshot(remoteData,options={}){
 async function loadSupabaseCloud(options={}){
   try{if(window.IS_TRIAL_PROFILE)throw new Error('試用空間不連接正式 Supabase');if(!storeV8Session)throw new Error('請先登入 Supabase');const rows=await supabaseRpc('store_app_load_state'),row=Array.isArray(rows)?rows[0]:rows;if(!row)throw new Error('找不到雲端狀態');storeV8CloudVersion=Number(row.version);updateSupabaseUI();
     const remote=normalizeSupabaseSnapshot(row.payload),local=collectSupabaseSnapshot(),[remoteHash,localHash]=await Promise.all([hashSupabaseSnapshot(remote),hashSupabaseSnapshot(local)]);
-    if(remoteHash===localHash){markCloudSynced();clearV81Queue();localStorage.setItem(STORE_V8_RESOLVED_VERSION_KEY,String(storeV8CloudVersion));updateSupabaseUI();if(options.manual)showToast('✅ 本機與 Supabase 資料一致。');return row}
-    if(!Object.keys(local).length&&Object.keys(remote).length){applySupabaseSnapshot(remote,{auto:options.source!=='manual'});return row}
+    if(remoteHash===localHash){storeV8CloudReady=true;hideCloudStartupGate();markCloudSynced();clearV81Queue();localStorage.setItem(STORE_V8_RESOLVED_VERSION_KEY,String(storeV8CloudVersion));updateSupabaseUI();if(options.manual)showToast('✅ 本機與 Supabase 資料一致。');return row}
+    // v8.3.5：新裝置的主題、空草稿等預設鍵不算勤務資料；沒有真正班表／回報時必須優先套用雲端。
+    if(!hasMeaningfulOperationalData(local)&&Object.keys(remote).length){applySupabaseSnapshot(remote,{auto:true});return row}
+    if(!hasMeaningfulOperationalData(local)&&!Object.keys(remote).length){storeV8CloudReady=true;hideCloudStartupGate();markCloudSynced();clearV81Queue();localStorage.setItem(STORE_V8_RESOLVED_VERSION_KEY,String(storeV8CloudVersion));updateSupabaseUI();return row}
     // v8.3.3：本機沒有待上傳變更時，差異只代表其他裝置有新版，直接自動套用。
     // 只有本機同時存在未同步修改，才開啟衝突選擇，避免 A 更新後 B 還要人工選一次。
     if(!hasV81Pending()){applySupabaseSnapshot(remote,{auto:options.source!=='manual'});return row}
@@ -8003,7 +8023,7 @@ async function syncSupabaseNow(options={}){
   const manual=options.manual===true;if(window.IS_TRIAL_PROFILE)return false;
   if(!storeV8Session||!storeV8Member?.approved){setV81QueuePending();markCloudPending({schedule:false});if(manual)showToast('💾 本機已儲存；登入並核准後才能同步。',4000);return false}
   if(storeV8Member.role==='viewer'){if(manual)showToast('🔒 viewer 為唯讀帳號，不能上傳。',4000);return false}
-  try{if(storeV8CloudVersion===null)await loadSupabaseCloud({source:'sync'});if(storeV8PendingCloud&&!Number.isFinite(options.expectedVersion)){if(manual)openSupabaseChoice();return false}
+  try{if(!storeV8CloudReady||storeV8CloudVersion===null){await loadSupabaseCloud({source:'sync'});if(!storeV8CloudReady)return false}if(storeV8PendingCloud&&!Number.isFinite(options.expectedVersion)){if(manual)openSupabaseChoice();return false}
     const expected=Number.isFinite(options.expectedVersion)?Number(options.expectedVersion):storeV8CloudVersion;const result=await supabaseRpc('store_app_save_state',{p_payload:collectSupabaseSnapshot(),p_expected_version:expected});const row=Array.isArray(result)?result[0]:result;storeV8CloudVersion=Number(row.version);storeV8PendingCloud=null;markCloudSynced();clearV81Queue();localStorage.setItem(STORE_V8_RESOLVED_VERSION_KEY,String(storeV8CloudVersion));updateSupabaseUI();if(manual)showToast(`✅ Supabase 同步完成（v${storeV8CloudVersion}）。`);return true;
   }catch(error){setV81QueuePending();markCloudPending({schedule:false});updateSupabaseUI();if(String(error.message).includes('SYNC_CONFLICT')){await loadSupabaseCloud({source:'conflict'}).catch(()=>{});showToast('⚠️ 雲端已有新版，已阻止覆蓋。請選擇保留資料。',5000)}else if(manual)showToast('⚠️ 同步失敗：'+error.message,4500);return false}
 }
@@ -8234,8 +8254,11 @@ async function initSupabaseV8(){
   // v8.1.0：正式化清除功能名稱；即使瀏覽器保留舊的按鈕狀態，載入時也強制校正。
   const clearMemoryButton=document.getElementById('clear-web-memory-btn');
   if(clearMemoryButton&&!window.IS_TRIAL_PROFILE)clearMemoryButton.textContent='🧹 清除本應用網頁記憶';
-  const config=JSON.parse(localStorage.getItem(STORE_V8_CONFIG_KEY)||'{}');const url=document.getElementById('supabase-project-url'),key=document.getElementById('supabase-publishable-key');if(url)url.value=config.url||'';if(key)key.value=config.key||'';storeV8Session=JSON.parse(localStorage.getItem(STORE_V8_SESSION_KEY)||'null');
-  if(storeV8Session&&config.url&&config.key){await refreshSupabaseSession();try{await registerSupabaseMember();await refreshCloudSnapshots()}catch(error){console.warn(error);updateSupabaseUI()}}else updateSupabaseUI();
+  const config=JSON.parse(localStorage.getItem(STORE_V8_CONFIG_KEY)||'{}');const url=document.getElementById('supabase-project-url'),key=document.getElementById('supabase-publishable-key');if(url)url.value=config.url||STORE_V8_DEFAULT_URL;if(key)key.value=config.key||'';storeV8Session=JSON.parse(localStorage.getItem(STORE_V8_SESSION_KEY)||'null');
+  const hasLocalWork=hasMeaningfulOperationalData();
+  if(!config.key){if(!hasLocalWork)showCloudStartupGate('這台裝置尚未完成雲端連線，系統不會再用空白班表冒充同步結果。請先設定 Publishable key 並登入一次。');updateSupabaseUI()}
+  else if(!storeV8Session){if(!hasLocalWork)showCloudStartupGate('這台裝置尚未登入。登入後系統會先下載雲端班表與回報，再開放操作。');updateSupabaseUI()}
+  else{await refreshSupabaseSession();try{await registerSupabaseMember();await refreshCloudSnapshots();hideCloudStartupGate()}catch(error){console.warn(error);if(!hasLocalWork)showCloudStartupGate('目前無法載入雲端勤務資料，已阻止空白資料覆蓋雲端。請重新登入或檢查網路。','重新開啟登入設定');updateSupabaseUI()}}
   if(appStorage.getItem('shopee_cloud_pending')==='true')setV81QueuePending();else updateV81SyncCenter();
   startSupabaseAutoPull();
   // RC16 手機輸入保護：回報頁使用期間不得有 2.5 秒全域 DOM 輪詢；提醒與照片改由載入、儲存、切店及資料增刪事件更新。
