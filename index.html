@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>智取店勤務助手 v8.3.7</title>
+<title>智取店勤務助手 v8.3.8</title>
 
 <!--
   v7.0.0 程式碼註解與維護規則
@@ -1640,7 +1640,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 智取店勤務助手<br>v8.3.7
+      📦 智取店勤務助手<br>v8.3.8
     </h1>
   </div>
   <div class="main-nav">
@@ -2330,16 +2330,7 @@
       <details class="ux-advanced">
         <summary>快照與進階同步管理</summary>
         <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px"><button onclick="retrySupabaseQueue()">重試待同步</button><button onclick="refreshCloudSnapshots()">重新整理雲端快照</button></div>
-        <div id="sync-version-conflict" style="display:none;margin-top:9px;padding:10px;border:1px solid #f0b36a;border-radius:8px;background:#fff7ed;font-size:12px;line-height:1.65;">
-          <b>偵測到兩台裝置都有修改</b>
-          <div id="sync-version-conflict-info" style="margin-top:4px;"></div>
-          <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;">
-            <button onclick="keepLocalSupabaseChoice()">保留本機，稍後同步</button>
-            <button onclick="overwriteSupabaseChoice()" style="background:#ee4d2d;color:#fff;">用本機更新雲端</button>
-            <button onclick="useSupabaseCloudChoice()" style="background:#2878d0;color:#fff;">套用雲端資料</button>
-          </div>
-        </div>
-        <div id="sync-snapshot-list" style="margin-top:9px;font-size:12px;color:var(--ops-muted);">登入後可查看最近 20 份雲端快照。</div>
+        <button onclick="openBackupVersionManager()" style="width:100%;margin-top:9px;">開啟備份版本管理</button>
       </details>
     </div>
     <div id="supabase-members" style="margin-top:10px;"></div>
@@ -2348,7 +2339,21 @@
 
   <div class="card settings-section" data-settings-group="global">
     <h3>💾 備份與資料</h3>
-    <p style="font-size:12px;color:var(--ops-muted);">本機 JSON 適合完整備份與還原；Google Drive 僅作人工備份。日常跨裝置同步仍以 Supabase 為準。</p>
+    <p style="font-size:12px;color:var(--ops-muted);">自動同步負責日常跨裝置資料；此頁保留人工備份、版本選擇與還原，不再混在帳號登入設定裡。</p>
+    <div id="backup-version-manager" style="margin-bottom:12px;padding:12px;border:1px solid var(--ops-border);border-radius:10px;background:var(--ops-bg);">
+      <div id="sync-version-conflict" style="display:none;margin-bottom:12px;padding:10px;border:1px solid #f0b36a;border-radius:8px;font-size:12px;line-height:1.65;">
+        <b>同筆資料版本選擇（不會自動覆蓋）</b>
+        <div id="sync-version-conflict-info"></div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;">
+          <button onclick="keepLocalSupabaseChoice()">保留本機，稍後處理</button>
+          <button onclick="overwriteSupabaseChoice()">用本機更新雲端</button>
+          <button onclick="useSupabaseCloudChoice()">套用雲端資料</button>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><b>☁️ 雲端備份版本</b><button onclick="refreshCloudSnapshots()">重新整理版本</button></div>
+      <p style="font-size:11px;color:var(--ops-muted);margin:7px 0;">可查看最近 20 份自動快照，選擇指定版本預覽差異後套用。套用只先還原至本機，不會立刻覆蓋雲端。</p>
+      <div id="sync-snapshot-list" style="font-size:12px;color:var(--ops-muted);">登入後可查看最近 20 份雲端快照。</div>
+    </div>
     <div class="settings-grid">
       <button onclick="restoreLastSafetySnapshot()">還原最近安全快照</button>
       <button onclick="exportBackupData()">下載本機備份檔</button>
@@ -2431,7 +2436,7 @@
   <div class="card settings-section" data-settings-group="global">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v8.3.7 正式版（2026/10/05）</div>
+      <div><b>目前版本：</b> v8.3.8 正式版（2026/10/05）</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -3339,6 +3344,7 @@ function filterSettingsCards() {
   if(category==='stores')document.querySelectorAll('[data-store-management-tab]').forEach(button=>button.classList.toggle('active',button.dataset.storeManagementTab===storeTab));
 }
 function focusMoreSection(id) { openMoreContext('settings');selectV82SettingsCategory('stores');if(id==='arrival-tools-card')selectStoreManagementTab('toolbox');setTimeout(() => document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'}),80); }
+function openBackupVersionManager(){openMoreContext('settings');selectV82SettingsCategory('backup');setTimeout(()=>{document.getElementById('backup-version-manager')?.scrollIntoView({behavior:'smooth',block:'start'});refreshCloudSnapshots()},100)}
 
 function navButtonFor(tabId) {
   return Array.from(document.querySelectorAll('.nav-btn')).find(btn => btn.dataset.navTab===tabId) ||
@@ -7811,10 +7817,10 @@ function buildScheduleCalendarHtml(f,rows){
   }).join('');
 }
 function buildFormalReportHtml(f,rows){
-  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v8.3.7</span></div></article>`;
+  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v8.3.8</span></div></article>`;
   const model=getFormalReportModel(f,rows);
   const records=model.records.map(record=>{const cells=[];for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];cells.push(`<b>${escapeStoreHTML(a[0])}</b><span>${escapeStoreHTML(String(a[1]??'—'))}</span>${b?`<b>${escapeStoreHTML(b[0])}</b><span>${escapeStoreHTML(String(b[1]??'—'))}</span>`:'<b></b><span></span>'}`);}return `<section><div class="formal-report-record-title">${escapeStoreHTML(record.title)}</div><div class="formal-report-detail-grid">${cells.join('')}</div></section>`;}).join('');
-  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${escapeStoreHTML(model.stores)}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v8.3.7｜第 1 頁</span></div></article>`;
+  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${escapeStoreHTML(model.stores)}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v8.3.8｜第 1 頁</span></div></article>`;
 }
 function initReportCenter(){const f=getReportFilters();if(!f.start||!f.end)setReportRange('today');previewAdvancedReport();}
 // v7.1.4 報表預覽可收合：只改變畫面顯示，不清除預覽或勤務資料。
@@ -7826,7 +7832,7 @@ function appendFormalExcelSheet(wb,name,rows,f){
   const model=getFormalReportModel(f,rows),aoa=[[model.title],['統計期間',`${f.start} 至 ${f.end}`,'門市範圍',model.scope],['資料筆數',rows.length,'涉及門市',model.stores],['勤務明細']],merges=[{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:3,c:0},e:{r:3,c:3}}];
   if(!model.records.length)aoa.push(['此條件沒有資料。']);
   model.records.forEach(record=>{const titleRow=aoa.length;aoa.push([record.title]);merges.push({s:{r:titleRow,c:0},e:{r:titleRow,c:3}});for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];aoa.push([a[0],a[1]??'',b?.[0]||'',b?.[1]??'']);}});
-  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v8.3.7']);
+  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v8.3.8']);
   const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=merges;ws['!cols']=[{wch:16},{wch:46},{wch:16},{wch:46}];ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:Math.max(22,18+String(aoa[r][1]||'').split('\n').length*12)}));ws['!freeze']={xSplit:0,ySplit:4};ws['!autofilter']=undefined;ws['!margins']={left:.35,right:.35,top:.5,bottom:.5,header:.2,footer:.2};ws['!pageSetup']={paperSize:9,orientation:'portrait',fitToWidth:1,fitToHeight:0};
   const border={top:{style:'thin',color:{rgb:'7F8FA6'}},bottom:{style:'thin',color:{rgb:'7F8FA6'}},left:{style:'thin',color:{rgb:'7F8FA6'}},right:{style:'thin',color:{rgb:'7F8FA6'}}};
   for(let r=0;r<aoa.length;r++)for(let c=0;c<4;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:10,bold:r===0},alignment:{vertical:'top',wrapText:true,horizontal:r===0?'center':'left'},border};if(r===0)cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'17365D'}};else if(r===3||model.records.some(record=>aoa[r]?.[0]===record.title)){cell.s.fill={fgColor:{rgb:r===3?'D9EAF7':'2F75B5'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:r===3?'17365D':'FFFFFF'}};}else if(r===1||r===2||((r>3)&&(c===0||c===2))){cell.s.fill={fgColor:{rgb:'EDF4FB'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'17365D'}};}}
@@ -7845,7 +7851,7 @@ function appendScheduleCalendarSheets(wb,f,rows){
     const aoa=[[`${model.year} 年 ${model.month} 月｜個人勤務班表`],[`統計範圍：${f.start} 至 ${f.end}`],weekdays];
     model.weeks.forEach(week=>aoa.push(week.map(scheduleDayText)));
     if(model.legend.length){aoa.push(['門市圖例',...model.legend.map(([short,full])=>`${short}＝${full}`)]);}
-    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v8.3.7']);
+    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v8.3.8']);
     const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}},{s:{r:1,c:0},e:{r:1,c:6}}];ws['!cols']=weekdays.map(()=>({wch:22}));ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:r===1||r===2?22:(r>=3&&r<3+model.weeks.length?88:26)}));ws['!margins']={left:.25,right:.25,top:.4,bottom:.4,header:.15,footer:.15};ws['!pageSetup']={paperSize:9,orientation:'landscape',fitToWidth:1,fitToHeight:1};ws['!freeze']={xSplit:0,ySplit:3};
     for(let r=0;r<aoa.length;r++)for(let c=0;c<7;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:r===2?10:9,bold:r===0||r===2},alignment:{vertical:'top',wrapText:true,horizontal:r<=2?'center':'left'},border};if(r===0){cell.s.fill={fgColor:{rgb:'EEF2FF'}};cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'312E81'}};}else if(r===2){cell.s.fill={fgColor:{rgb:'4338CA'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'FFFFFF'}};}else if(r>=3&&r<3+model.weeks.length){cell.s.fill={fgColor:{rgb:c===0||c===6?'FAF7FF':'FFFFFF'}};}}
     XLSX.utils.book_append_sheet(wb,ws,`${model.year}-${String(model.month).padStart(2,'0')}班表`);
@@ -7965,14 +7971,16 @@ function hasMeaningfulOperationalData(snapshot=collectSupabaseSnapshot()){
   if(schedule&&typeof schedule==='object'&&Object.values(schedule).some(isMeaningfulScheduleDay))return true;
   const hasItems=key=>{const value=snapshotJSON(snapshot[key],null);return Array.isArray(value)?value.length>0:Boolean(value&&typeof value==='object'&&Object.keys(value).length)};
   // 內建門市清單會在全新瀏覽器首次開啟時自動寫入，不能拿來判斷「這台裝置已有勤務資料」。
-  if(['shopee_support_duties','shopee_incidents'].some(hasItems))return true;
+  if(['shopee_v71_support_duties','shopee_v7_incidents','shopee_report_checkpoints_v1','shopee_v82_report_photo_refs_v1'].some(hasItems))return true;
   return Object.entries(snapshot).some(([key,value])=>{
     if(!/^shopee_report_(draft_|daily_)/.test(key))return false;
     const parsed=snapshotJSON(value,null),items=Array.isArray(parsed)?parsed:[parsed];
     return items.some(item=>item&&typeof item==='object'&&String(item.shopName||'').trim()&&Object.entries(item).some(([field,fieldValue])=>field==='shopName'||(/^c\d+_/.test(field)&&String(fieldValue??'').trim())||field==='_supportDutyId'));
   });
 }
+let storeV8MergeConflicts=[];
 function mergeOperationalSnapshots(remoteSnapshot,localSnapshot){
+  storeV8MergeConflicts=[];
   const remote=normalizeSupabaseSnapshot(remoteSnapshot),local=normalizeSupabaseSnapshot(localSnapshot),merged={...remote};
   // 雲端沒有的本機資料鍵先保留；同名非班表資料以已成功寫入雲端的版本為準，避免舊裝置反向覆蓋。
   Object.entries(local).forEach(([key,value])=>{if(!(key in merged))merged[key]=value});
@@ -7981,6 +7989,39 @@ function mergeOperationalSnapshots(remoteSnapshot,localSnapshot){
     if(!(date in schedule)||(!isMeaningfulScheduleDay(schedule[date])&&isMeaningfulScheduleDay(day)))schedule[date]=day;
   });
   if(Object.keys(schedule).length)merged.shopee_user_schedule=JSON.stringify(schedule);
+  const empty=value=>value==null||value===''||(Array.isArray(value)&&!value.length);
+  const mergeRecord=(cloud,device)=>{
+    if(!cloud||typeof cloud!=='object')return device;
+    if(!device||typeof device!=='object')return cloud;
+    const result={...cloud};
+    for(const [field,value] of Object.entries(device)){
+      if(empty(result[field])&&!empty(value))result[field]=value;
+      else if(!empty(value)&&!empty(result[field])&&JSON.stringify(canonicalSupabaseValue(value))!==JSON.stringify(canonicalSupabaseValue(result[field]))){
+        if(/^c\d+_|^_confirmed|^shopName$|^date$/.test(field))storeV8MergeConflicts.push(field);
+      }
+    }
+    return result;
+  };
+  const mergeRows=(cloud,device)=>{
+    const rows=[...cloud];
+    for(const item of device){
+      const identity=item?.id||[item?.date||'',item?.shopName||'',item?.shift||''].join('|');
+      const index=rows.findIndex(row=>(row?.id||[row?.date||'',row?.shopName||'',row?.shift||''].join('|'))===identity);
+      if(index<0)rows.push(item);else rows[index]=mergeRecord(rows[index],item);
+    }
+    return rows;
+  };
+  for(const [key,value] of Object.entries(local)){
+    if(!(key in remote))continue;
+    const cloud=snapshotJSON(remote[key],null),device=snapshotJSON(value,null);
+    if(/^shopee_report_(daily_|history_)/.test(key)&&Array.isArray(cloud)&&Array.isArray(device))merged[key]=JSON.stringify(mergeRows(cloud,device));
+    else if(/^shopee_report_(draft_\d+$|history_)/.test(key)&&cloud&&device&&!Array.isArray(cloud)&&!Array.isArray(device))merged[key]=JSON.stringify(mergeRecord(cloud,device));
+    else if(['shopee_report_checkpoints_v1','shopee_v71_support_duties','shopee_v7_incidents'].includes(key)&&Array.isArray(cloud)&&Array.isArray(device)){
+      const seen=new Set(cloud.map(item=>JSON.stringify(canonicalSupabaseValue(item))));
+      merged[key]=JSON.stringify([...cloud,...device.filter(item=>!seen.has(JSON.stringify(canonicalSupabaseValue(item))))]);
+    }else if(key==='shopee_v82_report_photo_refs_v1'&&cloud&&device)merged[key]=JSON.stringify(mergeV82PhotoIndexes(device,cloud));
+  }
+  if(local.shopee_report_draft_count)merged.shopee_report_draft_count=String(Math.max(Number(local.shopee_report_draft_count)||0,Number(remote.shopee_report_draft_count)||0));
   return merged;
 }
 function showCloudStartupGate(message,actionText='開啟雲端登入設定'){
@@ -8014,11 +8055,12 @@ async function loadSupabaseCloud(options={}){
     if(!hasMeaningfulOperationalData(local)&&!Object.keys(remote).length){storeV8CloudReady=true;hideCloudStartupGate();markCloudSynced();clearV81Queue();localStorage.setItem(STORE_V8_RESOLVED_VERSION_KEY,String(storeV8CloudVersion));updateSupabaseUI();return row}
     // 手機可能曾被標成「已同步」，但仍持有雲端沒有的舊週次；不得因沒有 pending 標記就丟棄。
     const mergedCandidate=mergeOperationalSnapshots(remote,local),mergedHash=await hashSupabaseSnapshot(mergedCandidate);
+    if(storeV8MergeConflicts.length){storeV8PendingCloud={remoteData:remote,version:storeV8CloudVersion,updatedAt:row.updated_at,diff:describeSupabaseDifference(local,remote)};openSupabaseChoice();return row}
     if(mergedHash!==remoteHash){
       applySupabaseSnapshot(mergedCandidate,{silent:true});
       setV81QueuePending();markCloudPending({schedule:false});storeV8PendingCloud=null;
       if(options.source!=='sync')setTimeout(()=>syncSupabaseNow(),0);
-      showToast('☁️ 已保留本機舊週次並合併雲端新班表，正在同步完整紀錄。',4200);
+      showToast('☁️ 已合併本機回報、照片索引與班表，等待雲端確認同步完成。',4200);
       return row;
     }
     // v8.3.3：本機沒有待上傳變更時，差異只代表其他裝置有新版，直接自動套用。
@@ -8039,12 +8081,13 @@ function startSupabaseAutoPull(){
   clearInterval(storeV8PullTimer);
   storeV8PullTimer=setInterval(()=>pullLatestSupabaseIfClean({source:'poll'}),15000);
 }
+let storeV8ConflictToastAt=0;
 function openSupabaseChoice(){
   // v8.3.4：版本處理移至設定頁，日常勤務不再被全畫面選擇視窗阻擋。
   const box=document.getElementById('sync-version-conflict'),info=document.getElementById('sync-version-conflict-info');
   if(info)info.textContent=`雲端版本：${storeV8PendingCloud?.version??'—'}｜更新：${storeV8PendingCloud?.updatedAt?new Date(storeV8PendingCloud.updatedAt).toLocaleString('zh-TW',{hour12:false}):'未知'}\n${storeV8PendingCloud?.diff||''}`;
   if(info)info.style.whiteSpace='pre-line';if(box)box.style.display='block';
-  showToast('☁️ 偵測到雙邊修改，已保留資料；可繼續工作並至「帳號與同步」處理版本。',5000);
+  if(Date.now()-storeV8ConflictToastAt>30000){storeV8ConflictToastAt=Date.now();showToast('☁️ 同筆資料有差異，請至「備份與資料」查看並選擇版本。',5000)}
 }
 function closeSupabaseChoice(){document.getElementById('supabase-choice-modal')?.classList.remove('active');const box=document.getElementById('sync-version-conflict');if(box)box.style.display='none'}
 function keepLocalSupabaseChoice(){closeSupabaseChoice();markCloudPending({schedule:false});showToast('💾 已保留本機資料，尚未覆蓋雲端。')}
