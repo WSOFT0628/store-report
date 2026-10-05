@@ -7955,9 +7955,16 @@ function normalizeSupabaseSnapshot(snapshot){return Object.fromEntries(Object.en
 function snapshotJSON(value,fallback){try{return JSON.parse(value)}catch{return fallback}}
 function hasMeaningfulOperationalData(snapshot=collectSupabaseSnapshot()){
   const schedule=snapshotJSON(snapshot.shopee_user_schedule,'');
-  if(schedule&&typeof schedule==='object'&&Object.keys(schedule).length)return true;
+  if(schedule&&typeof schedule==='object'&&Object.values(schedule).some(day=>{
+    if(typeof day==='string')return Boolean(day.trim());
+    if(Array.isArray(day))return day.length>0;
+    if(!day||typeof day!=='object')return false;
+    const locations=[day.loc,...(Array.isArray(day.supportLocs)?day.supportLocs:[])].flatMap(value=>String(value||'').split(/[、,，/\n]/)).map(value=>value.trim()).filter(Boolean);
+    return locations.length>0||day.isOff===true||['shift','t1','startTime','endTime','note'].some(field=>String(day[field]||'').trim());
+  }))return true;
   const hasItems=key=>{const value=snapshotJSON(snapshot[key],null);return Array.isArray(value)?value.length>0:Boolean(value&&typeof value==='object'&&Object.keys(value).length)};
-  if(['shopee_custom_stores_data','shopee_support_duties','shopee_incidents'].some(hasItems))return true;
+  // 內建門市清單會在全新瀏覽器首次開啟時自動寫入，不能拿來判斷「這台裝置已有勤務資料」。
+  if(['shopee_support_duties','shopee_incidents'].some(hasItems))return true;
   return Object.entries(snapshot).some(([key,value])=>{
     if(!/^shopee_report_(draft_|daily_)/.test(key))return false;
     const parsed=snapshotJSON(value,null),items=Array.isArray(parsed)?parsed:[parsed];
