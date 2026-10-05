@@ -8012,17 +8012,21 @@ async function loadSupabaseCloud(options={}){
     // v8.3.5：新裝置的主題、空草稿等預設鍵不算勤務資料；沒有真正班表／回報時必須優先套用雲端。
     if(!hasMeaningfulOperationalData(local)&&Object.keys(remote).length){applySupabaseSnapshot(remote,{auto:true});return row}
     if(!hasMeaningfulOperationalData(local)&&!Object.keys(remote).length){storeV8CloudReady=true;hideCloudStartupGate();markCloudSynced();clearV81Queue();localStorage.setItem(STORE_V8_RESOLVED_VERSION_KEY,String(storeV8CloudVersion));updateSupabaseUI();return row}
+    // 手機可能曾被標成「已同步」，但仍持有雲端沒有的舊週次；不得因沒有 pending 標記就丟棄。
+    const mergedCandidate=mergeOperationalSnapshots(remote,local),mergedHash=await hashSupabaseSnapshot(mergedCandidate);
+    if(mergedHash!==remoteHash){
+      applySupabaseSnapshot(mergedCandidate,{silent:true});
+      setV81QueuePending();markCloudPending({schedule:false});storeV8PendingCloud=null;
+      if(options.source!=='sync')setTimeout(()=>syncSupabaseNow(),0);
+      showToast('☁️ 已保留本機舊週次並合併雲端新班表，正在同步完整紀錄。',4200);
+      return row;
+    }
     // v8.3.3：本機沒有待上傳變更時，差異只代表其他裝置有新版，直接自動套用。
     // 只有本機同時存在未同步修改，才開啟衝突選擇，避免 A 更新後 B 還要人工選一次。
     if(!hasV81Pending()){applySupabaseSnapshot(remote,{auto:options.source!=='manual'});return row}
     // v8.3.7：兩台裝置各自持有不同週次時，班表依日期做聯集，不再要求整包二選一。
     // 同一天若兩邊都有內容，以已成功寫入雲端者為準；本機獨有的舊週次會補回雲端。
-    const merged=mergeOperationalSnapshots(remote,local);
-    applySupabaseSnapshot(merged,{silent:true});
-    setV81QueuePending();markCloudPending({schedule:false});storeV8PendingCloud=null;
-    if(options.source!=='sync')setTimeout(()=>syncSupabaseNow(),0);
-    showToast('☁️ 已合併此裝置與雲端班表週次，正在同步完整紀錄。',4200);
-    return row;
+    storeV8PendingCloud={remoteData:remote,version:storeV8CloudVersion,updatedAt:row.updated_at,diff:describeSupabaseDifference(local,remote)};openSupabaseChoice();return row;
   }catch(error){markCloudPending({schedule:false});updateSupabaseUI();if(options.manual)showToast('⚠️ 雲端下載失敗：'+error.message,4500);throw error}
 }
 async function pullLatestSupabaseIfClean(options={}){
