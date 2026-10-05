@@ -8021,7 +8021,12 @@ function mergeOperationalSnapshots(remoteSnapshot,localSnapshot){
     if(!(date in schedule)||(!isMeaningfulScheduleDay(schedule[date])&&isMeaningfulScheduleDay(day)))schedule[date]=day;
     else if(day&&typeof day==='object'&&!Array.isArray(day)&&schedule[date]&&typeof schedule[date]==='object'&&!Array.isArray(schedule[date])){
       const cloudDay=schedule[date],supports=[...new Set([...(cloudDay.supportLocs||[]),...(day.supportLocs||[])])];
-      if(supports.length){schedule[date]={...cloudDay,supportLocs:supports,routeOrder:[...new Set([...(day.routeOrder||[]),...(cloudDay.routeOrder||[]),...supports])]};}
+      if(supports.length){
+        const cloudRoute=cloudDay.routeOrder||[],deviceRoute=day.routeOrder||[];
+        const preferDevice=supports.every(store=>deviceRoute.includes(store))&&!supports.every(store=>cloudRoute.includes(store));
+        const preferred=preferDevice?deviceRoute:cloudRoute,other=preferDevice?cloudRoute:deviceRoute;
+        schedule[date]={...cloudDay,supportLocs:supports,routeOrder:[...new Set([...preferred,...other,...supports])]};
+      }
     }
   });
   if(Object.keys(schedule).length)merged.shopee_user_schedule=JSON.stringify(schedule);
