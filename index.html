@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>智取店勤務助手 v8.3.11</title>
+<title>智取店勤務助手 v8.3.12</title>
 
 <!--
   v7.0.0 程式碼註解與維護規則
@@ -1640,7 +1640,7 @@
 <div class="main-header">
   <div style="padding: 12px 0 6px 0; text-align: left;">
     <h1 style="color: #ffffff; font-size: 19px; margin: 0; font-weight: bold; letter-spacing: 0.5px;">
-      📦 智取店勤務助手<br>v8.3.11
+      📦 智取店勤務助手<br>v8.3.12
     </h1>
   </div>
   <div class="main-nav">
@@ -2437,7 +2437,7 @@
   <div class="card settings-section" data-settings-group="global">
     <h3 style="color: #2196f3; border-bottom-color: rgba(33,150,243,0.3);">💻 系統維護與狀態</h3>
     <div style="font-size: 13px; line-height: 2; color: var(--ops-text);">
-      <div><b>目前版本：</b> v8.3.11 正式版（2026/10/05）</div>
+      <div><b>目前版本：</b> v8.3.12 正式版（2026/11/18）</div>
       <div id="settings-system-status"><b>系統連線狀態：</b> 檢測中...</div>
       <div id="settings-storage-usage"><b>本機儲存空間：</b> 計算中...</div>
     </div>
@@ -3230,6 +3230,8 @@ function normalizeStoresData(data) {
       hasChecklist: Boolean(store.hasChecklist),
       providesWater: Boolean(store.providesWater),
       coolingHours: String(store.coolingHours || '').trim(),
+      hdShelf: String(store.hdShelf || '').trim(),
+      taskEffectiveDates: store.taskEffectiveDates && typeof store.taskEffectiveDates === 'object' ? {...store.taskEffectiveDates} : {},
       routeNote: String(store.routeNote || '').trim(),
       sourceNotes: String(store.sourceNotes || '').trim(),
       sourceUpdatedAt: String(store.sourceUpdatedAt || '').trim(),
@@ -3245,6 +3247,7 @@ function reloadStoresDataFromStorage() {
   } catch (error) {
     console.warn('門市資料格式異常，沿用目前資料：', error);
   }
+  applyBundledStoreMasterUpdate();
   populateShopOptions();
   populateReportStoreDatalist();
   renderStoreManageList();
@@ -4724,7 +4727,7 @@ function buildStoreMasterHistoryStates(stores) {
     name:store.name,
     tags:(store.tags||[]).filter(tag=>STORE_MASTER_MANAGED_TAGS.includes(tag)),
     status:store.status==='closed'?'closed':'active',
-    storeType:store.storeType==='staffed'?'staffed':'pickup'
+    storeType:store.storeType==='staffed'?'staffed':'pickup',taskEffectiveDates:{...(store.taskEffectiveDates||{})}
   }));
 }
 
@@ -4751,7 +4754,7 @@ function getStoreTagsForDate(shopName,date,currentTags=[]) {
   const state=version?.states?.find(item=>item.identity===getStoreNameIdentity(shopName));
   if(!state)return currentTags;
   const manual=(currentTags||[]).filter(tag=>!STORE_MASTER_MANAGED_TAGS.includes(tag));
-  return [...new Set([...manual,...(state.tags||[])])];
+  return [...new Set([...manual,...(state.tags||[])])].filter(tag=>!state.taskEffectiveDates?.[tag]||date>=state.taskEffectiveDates[tag]);
 }
 
 function describeStoreSubjectLinks(tags=[]) {
@@ -4807,78 +4810,65 @@ function inferStoreMasterSourceDate(fileName, rows) {
   return match ? `${year}-${String(match[1]).padStart(2,'0')}-${String(match[2]).padStart(2,'0')}` : new Date().toISOString().slice(0,10);
 }
 
-function buildStoreMasterRecord(row, kind, sourceDate, sourceLabel) {
-  const staffed = kind === 'staffed';
-  const offset = staffed ? 0 : 2;
-  const name = cleanStoreMasterCell(row[offset]);
-  if (!name || /^(智取店|有人店)$/.test(name)) return null;
-  const tagColumns = staffed
-    ? [['NDD打包',1],['FBS打包',2],['SCS HD打包',3],['HD上架',4],['純取店',5],['包裹重新分配',6],['夜間上架',7]]
-    : [['NDD打包',3],['FBS打包',4],['SCS HD打包',5],['HD上架',6],['純取店',7],['包裹重新分配',8],['夜間上架',9]];
-  const notesIndex = staffed ? 8 : 10;
-  const addressIndex = staffed ? 9 : 11;
-  const tags = tagColumns.filter(([,index]) => hasStoreMasterMark(row[index])).map(([tag]) => tag);
-  if (!staffed && hasStoreMasterFlag(row[1])) tags.unshift('⭐重點店');
-  if (staffed) tags.push('👤有人店');
-  const sourceNotes = cleanStoreMasterCell(row[notesIndex]);
-  if (sourceNotes.includes('中正速配倉') && !tags.includes('中正速配倉')) tags.push('中正速配倉');
-  const event = parseStoreMasterEvent([row[1], sourceNotes].join(' '), sourceDate);
-  return {
-    name,
-    address: cleanStoreMasterCell(row[addressIndex]),
-    tags: [...new Set(tags)],
-    storeType: staffed ? 'staffed' : 'pickup',
-    statusEvent: event,
-    isPrimaryStore: staffed ? false : hasStoreMasterMark(row[0]),
-    sourceNotes,
-    recycleLocation: staffed ? '' : cleanStoreMasterCell(row[12]),
-    hasChecklist: staffed ? false : hasStoreMasterFlag(row[13]),
-    providesWater: staffed ? false : hasStoreMasterFlag(row[14]),
-    coolingHours: staffed ? '' : cleanStoreMasterCell(row[15]),
-    routeNote: staffed ? '' : cleanStoreMasterCell(row[16]),
-    sourceUpdatedAt: sourceDate,
-    sourceLabel
-  };
+function buildStoreMasterRecord(row, kind, sourceDate, sourceLabel, header) {
+  const staffed=kind==='staffed';
+  const key=value=>cleanStoreMasterCell(value).replace(/\s+/g,'');
+  const columns=header.map(key);
+  const indexOf=pattern=>columns.findIndex(value=>pattern.test(value));
+  const nameIndex=indexOf(staffed?/^有人店$/:/^智取店$/);
+  const name=cleanStoreMasterCell(row[nameIndex]);
+  if(!name||/^(智取店|有人店)$/.test(name))return null;
+  const fields=[['NDD打包',/^NDD打包/],['FBS打包',/^FBS打包/],['SCS HD打包',/^SCSHD打包/],['HD上架',/^HD上架/],['純取店',/^純取店/],['包裹重新分配',/^包裹重新分配/],['夜間上架',/^夜間上架/]];
+  const tags=[],managedTags=['👤有人店','中正速配倉'],taskEffectiveDates={};
+  for(const [tag,pattern] of fields){
+    const index=indexOf(pattern);if(index<0)continue;
+    managedTags.push(tag);
+    if(hasStoreMasterMark(row[index])){
+      tags.push(tag);
+      const start=cleanStoreMasterCell(row[index]).match(/(\d{1,2})\s*[\/月.]\s*(\d{1,2})\s*日?\s*起/);
+      if(start)taskEffectiveDates[tag]=`${sourceDate.slice(0,4)}-${start[1].padStart(2,'0')}-${start[2].padStart(2,'0')}`;
+    }
+  }
+  const priority=indexOf(/^重點店$/);
+  if(priority>=0){managedTags.push('⭐重點店');if(hasStoreMasterFlag(row[priority]))tags.unshift('⭐重點店')}
+  if(staffed)tags.push('👤有人店');
+  const notes=indexOf(/^其他事項$/),address=indexOf(/^門市地址$/);
+  const sourceNotes=cleanStoreMasterCell(row[notes]);
+  if(sourceNotes.includes('中正速配倉'))tags.push('中正速配倉');
+  const record={name,address:cleanStoreMasterCell(row[address]),tags:[...new Set(tags)],managedTags,taskEffectiveDates,storeType:staffed?'staffed':'pickup',statusEvent:parseStoreMasterEvent([row[priority],sourceNotes].join(' '),sourceDate),sourceNotes,sourceUpdatedAt:sourceDate,sourceLabel};
+  const primary=indexOf(/主要門市/);if(primary>=0)record.isPrimaryStore=hasStoreMasterMark(row[primary]);
+  for(const [field,pattern,flag] of [['hdShelf',/^SCSHD上架櫃位$/,false],['recycleLocation',/^垃圾回收地址$/,false],['hasChecklist',/^有檢核表門市$/,true],['providesWater',/^提供飲用水$/,true],['coolingHours',/^冷氣延長時段$/,false],['routeNote',/^路線/,false]]){
+    const index=indexOf(pattern);if(index>=0)record[field]=flag?hasStoreMasterFlag(row[index]):hasStoreMasterMark(row[index])?cleanStoreMasterCell(row[index]):'';
+  }
+  return record;
 }
 
 function parseStoreMasterWorkbookRows(rows, fileName) {
-  const mainHeader = rows.findIndex(row => row.some(cell => cleanStoreMasterCell(cell) === '智取店') && row.some(cell => cleanStoreMasterCell(cell) === '門市地址'));
-  if (mainHeader < 0) throw new Error('找不到「智取店／門市地址」欄位，請確認使用公司門市資訊表。');
-  const staffedHeader = rows.findIndex((row, index) => index > mainHeader && cleanStoreMasterCell(row[0]) === '有人店');
-  const sourceDate = inferStoreMasterSourceDate(fileName, rows);
-  const records = [];
-  rows.slice(mainHeader + 1, staffedHeader < 0 ? rows.length : staffedHeader).forEach(row => {
-    const item = buildStoreMasterRecord(row, 'pickup', sourceDate, fileName);
-    if (item) records.push(item);
-  });
-  if (staffedHeader >= 0) rows.slice(staffedHeader + 1).forEach(row => {
-    const item = buildStoreMasterRecord(row, 'staffed', sourceDate, fileName);
-    if (item) records.push(item);
-  });
-  if (!records.length) throw new Error('表格中沒有可匯入的門市資料。');
-  return { records, sourceDate, sourceLabel:fileName };
+  const main=rows.findIndex(row=>row.some(cell=>cleanStoreMasterCell(cell)==='智取店')&&row.some(cell=>cleanStoreMasterCell(cell)==='門市地址'));
+  if(main<0)throw new Error('找不到「智取店／門市地址」欄位');
+  const staffed=rows.findIndex((row,i)=>i>main&&cleanStoreMasterCell(row[0])==='有人店');
+  const sourceDate=inferStoreMasterSourceDate(fileName,rows),records=[];
+  for(const row of rows.slice(main+1,staffed<0?rows.length:staffed)){const record=buildStoreMasterRecord(row,'pickup',sourceDate,fileName,rows[main]);if(record)records.push(record)}
+  if(staffed>=0)for(const row of rows.slice(staffed+1)){const record=buildStoreMasterRecord(row,'staffed',sourceDate,fileName,rows[staffed]);if(record)records.push(record)}
+  if(!records.length)throw new Error('表格中沒有可匯入的門市資料');
+  const identities=records.map(record=>getStoreNameIdentity(record.name));
+  if(new Set(identities).size!==identities.length)throw new Error('門市一覽有重複店名，請先確認來源');
+  return {records,sourceDate,sourceLabel:fileName};
 }
 
-function mergeStoreMasterRecord(current, source) {
-  const manualTags = (current?.tags || []).filter(tag => !STORE_MASTER_MANAGED_TAGS.includes(tag));
-  const status = source.statusEvent ? (source.statusEvent.action === 'close' ? 'closed' : 'active') : (current?.status || 'active');
-  return normalizeStoresData([{
-    ...(current || {}),
-    ...source,
-    notes: current?.notes || (current ? '' : source.sourceNotes),
-    tags: [...new Set([...manualTags, ...source.tags])],
-    status,
-    openDate: source.statusEvent?.action === 'open' ? source.statusEvent.date : (current?.openDate || ''),
-    closeDate: source.statusEvent?.action === 'close' ? source.statusEvent.date : (source.statusEvent?.action === 'open' ? '' : (current?.closeDate || ''))
-  }])[0];
+function mergeStoreMasterRecord(current,source){
+  const managed=source.managedTags||STORE_MASTER_MANAGED_TAGS;
+  const manual=(current?.tags||[]).filter(tag=>!managed.includes(tag));
+  const status=source.statusEvent?(source.statusEvent.action==='close'?'closed':'active'):(current?.status||'active');
+  return normalizeStoresData([{...(current||{}),...source,notes:current?.notes||(current?'':source.sourceNotes),tags:[...new Set([...manual,...source.tags])],status,openDate:source.statusEvent?.action==='open'?source.statusEvent.date:(current?.openDate||''),closeDate:source.statusEvent?.action==='close'?source.statusEvent.date:(source.statusEvent?.action==='open'?'':(current?.closeDate||''))}])[0];
 }
 
 function describeStoreMasterDiff(current, next) {
-  const labels = {name:'名稱',address:'地址',tags:'勤務標籤',status:'狀態',storeType:'店型',isPrimaryStore:'主要門市',recycleLocation:'垃圾回收',hasChecklist:'檢核表',providesWater:'飲用水',coolingHours:'冷氣時段',routeNote:'路線',sourceNotes:'公司備註'};
+  const labels = {name:'名稱',address:'地址',tags:'勤務標籤',status:'狀態',storeType:'店型',isPrimaryStore:'主要門市',recycleLocation:'垃圾回收',hasChecklist:'檢核表',providesWater:'飲用水',coolingHours:'冷氣時段',routeNote:'路線',sourceNotes:'公司備註',hdShelf:'SCS HD櫃位',taskEffectiveDates:'勤務生效日'};
   return Object.keys(labels).filter(key => {
     const left = Array.isArray(current?.[key]) ? [...current[key]].sort().join('|') : normalizeStoreMasterText(current?.[key]);
     const right = Array.isArray(next?.[key]) ? [...next[key]].sort().join('|') : normalizeStoreMasterText(next?.[key]);
-    return left !== right;
+    return key==='taskEffectiveDates'?JSON.stringify(current?.[key]||{})!==JSON.stringify(next?.[key]||{}):left !== right;
   }).map(key => labels[key]);
 }
 
@@ -6079,7 +6069,7 @@ function getTodayString() {
 
 window.onload = function() {
   try {
-    initProfileUI();
+    initProfileUI();applyBundledStoreMasterUpdate();
     const scheduleRepaired = repairScheduleStoreNamesAndDuplicates();
     const rolledOver = handleDailyRollover();
     applyTheme(appStorage.getItem('shopee_ui_theme') || 'light');
@@ -6737,12 +6727,13 @@ function updateStoreInfo() {
     }
 
     const notesBox = document.getElementById('storeNotesBox');
-    if (store.notes && store.notes.trim() !== '') {
-      notesBox.style.display = 'block';
-      notesBox.innerText = '💡 注意事項：' + store.notes;
-    } else {
-      notesBox.style.display = 'none';
-    }
+    const notes=[...new Set([store.notes,store.sourceNotes].filter(Boolean))];
+    if(store.hdShelf)notes.push('SCS HD上架櫃位：'+store.hdShelf);
+    if(store.recycleLocation)notes.push('垃圾回收：'+store.recycleLocation);
+    if(store.hasChecklist)notes.push('檢核表：有');
+    if(store.providesWater)notes.push('飲用水：有');
+    if(store.coolingHours)notes.push('冷氣延長：'+store.coolingHours);
+    notesBox.style.display=notes.length?'block':'none';notesBox.innerText=notes.join('\n');
     detailCard.style.display = 'block';
   } else {
     detailCard.style.display = 'none';
@@ -7830,10 +7821,10 @@ function buildScheduleCalendarHtml(f,rows){
   }).join('');
 }
 function buildFormalReportHtml(f,rows){
-  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v8.3.11</span></div></article>`;
+  if(f.kind==='schedule')return `<article class="formal-report-sheet">${buildScheduleCalendarHtml(f,rows)}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(new Date().toLocaleString('zh-TW',{hour12:false}))}</span><span>蝦皮智取店勤務助手 v8.3.12</span></div></article>`;
   const model=getFormalReportModel(f,rows);
   const records=model.records.map(record=>{const cells=[];for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];cells.push(`<b>${escapeStoreHTML(a[0])}</b><span>${escapeStoreHTML(String(a[1]??'—'))}</span>${b?`<b>${escapeStoreHTML(b[0])}</b><span>${escapeStoreHTML(String(b[1]??'—'))}</span>`:'<b></b><span></span>'}`);}return `<section><div class="formal-report-record-title">${escapeStoreHTML(record.title)}</div><div class="formal-report-detail-grid">${cells.join('')}</div></section>`;}).join('');
-  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${escapeStoreHTML(model.stores)}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v8.3.11｜第 1 頁</span></div></article>`;
+  return `<article class="formal-report-sheet"><div class="formal-report-title">${escapeStoreHTML(model.title)}</div><table class="formal-report-meta"><tr><th>統計期間</th><td>${escapeStoreHTML(f.start)} 至 ${escapeStoreHTML(f.end)}</td><th>門市範圍</th><td>${escapeStoreHTML(model.scope)}</td></tr><tr><th>資料筆數</th><td>${rows.length}</td><th>涉及門市</th><td>${escapeStoreHTML(model.stores)}</td></tr></table><div class="formal-report-section">勤務明細</div>${records||'<div class="formal-report-empty">此條件沒有資料。</div>'}<div class="formal-report-footer"><span>產製時間：${escapeStoreHTML(model.generated)}</span><span>蝦皮智取店勤務助手 v8.3.12｜第 1 頁</span></div></article>`;
 }
 function initReportCenter(){const f=getReportFilters();if(!f.start||!f.end)setReportRange('today');previewAdvancedReport();}
 // v7.1.4 報表預覽可收合：只改變畫面顯示，不清除預覽或勤務資料。
@@ -7845,7 +7836,7 @@ function appendFormalExcelSheet(wb,name,rows,f){
   const model=getFormalReportModel(f,rows),aoa=[[model.title],['統計期間',`${f.start} 至 ${f.end}`,'門市範圍',model.scope],['資料筆數',rows.length,'涉及門市',model.stores],['勤務明細']],merges=[{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:3,c:0},e:{r:3,c:3}}];
   if(!model.records.length)aoa.push(['此條件沒有資料。']);
   model.records.forEach(record=>{const titleRow=aoa.length;aoa.push([record.title]);merges.push({s:{r:titleRow,c:0},e:{r:titleRow,c:3}});for(let i=0;i<record.pairs.length;i+=2){const a=record.pairs[i],b=record.pairs[i+1];aoa.push([a[0],a[1]??'',b?.[0]||'',b?.[1]??'']);}});
-  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v8.3.11']);
+  const footerRow=aoa.length;aoa.push([`產製時間：${model.generated}`,'','','蝦皮智取店勤務助手 v8.3.12']);
   const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=merges;ws['!cols']=[{wch:16},{wch:46},{wch:16},{wch:46}];ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:Math.max(22,18+String(aoa[r][1]||'').split('\n').length*12)}));ws['!freeze']={xSplit:0,ySplit:4};ws['!autofilter']=undefined;ws['!margins']={left:.35,right:.35,top:.5,bottom:.5,header:.2,footer:.2};ws['!pageSetup']={paperSize:9,orientation:'portrait',fitToWidth:1,fitToHeight:0};
   const border={top:{style:'thin',color:{rgb:'7F8FA6'}},bottom:{style:'thin',color:{rgb:'7F8FA6'}},left:{style:'thin',color:{rgb:'7F8FA6'}},right:{style:'thin',color:{rgb:'7F8FA6'}}};
   for(let r=0;r<aoa.length;r++)for(let c=0;c<4;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:10,bold:r===0},alignment:{vertical:'top',wrapText:true,horizontal:r===0?'center':'left'},border};if(r===0)cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'17365D'}};else if(r===3||model.records.some(record=>aoa[r]?.[0]===record.title)){cell.s.fill={fgColor:{rgb:r===3?'D9EAF7':'2F75B5'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:r===3?'17365D':'FFFFFF'}};}else if(r===1||r===2||((r>3)&&(c===0||c===2))){cell.s.fill={fgColor:{rgb:'EDF4FB'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'17365D'}};}}
@@ -7864,7 +7855,7 @@ function appendScheduleCalendarSheets(wb,f,rows){
     const aoa=[[`${model.year} 年 ${model.month} 月｜個人勤務班表`],[`統計範圍：${f.start} 至 ${f.end}`],weekdays];
     model.weeks.forEach(week=>aoa.push(week.map(scheduleDayText)));
     if(model.legend.length){aoa.push(['門市圖例',...model.legend.map(([short,full])=>`${short}＝${full}`)]);}
-    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v8.3.11']);
+    aoa.push([`產製時間：${new Date().toLocaleString('zh-TW',{hour12:false})}`,'','','','','','蝦皮智取店勤務助手 v8.3.12']);
     const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}},{s:{r:1,c:0},e:{r:1,c:6}}];ws['!cols']=weekdays.map(()=>({wch:22}));ws['!rows']=aoa.map((_,r)=>({hpt:r===0?30:r===1||r===2?22:(r>=3&&r<3+model.weeks.length?88:26)}));ws['!margins']={left:.25,right:.25,top:.4,bottom:.4,header:.15,footer:.15};ws['!pageSetup']={paperSize:9,orientation:'landscape',fitToWidth:1,fitToHeight:1};ws['!freeze']={xSplit:0,ySplit:3};
     for(let r=0;r<aoa.length;r++)for(let c=0;c<7;c++){const ref=XLSX.utils.encode_cell({r,c}),cell=ws[ref]||(ws[ref]={t:'s',v:''});cell.s={font:{name:'Microsoft JhengHei',sz:r===0?16:r===2?10:9,bold:r===0||r===2},alignment:{vertical:'top',wrapText:true,horizontal:r<=2?'center':'left'},border};if(r===0){cell.s.fill={fgColor:{rgb:'EEF2FF'}};cell.s.font={name:'Microsoft JhengHei',sz:16,bold:true,color:{rgb:'312E81'}};}else if(r===2){cell.s.fill={fgColor:{rgb:'4338CA'}};cell.s.font={name:'Microsoft JhengHei',sz:10,bold:true,color:{rgb:'FFFFFF'}};}else if(r>=3&&r<3+model.weeks.length){cell.s.fill={fgColor:{rgb:c===0||c===6?'FAF7FF':'FFFFFF'}};}}
     XLSX.utils.book_append_sheet(wb,ws,`${model.year}-${String(model.month).padStart(2,'0')}班表`);
@@ -7890,6 +7881,28 @@ function showToast(message, duration = 2000) {
     toast.classList.remove('show');
     setTimeout(() => toast.remove(), 300);
   }, duration);
+}
+
+const BUNDLED_STORE_MASTER_UPDATE={"id":"20260918-header-v1","records":[{"name":"文山興隆-智取店","address":"台北市文山區興隆路一段86號","tags":["⭐重點店","SCS HD打包","HD上架"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"HD滯留放 隔壁小房間","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":true,"hdShelf":"HD-51 HD-52","recycleLocation":"文山區景美分隊 116臺北市文山區溪洲街220號","hasChecklist":true,"providesWater":true,"coolingHours":""},{"name":"文山景興-智取店","address":"台北市文山區景興路87號1樓","tags":["⭐重點店","NDD打包","FBS打包","包裹重新分配"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"特選離店放後場","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"文山區景美分隊 116臺北市文山區溪洲街220號","hasChecklist":true,"providesWater":true,"coolingHours":"電扇 請自行開啟"},{"name":"文山仙岩-智取店","address":"台北市文山區仙岩路28號1樓","tags":["⭐重點店","NDD打包","FBS打包"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"文山區景美分隊 116臺北市文山區溪洲街220號","hasChecklist":true,"providesWater":true,"coolingHours":"8:30-15:00 17:30-22:30"},{"name":"文山萬隆-智取店","address":"台北市文山區羅斯福路五段218巷7號1樓","tags":["⭐重點店","NDD打包","FBS打包","包裹重新分配"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"文山區景美分隊 116臺北市文山區溪洲街220號","hasChecklist":true,"providesWater":true,"coolingHours":"17:30-03:00"},{"name":"文山興業-智取店","address":"台北市文山區興隆路二段220巷3號1樓","tags":["⭐重點店","SCS HD打包","HD上架"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"HD滯留放後場","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"HD-51 HD-52","recycleLocation":"文山區景美分隊 116臺北市文山區溪洲街220號","hasChecklist":true,"providesWater":true,"coolingHours":"電扇 請自行開啟"},{"name":"文山興豐-智取店","address":"台北市文山區興隆路一段157號1樓","tags":["⭐重點店","NDD打包","FBS打包"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"文山區景美分隊 116臺北市文山區溪洲街220號","hasChecklist":true,"providesWater":false,"coolingHours":""},{"name":"文山福興-智取店","address":"台北市文山區福興路32號1樓","tags":["包裹重新分配"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"文山區景美分隊 116臺北市文山區溪洲街220號","hasChecklist":false,"providesWater":true,"coolingHours":""},{"name":"文山隆德-智取店","address":"台北市文山區汀州路四段265號1樓","tags":["⭐重點店","NDD打包","FBS打包"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"文山區景美分隊 116臺北市文山區溪洲街220號","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"文山興泰-智取店","address":"台北市文山區辛亥路四段234號1樓","tags":["⭐重點店","NDD打包","FBS打包"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"文山區景美分隊 116臺北市文山區溪洲街220號","hasChecklist":false,"providesWater":true,"coolingHours":""},{"name":"文山景仁-智取店","address":"台北市文山區羅斯福路六段44號1樓","tags":[],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"文山區景美分隊 116臺北市文山區溪洲街220號","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"文山羅斯-智取店","address":"台北市文山區羅斯福路五段241號","tags":["純取店"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"文山區景美分隊 116臺北市文山區溪洲街220號","hasChecklist":false,"providesWater":true,"coolingHours":""},{"name":"文山隆市-智取店","address":"台北市文山區興隆路二段81號1樓","tags":["純取店"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"特選離店放後場","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"文山區景美分隊 116臺北市文山區溪洲街220號","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"文山興隆二-智取店","address":"台北市文山區興隆路二段195號1樓","tags":["純取店"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"(暫停)文山興隆二店11:30後(周三X周日X) 116臺北市文山區興隆路二段195號1樓","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"文山萬福-智取店","address":"台北市文山區羅斯福路五段170巷2號1樓","tags":["SCS HD打包","HD上架","包裹重新分配"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"HD-51 HD-52","recycleLocation":"文山區景美分隊 116臺北市文山區溪洲街220號","hasChecklist":true,"providesWater":false,"coolingHours":"17:30-03:00"},{"name":"大安台大-智取店","address":"台北市大安區復興南路二段360號1樓","tags":["⭐重點店","SCS HD打包","HD上架"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"HD滯留放後場","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":true,"hdShelf":"HD-07 HD-08","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":true,"providesWater":true,"coolingHours":""},{"name":"大安市圖-智取店","address":"台北市大安區建國南路二段151巷22號1樓","tags":["⭐重點店","NDD打包","FBS打包","包裹重新分配"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":true,"providesWater":false,"coolingHours":"處理中 請稍後"},{"name":"大安瑞安-智取店","address":"台北市大安區瑞安街146號","tags":["⭐重點店","SCS HD打包","HD上架"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"HD滯留放後場","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"HD-07 HD-08","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":true,"providesWater":true,"coolingHours":""},{"name":"大安附中-智取店","address":"台北市大安區復興南路一段342之2號1樓","tags":["純取店"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":false,"providesWater":true,"coolingHours":""},{"name":"大安高工-智取店","address":"台北市大安區復興南路二段47號1樓","tags":["⭐重點店","SCS HD打包","HD上架"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"HD滯留放後場、 特選離店放後場","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"HD-07 HD-08","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":true,"providesWater":true,"coolingHours":"電扇 請自行開啟"},{"name":"大安龍門-智取店","address":"台北市大安區和平東路二段30號1樓","tags":["純取店"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"大安龍陣-智取店","address":"台北市大安區和平東路二段107巷25號1樓","tags":["純取店"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"大安德安-智取店","address":"台北市大安區敦化南路一段320號1樓","tags":["純取店"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"大安中山醫-智取店","address":"台北市大安區仁愛路四段112巷9弄3號1樓","tags":[],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"大安國中-智取店","address":"台北市大安區大安路二段51號1樓","tags":[],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"大安群賢-智取店","address":"台北市大安區和平東路二段265巷60號1樓","tags":["⭐重點店","NDD打包","FBS打包"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":true,"providesWater":true,"coolingHours":"8:30-15:00"},{"name":"大安科技-智取店","address":"台北市大安區和平東路二段157之1號1樓","tags":["包裹重新分配"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"特選離店放後場","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":false,"providesWater":false,"coolingHours":"電扇 請自行開啟"},{"name":"大安成功-智取店","address":"台北市大安區四維路192巷10號1樓","tags":[],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":false,"providesWater":true,"coolingHours":""},{"name":"大安建安-智取店","address":"台北市大安區大安路二段170號1樓","tags":["純取店"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"大安福華-智取店","address":"台北市大安區復興南路一段251號1樓","tags":["⭐重點店","NDD打包","FBS打包","包裹重新分配"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區瑞安分隊 106臺北市大安區建國南路二段263號","hasChecklist":true,"providesWater":false,"coolingHours":""},{"name":"大安潮州-智取店","address":"台北市大安區潮州街90號1樓","tags":["⭐重點店","NDD打包","FBS打包"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"特選離店放後場","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":true,"hdShelf":"","recycleLocation":"大安區和平分隊 106臺北市大安區辛亥路一段臨143號","hasChecklist":true,"providesWater":true,"coolingHours":"電扇 請自行開啟"},{"name":"大安新生南-智取店","address":"台北市大安區新生南路三段60巷2之1號1樓","tags":["⭐重點店","SCS HD打包","HD上架"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"HD滯留放後場","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"HD-51 HD-52","recycleLocation":"大安區台大分隊 106臺北市大安區辛亥路一段138號","hasChecklist":true,"providesWater":true,"coolingHours":"電扇 請自行開啟"},{"name":"大安泰順-智取店","address":"台北市大安區泰順街42之1號1樓","tags":["⭐重點店"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區和平分隊 106臺北市大安區辛亥路一段臨143號","hasChecklist":true,"providesWater":true,"coolingHours":"8:30-15:00"},{"name":"大安麗水-智取店","address":"台北市大安區永康街10巷7號1樓","tags":[],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區和平分隊 106臺北市大安區辛亥路一段臨143號","hasChecklist":false,"providesWater":true,"coolingHours":""},{"name":"大安師大-智取店","address":"台北市大安區羅斯福路三段135號1樓","tags":["包裹重新分配"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區和平分隊 106臺北市大安區辛亥路一段臨143號","hasChecklist":false,"providesWater":false,"coolingHours":"17:30-03:00"},{"name":"大安民榮-智取店","address":"台北市大安區信義路三段31巷18號1樓","tags":["包裹重新分配"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"中正公館-智取店","address":"台北市中正區汀州路三段122號1樓","tags":["⭐重點店","NDD打包","FBS打包","HD上架","中正速配倉"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"HD滯留放後場、 中正速配倉","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區台大分隊 106臺北市大安區辛亥路一段138號","hasChecklist":true,"providesWater":true,"coolingHours":"電扇 請自行開啟"},{"name":"中正軍總-智取店","address":"台北市中正區汀州路三段52號1樓","tags":["中正速配倉"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"中正速配倉、 掃騎樓","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區台大分隊 106臺北市大安區辛亥路一段138號","hasChecklist":false,"providesWater":true,"coolingHours":""},{"name":"中正東門-智取店","address":"台北市中正區臨沂街56之1號1樓","tags":["中正速配倉"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"中正速配倉","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"大安區和平分隊 106臺北市大安區辛亥路一段臨143號","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"中正臨沂-智取店","address":"台北市中正區臨沂街19巷3號1樓","tags":["⭐重點店","NDD打包","FBS打包","中正速配倉"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"中正速配倉","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":true,"hdShelf":"","recycleLocation":"","hasChecklist":true,"providesWater":true,"coolingHours":""},{"name":"中正紹興南-智取店","address":"台北市中正區紹興南街15之2號1樓","tags":["中正速配倉"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"中正速配倉","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"","hasChecklist":false,"providesWater":true,"coolingHours":""},{"name":"中正連雲-智取店","address":"台北市中正區新生南路一段144之9號1樓","tags":["純取店","中正速配倉"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"中正速配倉","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"中正華山-智取店","address":"台北市中正區忠孝東路二段38號1樓","tags":["中正速配倉"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"中正速配倉","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"中正八德-智取店","address":"台北市中正區八德路一段74號1樓","tags":["中正速配倉"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"中正速配倉","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"","hasChecklist":false,"providesWater":true,"coolingHours":""},{"name":"中正北平東-智取店","address":"台北市中正區北平東路26號1樓","tags":["NDD打包","FBS打包","中正速配倉"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{"NDD打包":"2026-10-20","FBS打包":"2026-10-20"},"storeType":"pickup","statusEvent":null,"sourceNotes":"中正速配倉","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"","hasChecklist":false,"providesWater":true,"coolingHours":""},{"name":"信義景聯-智取店","address":"台北市信義區吳興街50巷17號1樓","tags":["⭐重點店","SCS HD打包","HD上架"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"HD滯留放後場","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":true,"hdShelf":"HD-07 HD-08","recycleLocation":"信義吳興店11:30後(周三周X日X) 110臺北市信義區吳興街125號1樓","hasChecklist":false,"providesWater":true,"coolingHours":"17:30-03:00"},{"name":"信義三興-智取店","address":"台北市信義區吳興街156巷24號1樓","tags":["純取店"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"信義吳興店11:30後(周三周X日X) 110臺北市信義區吳興街125號1樓","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"松菸旗艦店","address":"台北市信義區忠孝東路四段553巷24號1樓","tags":["⭐重點店","NDD打包","FBS打包","HD上架"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"0930開門&拍貼機 2130關門&拍貼機","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"松菸旗艦店(周三X周日X) 110臺北市信義區忠孝東路四段553巷24號1樓","hasChecklist":true,"providesWater":true,"coolingHours":""},{"name":"信義逸仙-智取店","address":"台北市信義區逸仙路42巷12之1號1樓","tags":["純取店"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"松菸旗艦店(周三X周日X) 110臺北市信義區忠孝東路四段553巷24號1樓","hasChecklist":false,"providesWater":false,"coolingHours":""},{"name":"信義松信-智取店","address":"台北市信義區松信路101號1樓","tags":["⭐重點店"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配","⭐重點店"],"taskEffectiveDates":{},"storeType":"pickup","statusEvent":null,"sourceNotes":"","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx","isPrimaryStore":false,"hdShelf":"","recycleLocation":"松菸旗艦店(周三X周日X) 110臺北市信義區忠孝東路四段553巷24號1樓","hasChecklist":true,"providesWater":true,"coolingHours":""},{"name":"大安溫州店","address":"台北市大安區溫州街8號1樓","tags":["NDD打包","FBS打包","👤有人店"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配"],"taskEffectiveDates":{},"storeType":"staffed","statusEvent":null,"sourceNotes":"-","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx"},{"name":"中正台大店","address":"台北市中正區羅斯福路三段304號","tags":["NDD打包","FBS打包","👤有人店","中正速配倉"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配"],"taskEffectiveDates":{},"storeType":"staffed","statusEvent":null,"sourceNotes":"中正速配倉","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx"},{"name":"中正廈門店","address":"台北市中正區廈門街88號","tags":["NDD打包","FBS打包","👤有人店","中正速配倉"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配"],"taskEffectiveDates":{},"storeType":"staffed","statusEvent":null,"sourceNotes":"中正速配倉","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx"},{"name":"中正杭州店","address":"台北市中正區杭州南路一段63-1號1樓","tags":["NDD打包","FBS打包","👤有人店","中正速配倉"],"managedTags":["👤有人店","中正速配倉","NDD打包","FBS打包","SCS HD打包","HD上架","純取店","包裹重新分配"],"taskEffectiveDates":{},"storeType":"staffed","statusEvent":null,"sourceNotes":"中正速配倉","sourceUpdatedAt":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx"}],"sourceDate":"2026-09-18","sourceLabel":"門市資訊918更新.xlsx"};
+function applyBundledStoreMasterUpdate(){
+  const patch=BUNDLED_STORE_MASTER_UPDATE,key='shopee_store_master_bundle_'+patch.id;
+  if(appStorage.getItem(key)==='true')return false;
+  const before=JSON.parse(JSON.stringify(storesData));let changes=0;
+  for(const source of patch.records){
+    const index=storesData.findIndex(store=>getStoreNameIdentity(store.name)===getStoreNameIdentity(source.name));
+    const current=index>=0?storesData[index]:null;
+    if(current?.sourceUpdatedAt&&current.sourceUpdatedAt>patch.sourceDate)continue;
+    const next=mergeStoreMasterRecord(current,source);
+    if(!current||JSON.stringify(current)!==JSON.stringify(next)){if(index<0)storesData.push(next);else storesData[index]=next;changes++}
+  }
+  if(changes){
+    appStorage.setItem(STORE_MASTER_SNAPSHOT_KEY,JSON.stringify({createdAt:new Date().toISOString(),source:patch.sourceLabel,stores:before,history:readStoreMasterHistory()}));
+    appStorage.setItem('shopee_custom_stores_data',JSON.stringify(storesData));
+    saveStoreMasterHistoryVersion({effectiveDate:patch.sourceDate,sourceLabel:patch.sourceLabel,beforeStores:before,afterStores:storesData});
+    markCloudPending();
+  }
+  appStorage.setItem(key,'true');
+  return Boolean(changes);
 }
 </script>
 <script>
@@ -8066,7 +8079,11 @@ function mergeOperationalSnapshots(remoteSnapshot,localSnapshot){
   for(const [key,value] of Object.entries(local)){
     if(!(key in remote))continue;
     const cloud=snapshotJSON(remote[key],null),device=snapshotJSON(value,null);
-    if(/^shopee_report_(daily_|history_)/.test(key)&&Array.isArray(cloud)&&Array.isArray(device))merged[key]=JSON.stringify(mergeRows(cloud,device));
+    if(key==='shopee_custom_stores_data'&&Array.isArray(cloud)&&Array.isArray(device)){
+      const rows=[...cloud];for(const record of device){const i=rows.findIndex(item=>getStoreNameIdentity(item.name)===getStoreNameIdentity(record.name));if(i<0)rows.push(record);else if(String(record.sourceUpdatedAt||'')>String(rows[i].sourceUpdatedAt||''))rows[i]=record}merged[key]=JSON.stringify(rows);
+    }else if(key==='shopee_store_master_history_v1'&&Array.isArray(cloud)&&Array.isArray(device)){
+      const rows=[...cloud],seen=new Set(rows.map(item=>item.effectiveDate+'|'+item.sourceLabel));for(const item of device){const id=item.effectiveDate+'|'+item.sourceLabel;if(!seen.has(id)){rows.push(item);seen.add(id)}}rows.sort((a,b)=>String(a.effectiveDate).localeCompare(String(b.effectiveDate)));merged[key]=JSON.stringify(rows.slice(-24));
+    }else if(/^shopee_report_(daily_|history_)/.test(key)&&Array.isArray(cloud)&&Array.isArray(device))merged[key]=JSON.stringify(mergeRows(cloud,device));
     else if(/^shopee_report_(draft_\d+$|history_)/.test(key)&&cloud&&device&&!Array.isArray(cloud)&&!Array.isArray(device))merged[key]=JSON.stringify(mergeRecord(cloud,device));
     else if(['shopee_report_checkpoints_v1','shopee_v71_support_duties','shopee_v7_incidents'].includes(key)&&Array.isArray(cloud)&&Array.isArray(device)){
       const seen=new Set(cloud.map(item=>JSON.stringify(canonicalSupabaseValue(item))));
